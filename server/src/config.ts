@@ -30,7 +30,7 @@ export const isProd = e.NODE_ENV === "production";
 
 // Fail fast in production: never boot with missing security-critical config.
 if (isProd) {
-  const missing = ["DATABASE_URL", "JWT_SECRET", "SESSION_SECRET", "OTP_PEPPER", "ADMIN_USERNAME", "CHECK_USERNAME", "SENDGRID_API_KEY", "MAIL_FROM", "PUBLIC_URL"].filter(
+  const missing = ["DATABASE_URL", "JWT_SECRET", "SESSION_SECRET", "OTP_PEPPER", "ADMIN_USERNAME", "CHECK_USERNAME", "SENDGRID_API_KEY", "MAIL_FROM"].filter(
     (k) => !(e as Record<string, unknown>)[k],
   );
   if (!e.ADMIN_PASSWORD && !e.ADMIN_PASSWORD_HASH) missing.push("ADMIN_PASSWORD_HASH");

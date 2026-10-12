@@ -52,8 +52,8 @@ export function staffAuth(app: FastifyInstance, db: Db, cfg: StaffCfg) {
     if (req.method !== "GET" && req.method !== "HEAD") {
       const h = req.headers["x-csrf-token"];
       if (typeof h !== "string" || !safeEqual(h, c.csrf)) return reply.code(403).send({ error: "csrf" });
-      const origin = req.headers.origin;
-      if (isProd && origin && config.publicUrl && origin !== new URL(config.publicUrl).origin) return reply.code(403).send({ error: "origin" });
+      const origin = req.headers.origin; // same-origin check: the browser's Origin must be this very host
+      if (isProd && origin) { let oh = ""; try { oh = new URL(origin).host; } catch {} if (oh !== req.headers.host) return reply.code(403).send({ error: "origin" }); }
     }
     (req as any).csrf = c.csrf;
   };
