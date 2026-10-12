@@ -110,28 +110,40 @@ struct AtomOrb: View {
     var electron: Color = P.accent
     var lineWidth: CGFloat = 1.2
     var period: Double = 9
+
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
             Canvas { gc, size in
-                let c = CGPoint(x: size.width / 2, y: size.height / 2)
-                let rx = min(size.width, size.height) * 0.46
-                let ry = rx * 0.36
-                for (i, rot) in [0.0, 60.0, 120.0].enumerated() {
-                    var g = gc
-                    g.translateBy(x: c.x, y: c.y)
-                    g.rotate(by: .degrees(rot))
-                    g.stroke(Path(ellipseIn: CGRect(x: -rx, y: -ry, width: rx * 2, height: ry * 2)), with: .color(color.opacity(0.55)), lineWidth: lineWidth)
-                    let ang = (t / period * 2 * .pi) * (i == 1 ? -1 : 1) + Double(i) * 2.0944
-                    let p = CGPoint(x: rx * cos(ang), y: ry * sin(ang))
-                    let r = lineWidth * 3.2
-                    g.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(electron))
-                }
-                let r = lineWidth * 4.4
-                gc.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(color))
+                draw(gc, size: size, time: ctx.date.timeIntervalSinceReferenceDate)
             }
         }
         .accessibilityHidden(true)
+    }
+
+    private func draw(_ gc: GraphicsContext, size: CGSize, time: Double) {
+        let cx: CGFloat = size.width / 2
+        let cy: CGFloat = size.height / 2
+        let rx: CGFloat = min(size.width, size.height) * 0.46
+        let ry: CGFloat = rx * 0.36
+        let rotations: [Double] = [0, 60, 120]
+        let turn: Double = time / period * 2.0 * Double.pi
+        for i in 0..<rotations.count {
+            var g = gc
+            g.translateBy(x: cx, y: cy)
+            g.rotate(by: Angle.degrees(rotations[i]))
+            let orbit = Path(ellipseIn: CGRect(x: -rx, y: -ry, width: rx * 2, height: ry * 2))
+            g.stroke(orbit, with: GraphicsContext.Shading.color(color.opacity(0.55)), lineWidth: lineWidth)
+            let direction: Double = (i == 1) ? -1.0 : 1.0
+            let angle: Double = turn * direction + Double(i) * 2.0944
+            let ex: CGFloat = rx * CGFloat(cos(angle))
+            let ey: CGFloat = ry * CGFloat(sin(angle))
+            let r: CGFloat = lineWidth * 3.2
+            let dot = Path(ellipseIn: CGRect(x: ex - r, y: ey - r, width: r * 2, height: r * 2))
+            g.fill(dot, with: GraphicsContext.Shading.color(electron))
+        }
+        let nr: CGFloat = lineWidth * 4.4
+        let nucleus = Path(ellipseIn: CGRect(x: cx - nr, y: cy - nr, width: nr * 2, height: nr * 2))
+        gc.fill(nucleus, with: GraphicsContext.Shading.color(color))
     }
 }
 
