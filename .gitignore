@@ -6,3 +6,4 @@ dist/
 *.keystore
 *.jks
 local.properties
+*.apk
