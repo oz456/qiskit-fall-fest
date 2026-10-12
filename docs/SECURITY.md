@@ -18,10 +18,10 @@
 
 ## Pre-launch checklist
 - [ ] Secrets only in Secret Manager; none in git/chat. Rotate anything pasted anywhere.
-- [ ] SendGrid domain authenticated; send a real test to Gmail + college mail.
+- [ ] Gmail SMTP domain authenticated; send a real test to Gmail + college mail.
 - [ ] Admin password ≥16 chars, unique.
 - [ ] Neon: strong password, pooled URL with `sslmode=require`; snapshot taken.
 - [ ] Test on 2 phones: login, second-phone takeover, screenshot QR rejected, duplicate scan flagged.
 - [ ] Cloud Run `min-instances=1` for event days.
 - [ ] Release keystore backed up (`~/.qff/`).
-- [ ] SendGrid key + verified sender set (see DEPLOY.md).
+- [x] Gmail SMTP app password(s) configured; test a real code to Gmail + college mail.

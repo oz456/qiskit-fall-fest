@@ -8,6 +8,7 @@ import Fastify from "fastify";
 import { ZodError } from "zod";
 import { config, isProd } from "./config.ts";
 import type { Db } from "./db.ts";
+import { initMail } from "./lib/mail.ts";
 import { adminRoutes } from "./routes/admin.ts";
 import { checkRoutes } from "./routes/check.ts";
 import { appRoutes } from "./routes/app.ts";
@@ -53,6 +54,7 @@ export async function buildApp(db: Db) {
     return { ok: true };
   });
 
+  initMail(db);
   appRoutes(app, db);
   adminRoutes(app, db);
   checkRoutes(app, db);

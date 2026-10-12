@@ -5,7 +5,7 @@ import { z } from "zod";
 import { config } from "../config.ts";
 import type { Db, Queryable } from "../db.ts";
 import { staffAuth } from "../lib/staff.ts";
-import { announcementMail, sendMail, ticketReplyMail } from "../lib/mail.ts";
+import { announcementMail, mailRemaining, sendMail, ticketReplyMail } from "../lib/mail.ts";
 import { AnnouncementInput, EventInput, FaqInput, SettingsInput, TicketReply, TicketStatus, UserInput } from "../lib/schemas.ts";
 import { audit, eventDay, eventOut } from "../lib/util.ts";
 
@@ -52,7 +52,8 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
         (SELECT count(*)::int FROM events) AS events,
         (SELECT count(*)::int FROM tickets WHERE status <> 'resolved') AS open_tickets,
         (SELECT count(*)::int FROM checkins WHERE scope = $1) AS checked_in_today`, ["day:" + eventDay()]);
-      return s;
+      const left = await mailRemaining();
+      return { ...s, mail_remaining: Number.isFinite(left) ? left : null };
     });
 
     // ---- events ----
@@ -135,10 +136,14 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     api.get("/admin/api/announcements", async () => (await db.query("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 100")).map((a) => ({ id: a.id, title: a.title, body: a.body, emailed: a.emailed, createdAt: new Date(a.created_at).toISOString() })));
     api.post("/admin/api/announcements", async (req, reply) => {
       const b = AnnouncementInput.parse(req.body);
+      const users = b.sendEmail ? await db.query("SELECT email FROM users WHERE status='active'") : [];
+      if (b.sendEmail) { // keep headroom so login codes can still be sent today
+        const left = await mailRemaining();
+        if (users.length + 100 > left) return reply.code(409).send({ error: "mail_quota", message: `Not enough email quota left today (${Number.isFinite(left) ? left : "∞"} left, ${users.length} attendees + 100 reserved for login codes). Post without email, or send tomorrow.` });
+      }
       const [a] = await db.query("INSERT INTO announcements (title,body) VALUES ($1,$2) RETURNING id", [b.title, b.body]);
       let sent = 0, failed = 0;
       if (b.sendEmail) {
-        const users = await db.query("SELECT email FROM users WHERE status='active'");
         for (let i = 0; i < users.length; i += 10) {
           const res = await Promise.allSettled(users.slice(i, i + 10).map((u) => sendMail(announcementMail(u.email, b.title, b.body))));
           for (const r of res) r.status === "fulfilled" ? sent++ : failed++;

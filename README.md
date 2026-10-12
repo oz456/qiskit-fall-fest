@@ -12,7 +12,7 @@ qff/
 
 ## How it fits together
 - **Attendees** are pre-registered by the organisers (admin site → Attendees → add or import CSV).
-  They sign in with their email + a 6-digit code (SendGrid). No passwords.
+  They sign in with their email + a 6-digit code (Gmail SMTP). No passwords.
 - **App ↔ server**: events, announcements, FAQs, saved/registered events and support tickets live in Postgres (Neon).
 - **Pass**: a QR that rotates every 30 s, signed with a per-attendee secret that only the signed-in phone holds.
   Screenshots/forwards fail the check; each pass checks in once per day/event; one phone per account.
@@ -31,4 +31,4 @@ cd ../android && ./gradlew :app:assembleDebug   # debug build talks to http://10
 ```
 
 ## Production
-Live on Cloud Run; every push to `main` redeploys. Details and the one remaining step (SendGrid) in [docs/DEPLOY.md](docs/DEPLOY.md).
+Live on Cloud Run; every push to `main` redeploys. Details and the one remaining step (Gmail SMTP) in [docs/DEPLOY.md](docs/DEPLOY.md).

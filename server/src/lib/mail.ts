@@ -1,30 +1,68 @@
+// Outbound email through Gmail / Google Workspace SMTP (app passwords). Supports several accounts: sends are spread
+// round-robin (least-used first), fall over to the next account on failure, and respect a per-account daily cap.
+import nodemailer, { type Transporter } from "nodemailer";
 import { config, isProd } from "../config.ts";
+import type { Db } from "../db.ts";
+import { eventDay } from "./util.ts";
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+let db: Db | null = null;
+export const initMail = (d: Db) => { db = d; };
+
+const accounts = config.smtpAccounts;
+const transports = new Map<string, Transporter>();
+const transportFor = (user: string, pass: string) => {
+  let t = transports.get(user);
+  if (!t) {
+    t = nodemailer.createTransport({
+      host: config.smtpHost, port: config.smtpPort, secure: config.smtpPort === 465, requireTLS: config.smtpPort !== 465,
+      auth: { user, pass }, pool: true, maxConnections: 2, maxMessages: 100, connectionTimeout: 10_000, socketTimeout: 20_000,
+    });
+    transports.set(user, t);
+  }
+  return t;
+};
 
 export interface Mail { to: string; subject: string; text: string; html?: string }
 
-/** Sends through SendGrid's v3 API. In dev (no key) it logs instead of sending. */
+/** How many more emails can go out today across all accounts. */
+export async function mailRemaining(): Promise<number> {
+  if (!accounts.length) return Infinity;
+  const rows = await db!.query<{ account: string; sent: number }>("SELECT account, sent FROM mail_quota WHERE day=$1", [eventDay()]);
+  const used = new Map(rows.map((r) => [r.account, r.sent]));
+  return accounts.reduce((n, a) => n + Math.max(0, config.smtpDailyLimit - (used.get(a.user) ?? 0)), 0);
+}
+
+/** Reserve one send on the least-used account that still has quota. Returns the accounts to try, best first. */
+async function pick(): Promise<{ user: string; pass: string }[]> {
+  const rows = await db!.query<{ account: string; sent: number }>("SELECT account, sent FROM mail_quota WHERE day=$1", [eventDay()]);
+  const used = new Map(rows.map((r) => [r.account, r.sent]));
+  return accounts.filter((a) => (used.get(a.user) ?? 0) < config.smtpDailyLimit).sort((x, y) => (used.get(x.user) ?? 0) - (used.get(y.user) ?? 0));
+}
+const bump = (acct: string, by: number) => db!.query(
+  "INSERT INTO mail_quota (day, account, sent) VALUES ($1,$2,GREATEST($3,0)) ON CONFLICT (day, account) DO UPDATE SET sent = GREATEST(mail_quota.sent + $3, 0)", [eventDay(), acct, by]);
+
 export async function sendMail(m: Mail): Promise<void> {
-  if (!config.sendgridKey) {
-    if (isProd) throw new Error("SENDGRID_API_KEY missing");
+  if (!accounts.length) {
+    if (isProd) throw new Error("SMTP_ACCOUNTS not configured");
     console.log(`[mail:dev] to=${m.to} subject=${m.subject}\n${m.text}`);
     return;
   }
-  const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${config.sendgridKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      personalizations: [{ to: [{ email: m.to }] }],
-      from: { email: config.mailFrom, name: config.mailFromName },
-      subject: m.subject,
-      content: [{ type: "text/plain", value: m.text }, ...(m.html ? [{ type: "text/html", value: m.html }] : [])],
-      tracking_settings: { click_tracking: { enable: false }, open_tracking: { enable: false } },
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw new Error(`SendGrid ${res.status}`);
+  const candidates = await pick();
+  if (!candidates.length) throw new Error("daily email quota exhausted");
+  let lastErr: unknown;
+  for (const a of candidates) {
+    await bump(a.user, 1);
+    try {
+      await transportFor(a.user, a.pass).sendMail({
+        from: { name: config.mailFromName, address: a.user }, to: m.to, subject: m.subject, text: m.text, html: m.html,
+      });
+      return;
+    } catch (e) { lastErr = e; await bump(a.user, -1); }
+  }
+  throw new Error(`SMTP send failed: ${(lastErr as Error)?.message ?? "unknown"}`);
 }
+
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 const shell = (title: string, inner: string) => `<!doctype html><html><body style="margin:0;background:#f6f5f0;font-family:Arial,sans-serif;color:#111a16">
 <div style="max-width:480px;margin:0 auto;padding:32px 24px"><div style="font-weight:700;letter-spacing:.5px;margin-bottom:24px">QISKIT FALL FEST ’26</div>

@@ -88,7 +88,7 @@ const confirmDo = (msg, fn) => { if (confirm(msg)) guard(fn)(); };
 async function dashboard(m) {
   const s = await api("GET", "/stats");
   m.append(head("Overview"), h("div", { class: "grid g4" },
-    [["Registered attendees", s.users], ["Using the app", s.app_users], ["Checked in today", s.checked_in_today], ["Open tickets", s.open_tickets], ["Events", s.events]]
+    [["Registered attendees", s.users], ["Using the app", s.app_users], ["Checked in today", s.checked_in_today], ["Open tickets", s.open_tickets], ["Events", s.events], ["Emails left today", s.mail_remaining ?? "∞"]]
       .map(([l, v]) => h("div", { class: "card stat" }, h("b", {}, v), h("span", { class: "muted" }, l)))),
     h("div", { class: "card", }, h("h2", {}, "Quick start"), h("p", { class: "muted" }, "Add or import attendees (only registered emails can sign in), create events (multi-day events are supported), post announcements and answer support tickets. Door scanning happens on the separate /check site, and results show up under Attendance.")));
 }

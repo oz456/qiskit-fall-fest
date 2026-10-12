@@ -13,8 +13,11 @@ const Env = z.object({
   CHECK_USERNAME: z.string().min(3).optional(),
   CHECK_PASSWORD: z.string().min(10).optional(),
   CHECK_PASSWORD_HASH: z.string().optional(),
-  SENDGRID_API_KEY: z.string().optional(),
-  MAIL_FROM: z.string().email().optional(),
+  // JSON array: [{"user":"a@gmail.com","pass":"16-char app password"}, ...] — several accounts = round-robin
+  SMTP_ACCOUNTS: z.string().optional(),
+  SMTP_HOST: z.string().default("smtp.gmail.com"),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_DAILY_LIMIT: z.coerce.number().default(1900), // per account; use 450 for a free @gmail.com, ~1900 for Workspace
   MAIL_FROM_NAME: z.string().default("Qiskit Fall Fest"),
   PUBLIC_URL: z.string().url().optional(),
   EVENT_TZ: z.string().default("Asia/Kolkata"),
@@ -30,7 +33,7 @@ export const isProd = e.NODE_ENV === "production";
 
 // Fail fast in production: never boot with missing security-critical config.
 if (isProd) {
-  const missing = ["DATABASE_URL", "JWT_SECRET", "SESSION_SECRET", "OTP_PEPPER", "ADMIN_USERNAME", "CHECK_USERNAME", "SENDGRID_API_KEY", "MAIL_FROM"].filter(
+  const missing = ["DATABASE_URL", "JWT_SECRET", "SESSION_SECRET", "OTP_PEPPER", "ADMIN_USERNAME", "CHECK_USERNAME", "SMTP_ACCOUNTS"].filter(
     (k) => !(e as Record<string, unknown>)[k],
   );
   if (!e.ADMIN_PASSWORD && !e.ADMIN_PASSWORD_HASH) missing.push("ADMIN_PASSWORD_HASH");
@@ -57,8 +60,15 @@ export const config = {
   checkUser: e.CHECK_USERNAME ?? "check",
   checkPassword: e.CHECK_PASSWORD ?? (isProd ? undefined : "check-dev-password"),
   checkPasswordHash: e.CHECK_PASSWORD_HASH,
-  sendgridKey: e.SENDGRID_API_KEY,
-  mailFrom: e.MAIL_FROM ?? "no-reply@example.org",
+  smtpAccounts: ((): { user: string; pass: string }[] => {
+    if (!e.SMTP_ACCOUNTS) return [];
+    try {
+      const a = JSON.parse(e.SMTP_ACCOUNTS);
+      if (!Array.isArray(a) || !a.every((x) => typeof x?.user === "string" && typeof x?.pass === "string")) throw new Error("shape");
+      return a.map((x) => ({ user: x.user, pass: String(x.pass).replace(/\s+/g, "") }));
+    } catch { console.error("SMTP_ACCOUNTS must be a JSON array of {user,pass}"); process.exit(1); }
+  })(),
+  smtpHost: e.SMTP_HOST, smtpPort: e.SMTP_PORT, smtpDailyLimit: e.SMTP_DAILY_LIMIT,
   mailFromName: e.MAIL_FROM_NAME,
   publicUrl: e.PUBLIC_URL,
   tz: e.EVENT_TZ,
