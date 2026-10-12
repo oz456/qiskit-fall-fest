@@ -48,6 +48,9 @@ jobs:
           xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
           xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/QFF.app
           mkdir -p shots
+          # warm-up launch: the first launch after install is slow and would otherwise be captured mid-launch-screen
+          SIMCTL_CHILD_QFF_PREVIEW=1 SIMCTL_CHILD_QFF_SCREEN=hub xcrun simctl launch "$UDID" org.qiskit.fallfest.amaravati; sleep 8
+          xcrun simctl terminate "$UDID" org.qiskit.fallfest.amaravati
           for s in signin hub event pass qr support ticket thread faq notifications profile; do
             SIMCTL_CHILD_QFF_PREVIEW=1 SIMCTL_CHILD_QFF_SCREEN=$s xcrun simctl launch --terminate-running-process "$UDID" org.qiskit.fallfest.amaravati
             sleep 5

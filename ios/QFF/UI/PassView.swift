@@ -73,13 +73,16 @@ struct PassView: View {
     }
 }
 
+/// Progress border around the QR tile (a circle would cut through the QR's corners).
 struct CountdownRing: View {
     let progress: Double
+    var corner: CGFloat = 18
     var color: Color = Color(hex: 0x163226)
     var body: some View {
         ZStack {
-            Circle().stroke(color.opacity(0.15), lineWidth: 3)
-            Circle().trim(from: 0, to: progress).stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round)).rotationEffect(.degrees(-90))
+            RoundedRectangle(cornerRadius: corner, style: .continuous).stroke(color.opacity(0.15), lineWidth: 3)
+            RoundedRectangle(cornerRadius: corner, style: .continuous).trim(from: 0, to: progress)
+                .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .animation(.linear(duration: 0.25), value: progress)
         }
     }
@@ -118,7 +121,7 @@ private struct TiltPass: View {
                             Color.white
                             if let payload, !hidden { QRView(payload: payload).padding(10) }
                             else { Image(systemName: "eye.slash").font(.system(size: 28)).foregroundStyle(Color(hex: 0x163226)) }
-                            CountdownRing(progress: progress).padding(2)
+                            CountdownRing(progress: progress, corner: 16).padding(1.5)
                         }
                         .frame(width: 112, height: 112).clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     }
@@ -164,7 +167,7 @@ private struct FullQR: View {
                         Color.white
                         if let payload, !hidden { QRView(payload: payload).padding(28) }
                         else { Image(systemName: "eye.slash").font(.system(size: 48)).foregroundStyle(Color(hex: 0x163226)) }
-                        CountdownRing(progress: app.passProgress()).padding(6)
+                        CountdownRing(progress: app.passProgress(), corner: 24).padding(4)
                     }
                     .aspectRatio(1, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(P.line))

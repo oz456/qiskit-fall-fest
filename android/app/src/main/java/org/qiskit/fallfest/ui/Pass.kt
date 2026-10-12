@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -103,12 +104,19 @@ private fun Stat(label: String, value: String, modifier: Modifier) {
 }
 
 @Composable
-private fun CountdownRing(progress: Float, modifier: Modifier, color: Color) {
+private fun CountdownRing(progress: Float, modifier: Modifier, color: Color, corner: androidx.compose.ui.unit.Dp = 18.dp) {
     val p by animateFloatAsState(progress, tween(250, easing = LinearEasing), label = "ring")
     Canvas(modifier) {
         val w = 3.dp.toPx(); val inset = w / 2
-        drawArc(color.copy(alpha = .15f), 0f, 360f, false, Offset(inset, inset), Size(size.width - w, size.height - w), style = Stroke(w))
-        drawArc(color, -90f, 360f * p, false, Offset(inset, inset), Size(size.width - w, size.height - w), style = Stroke(w, cap = StrokeCap.Round))
+        val r = corner.toPx() - inset
+        val path = androidx.compose.ui.graphics.Path().apply {
+            addRoundRect(androidx.compose.ui.geometry.RoundRect(inset, inset, size.width - inset, size.height - inset, CornerRadius(r, r)))
+        }
+        val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
+        val seg = androidx.compose.ui.graphics.Path()
+        measure.getSegment(0f, measure.length * p, seg, true)
+        drawPath(path, color.copy(alpha = .15f), style = Stroke(w))
+        drawPath(seg, color, style = Stroke(w, cap = StrokeCap.Round))
     }
 }
 
@@ -145,7 +153,7 @@ private fun TiltPass(app: AppState, payload: String?, progress: Float, onQr: () 
                 }
                 Box(Modifier.size(112.dp).pressable(RoundedCornerShape(18.dp), true, onQr).background(Color.White), contentAlignment = Alignment.Center) {
                     if (payload != null) QrCode(payload, Modifier.fillMaxSize().padding(10.dp))
-                    CountdownRing(progress, Modifier.fillMaxSize().padding(2.dp), Color(0xFF163226))
+                    CountdownRing(progress, Modifier.fillMaxSize().padding(1.dp), Color(0xFF163226), 18.dp)
                 }
             }
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = .1f)).pressable(RoundedCornerShape(16.dp), onClick = onQr).padding(vertical = 12.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -171,7 +179,7 @@ private fun FullQr(app: AppState, payload: String?, progress: Float, onDismiss: 
                 Text("ID: ${app.profile?.passCode.orEmpty()}", style = T.body, color = P.muted)
                 Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(28.dp)).background(Color.White).border(1.dp, P.line, RoundedCornerShape(28.dp)), contentAlignment = Alignment.Center) {
                     if (payload != null) QrCode(payload, Modifier.fillMaxSize().padding(28.dp))
-                    CountdownRing(progress, Modifier.fillMaxSize().padding(6.dp), Color(0xFF163226))
+                    CountdownRing(progress, Modifier.fillMaxSize().padding(2.dp), Color(0xFF163226), 28.dp)
                 }
                 Text("Live code — it changes every 30 seconds.\nHold steady at the scanner. Tap anywhere to close.", style = T.small, color = P.muted, textAlign = TextAlign.Center)
             }

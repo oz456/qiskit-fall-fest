@@ -179,7 +179,7 @@ private struct Hero: View {
                     } else if after {
                         Text("See you at\nFall Fest 2027").font(T.h1).foregroundStyle(.white)
                     } else {
-                        Text(target?.title ?? "").font(Fonts.display(30, 700, style: .title1)).foregroundStyle(.white).lineLimit(2).multilineTextAlignment(.leading)
+                        Text(target?.title ?? "").font(Fonts.display(28, 700, style: .title1)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.75).multilineTextAlignment(.leading)
                     }
                     Spacer(minLength: 8)
                     HStack {
@@ -190,8 +190,9 @@ private struct Hero: View {
                     }
                 }
                 .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .frame(height: 206)
+            .frame(height: 214)
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         }
         .buttonStyle(PressStyle())
@@ -255,6 +256,17 @@ struct EventRow: View {
     var day: Date?
     var trailing = true
 
+    private var locationLabel: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "mappin.and.ellipse").font(.system(size: 12))
+            Text(event.location).lineLimit(1)
+        }
+    }
+    @ViewBuilder private var extraPills: some View {
+        if event.isMultiDay { Pill(text: "\(event.durationDays) DAYS", bg: P.surfaceAlt, fg: P.muted) }
+        if event.registered { Pill(text: "REGISTERED", bg: P.mint, fg: P.mintInk) }
+    }
+
     var body: some View {
         let status = app.status(of: event)
         Card {
@@ -268,11 +280,9 @@ struct EventRow: View {
                                 StatusBadge(status: status, checkedIn: app.isCheckedIn(event))
                             }
                             Text(event.title).font(T.title).foregroundStyle(P.ink).lineLimit(1)
-                            HStack(spacing: 6) {
-                                Image(systemName: "mappin.and.ellipse").font(.system(size: 12))
-                                Text(event.location).lineLimit(1)
-                                if event.isMultiDay { Pill(text: "\(event.durationDays) DAYS", bg: P.surfaceAlt, fg: P.muted) }
-                                if event.registered { Pill(text: "REGISTERED", bg: P.mint, fg: P.mintInk) }
+                            ViewThatFits(in: .horizontal) {
+                                HStack(spacing: 6) { locationLabel; extraPills }
+                                locationLabel
                             }
                             .font(T.small).foregroundStyle(P.muted)
                         }
