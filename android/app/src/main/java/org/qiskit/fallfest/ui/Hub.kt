@@ -125,7 +125,11 @@ private fun e0(e: Event, day: LocalDate) = e.isMultiDay && e.startDay.isBefore(d
 @Composable
 private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> Unit) {
     val now = app.now()
-    val firstStart = app.events.minOf { it.start }; val lastEnd = app.events.maxOf { it.end }
+    // The festival window (admin setting) bounds the countdown and the "thanks" state, even before every session is listed.
+    val festStart = app.settings["fest_start"]?.let { runCatching { java.time.LocalDate.parse(it).atStartOfDay(IST) }.getOrNull() }
+    val festEnd = app.settings["fest_end"]?.let { runCatching { java.time.LocalDate.parse(it).plusDays(1).atStartOfDay(IST) }.getOrNull() }
+    val firstStart = listOfNotNull(app.events.minOf { it.start }, festStart).minOf { it }
+    val lastEnd = listOfNotNull(app.events.maxOf { it.end }, festEnd).maxOf { it }
     val before = now.isBefore(firstStart); val after = now.isAfter(lastEnd)
     val target = live ?: next ?: app.events.first()
     val shape = RoundedCornerShape(30.dp)
@@ -142,7 +146,7 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
                 Spacer(Modifier.height(10.dp))
                 when {
                     before -> { val d = Duration.between(now, firstStart); Text("${d.toDays()}d ${d.toHours() % 24}h ${d.toMinutes() % 60}m", style = T.h1.copy(fontSize = 36.sp, lineHeight = 40.sp), color = Color.White)
-                        Text("First up · ${target.title}", style = T.body, color = Color.White.copy(alpha = .7f), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        Text(app.settings["venue"] ?: "First up · ${target.title}", style = T.body, color = Color.White.copy(alpha = .7f), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     after -> Text("See you at\nFall Fest 2027", style = T.h1, color = Color.White)
                     else -> Text(target.title, style = T.h1.copy(fontSize = 30.sp, lineHeight = 34.sp), color = Color.White, maxLines = 2)
                 }

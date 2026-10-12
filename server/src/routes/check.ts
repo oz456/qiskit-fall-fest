@@ -17,9 +17,15 @@ export function checkRoutes(app: FastifyInstance, db: Db) {
     common(api);
 
     api.get("/check/api/scopes", async () => {
+      // Entry days = every day of the festival window (admin setting) ∪ every day any event touches, so a gate can be scanned
+      // on a day even before sessions for it are entered.
+      const set = new Set<string>();
+      const addRange = (a: string, b: string) => { for (let t = Date.parse(a + "T00:00:00Z"); t <= Date.parse(b + "T00:00:00Z") && set.size < 90; t += 86400_000) set.add(new Date(t).toISOString().slice(0, 10)); };
       const [r] = await db.query("SELECT min(starts_at) AS a, max(ends_at) AS b FROM events WHERE published");
-      const days: string[] = [];
-      if (r?.a && r?.b) for (let d = new Date(r.a); eventDay(d) <= eventDay(new Date(r.b)) && days.length < 60; d = new Date(d.getTime() + 86400_000)) days.push(eventDay(d));
+      if (r?.a && r?.b) addRange(eventDay(new Date(r.a)), eventDay(new Date(r.b)));
+      const st = Object.fromEntries((await db.query("SELECT key, value FROM settings WHERE key IN ('fest_start','fest_end')")).map((x) => [x.key, x.value]));
+      if (/^\d{4}-\d{2}-\d{2}$/.test(st.fest_start ?? "") && /^\d{4}-\d{2}-\d{2}$/.test(st.fest_end ?? "")) addRange(st.fest_start, st.fest_end);
+      const days = [...set].sort();
       const events = await db.query("SELECT id,title,starts_at,ends_at FROM events WHERE published ORDER BY starts_at, title");
       const today = eventDay();
       const defaultDay = days.includes(today) ? today : days.find((d) => d > today) ?? days.at(-1) ?? today;

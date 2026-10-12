@@ -5,6 +5,7 @@ import { migrate, openDb, type Db } from "../src/db.ts";
 import { buildApp } from "../src/app.ts";
 import { hmac, passPayload } from "../src/lib/crypto.ts";
 import { config } from "../src/config.ts";
+import { exportTables, importTables } from "../src/lib/backup.ts";
 
 let app: Awaited<ReturnType<typeof buildApp>>; let db: Db;
 let cookie = ""; let csrf = ""; let ccookie = ""; let ccsrf = "";
@@ -46,6 +47,14 @@ describe("scanner/admin separation", () => {
     assert.equal((await app.inject({ method: "GET", url: "/check/api/scopes", headers: { cookie } })).statusCode, 401);
     assert.equal((await app.inject({ method: "POST", url: "/check/api/login", payload: { username: "admin", password: "admin-dev-password" } })).statusCode, 401);
     assert.equal((await app.inject({ method: "POST", url: "/admin/api/login", payload: { username: "check", password: "check-dev-password" } })).statusCode, 401);
+  });
+});
+
+describe("check-in days", () => {
+  it("always offers the festival window days even without events on them", async () => {
+    await admin("PUT", "/admin/api/settings", { fest_start: "2026-10-26", fest_end: "2026-10-30" });
+    const r = (await check("GET", "/check/api/scopes")).json();
+    for (const d of ["2026-10-26", "2026-10-27", "2026-10-30"]) assert.ok(r.days.includes(d), d);
   });
 });
 
@@ -121,6 +130,20 @@ describe("attendee flow", () => {
     await admin("POST", `/admin/api/tickets/${t.json().id}/reply`, { body: "On it!" });
     const list = (await app.inject({ url: "/v1/tickets", headers: h })).json();
     assert.equal(list[0].messages.at(-1).body, "On it!"); assert.equal(list[0].status, "in_progress");
+  });
+});
+
+describe("backup & restore", () => {
+  it("round-trips everything, including pass secrets, so a restored pass still verifies", async () => {
+    const [u] = await db.query("SELECT pass_code, pass_secret FROM users WHERE email='alex@example.org'");
+    const snap = JSON.parse(JSON.stringify(await exportTables(db)));            // as it would be written to a file
+    const before = snap.counts;
+    await db.query("DELETE FROM user_events"); await db.query("DELETE FROM tickets"); await db.query("DELETE FROM events");
+    await importTables(db, snap);
+    const after = (await exportTables(db)).counts;
+    assert.deepEqual(after, before);
+    const [u2] = await db.query("SELECT pass_secret FROM users WHERE email='alex@example.org'");
+    assert.equal(Buffer.from(u2!.pass_secret).toString("hex"), Buffer.from(u!.pass_secret).toString("hex"));
   });
 });
 
