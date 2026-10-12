@@ -52,11 +52,26 @@ targets:
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG QFF_PREVIEW"
+  QFFTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: QFFTests
+    dependencies:
+      - target: QFF
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.qiskit.fallfest.amaravati.tests
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   QFF:
     build:
       targets:
         QFF: all
+    test:
+      config: Debug
+      targets:
+        - QFFTests
     run:
       config: Debug
     archive:

@@ -26,6 +26,24 @@ jobs:
         working-directory: ios
         run: xcodegen generate
 
+      - name: Pick a simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)['devices']
+          c=[x for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 1') and 'Pro' in x['name'] and 'Max' not in x['name']]
+          c=c or [x for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')]
+          print(c[-1]['udid'])")
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          echo "Simulator $UDID"
+
+      - name: Unit tests (real API fixtures + pass-QR parity with the server)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild test -project QFF.xcodeproj -scheme QFF -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log | grep -E "Test Case|Executed|error:|TEST (SUCCEEDED|FAILED)" | tail -40
+
       - name: Build for Simulator (Debug, with screenshot preview mode)
         working-directory: ios
         run: |
@@ -37,14 +55,7 @@ jobs:
       - name: Render every screen in the Simulator
         working-directory: ios
         run: |
-          UDID=$(xcrun simctl list devices available -j | python3 -c "
-          import json,sys
-          d=json.load(sys.stdin)['devices']
-          c=[x for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 1') and 'Pro' in x['name'] and 'Max' not in x['name']]
-          c=c or [x for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')]
-          print(c[-1]['udid'])")
-          echo "Simulator $UDID"
-          xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl boot "$UDID" || true; xcrun simctl bootstatus "$UDID" -b
           xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
           xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/QFF.app
           mkdir -p shots

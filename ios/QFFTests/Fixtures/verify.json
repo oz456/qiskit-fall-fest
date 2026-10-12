@@ -1,0 +1,12 @@
+{
+ "accessToken": "fixture-access-token",
+ "expiresIn": 900,
+ "refreshToken": "fixture-refresh-token",
+ "profile": {
+  "name": "Alex Morgan",
+  "email": "alex.morgan@srmap.edu.in",
+  "college": "SRM University AP",
+  "passCode": "QFF-45993"
+ },
+ "passSecret": "lGvnbaYVoJ9VwAVroxQVWThkwypC4Tcp0DtGc2dfsRE="
+}

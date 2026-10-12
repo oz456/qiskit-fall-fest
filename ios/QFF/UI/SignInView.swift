@@ -16,13 +16,8 @@ struct SignInView: View {
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack {
             P.bg.ignoresSafeArea()
-            Circle()
-                .fill(RadialGradient(colors: [P.qiskitPurple.opacity(0.18), .clear], center: .center, startRadius: 0, endRadius: 210))
-                .frame(width: 420, height: 420).offset(x: 110, y: -40).allowsHitTesting(false)
-            AtomOrb(lineWidth: 1, period: 14).frame(width: 330, height: 330).offset(x: 120, y: 70).opacity(0.8).allowsHitTesting(false)
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .top) {
@@ -51,6 +46,15 @@ struct SignInView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
+        .background(alignment: .topTrailing) {
+            // decorative only: lives in a background so its oversized frames never affect the layout width
+            ZStack {
+                Circle().fill(RadialGradient(colors: [P.qiskitPurple.opacity(0.18), .clear], center: .center, startRadius: 0, endRadius: 210)).frame(width: 420, height: 420).offset(x: 110, y: -40)
+                AtomOrb(lineWidth: 1, period: 14).frame(width: 330, height: 330).offset(x: 120, y: 70).opacity(0.8)
+            }
+            .allowsHitTesting(false)
+        }
+        .clipped()
         .onAppear { withAnimation(.easeOut(duration: 0.8)) { entered = true } }
         .onReceive(tick) { _ in if cooldown > 0 { cooldown -= 1 } }
     }
@@ -60,7 +64,7 @@ struct SignInView: View {
             if step == 0 {
                 HStack(spacing: 12) {
                     Image(systemName: "envelope").foregroundStyle(focus == .email ? P.ink : P.muted)
-                    TextField("you@example.com", text: $email)
+                    TextField("", text: $email, prompt: Text("you@example.com").foregroundColor(P.muted.opacity(0.8)))
                         .font(T.body).foregroundStyle(P.ink)
                         .keyboardType(.emailAddress).textContentType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .submitLabel(.send).focused($focus, equals: .email).onSubmit(sendCode)
