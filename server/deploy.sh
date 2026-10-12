@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# One-time / config-change deploy of the API + /admin + /check to Cloud Run (builds from source with Cloud Build).
+# Routine code deploys happen automatically on `git push` via .github/workflows/deploy.yml — this script is for changing env/secrets wiring.
+set -euo pipefail
+PROJECT="${PROJECT:-qiskit-511416}"; REGION="${REGION:-us-east5}"; SERVICE="${SERVICE:-qff-api}"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+PUBLIC_URL="${PUBLIC_URL:-$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format='value(status.url)' 2>/dev/null || true)}"
+PUBLIC_URL="${PUBLIC_URL:-https://$SERVICE-$PROJECT_NUMBER.$REGION.run.app}"
+MAIL_FROM="${MAIL_FROM:-pending@example.org}"   # must be a SendGrid-verified sender
+cd "$(dirname "$0")"
+gcloud run deploy "$SERVICE" --quiet --project "$PROJECT" --region "$REGION" --source . \
+  --service-account "qff-run@$PROJECT.iam.gserviceaccount.com" \
+  --allow-unauthenticated --min-instances "${MIN_INSTANCES:-0}" --max-instances 3 --concurrency 40 --cpu 1 --memory 512Mi --timeout 30 \
+  --set-env-vars "NODE_ENV=production,EVENT_TZ=Asia/Kolkata,MAIL_FROM_NAME=Qiskit Fall Fest,MAIL_FROM=$MAIL_FROM,PUBLIC_URL=$PUBLIC_URL" \
+  --set-secrets "DATABASE_URL=qff-database-url:latest,JWT_SECRET=qff-jwt-secret:latest,SESSION_SECRET=qff-session-secret:latest,OTP_PEPPER=qff-otp-pepper:latest,ADMIN_USERNAME=qff-admin-username:latest,ADMIN_PASSWORD_HASH=qff-admin-password-hash:latest,CHECK_USERNAME=qff-check-username:latest,CHECK_PASSWORD_HASH=qff-check-password-hash:latest,SENDGRID_API_KEY=qff-sendgrid-key:latest"
+echo "URL: $PUBLIC_URL"

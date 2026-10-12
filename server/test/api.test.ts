@@ -1,0 +1,146 @@
+process.env.NODE_ENV = "test";
+import assert from "node:assert/strict";
+import { after, before, describe, it } from "node:test";
+import { migrate, openDb, type Db } from "../src/db.ts";
+import { buildApp } from "../src/app.ts";
+import { hmac, passPayload } from "../src/lib/crypto.ts";
+import { config } from "../src/config.ts";
+
+let app: Awaited<ReturnType<typeof buildApp>>; let db: Db;
+let cookie = ""; let csrf = ""; let ccookie = ""; let ccsrf = "";
+const admin = async (method: string, url: string, payload?: unknown) =>
+  app.inject({ method: method as any, url, payload: payload as any, headers: { cookie, "x-csrf-token": csrf } });
+const check = async (method: string, url: string, payload?: unknown) =>
+  app.inject({ method: method as any, url, payload: payload as any, headers: { cookie: ccookie, "x-csrf-token": ccsrf } });
+const lastOtp = async (email: string) => { // brute-force the 6-digit code from its HMAC (test-only; proves hashing, not plaintext, is stored)
+  const [r] = await db.query("SELECT code_hash FROM otp_codes WHERE email=$1 ORDER BY created_at DESC LIMIT 1", [email]);
+  for (let i = 0; i < 1_000_000; i++) { const c = String(i).padStart(6, "0"); if (hmac(config.otpPepper, `${email}|${c}`).toString("hex") === r!.code_hash) return c; }
+  throw new Error("no code");
+};
+
+before(async () => {
+  db = await openDb(); await migrate(db); app = await buildApp(db);
+  const r = await app.inject({ method: "POST", url: "/admin/api/login", payload: { username: "admin", password: "admin-dev-password" } });
+  assert.equal(r.statusCode, 200);
+  cookie = (r.headers["set-cookie"] as string).split(";")[0]!; csrf = r.json().csrf;
+  const c = await app.inject({ method: "POST", url: "/check/api/login", payload: { username: "check", password: "check-dev-password" } });
+  assert.equal(c.statusCode, 200);
+  ccookie = (c.headers["set-cookie"] as string).split(";")[0]!; ccsrf = c.json().csrf;
+});
+after(async () => { await app.close(); await db.close(); });
+
+describe("admin security", () => {
+  it("rejects unauthenticated and bad credentials", async () => {
+    assert.equal((await app.inject({ url: "/admin/api/events" })).statusCode, 401);
+    assert.equal((await app.inject({ method: "POST", url: "/admin/api/login", payload: { username: "admin", password: "nope" } })).statusCode, 401);
+  });
+  it("requires CSRF token on writes", async () => {
+    const r = await app.inject({ method: "POST", url: "/admin/api/events", payload: {}, headers: { cookie } });
+    assert.equal(r.statusCode, 403);
+  });
+});
+
+describe("scanner/admin separation", () => {
+  it("check login cannot reach admin APIs and admin login cannot scan", async () => {
+    assert.equal((await check("GET", "/admin/api/users")).statusCode, 401);
+    assert.equal((await app.inject({ method: "GET", url: "/check/api/scopes", headers: { cookie } })).statusCode, 401);
+    assert.equal((await app.inject({ method: "POST", url: "/check/api/login", payload: { username: "admin", password: "admin-dev-password" } })).statusCode, 401);
+    assert.equal((await app.inject({ method: "POST", url: "/admin/api/login", payload: { username: "check", password: "check-dev-password" } })).statusCode, 401);
+  });
+});
+
+describe("events: multi-day and validation", () => {
+  it("creates a 3-day event and rejects end<start", async () => {
+    const ok = await admin("POST", "/admin/api/events", { title: "Hackathon", track: "Hackathon", startsAt: "2026-10-16T11:00:00+05:30", endsAt: "2026-10-18T14:00:00+05:30", capacity: 1, registrationRequired: true });
+    assert.equal(ok.statusCode, 201);
+    const bad = await admin("POST", "/admin/api/events", { title: "Bad", track: "Talk", startsAt: "2026-10-16T11:00:00+05:30", endsAt: "2026-10-16T10:00:00+05:30" });
+    assert.equal(bad.statusCode, 400);
+  });
+});
+
+describe("attendee flow", () => {
+  const email = "alex@example.org"; let tokens: any; let eventId: string;
+  it("only registered emails get codes, with identical responses", async () => {
+    await admin("POST", "/admin/api/users", { email, name: "Alex Morgan", college: "SRM AP" });
+    const a = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email } });
+    const b = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "stranger@example.org" } });
+    assert.deepEqual(a.json(), b.json());
+    const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int n FROM otp_codes WHERE email='stranger@example.org'");
+    assert.equal(n, 0);
+  });
+  it("wrong codes lock after 5 attempts", async () => {
+    const good = await lastOtp(email);
+    for (let i = 0; i < 5; i++) assert.equal((await app.inject({ method: "POST", url: "/v1/auth/verify", payload: { email, code: "000000" === good ? "111111" : "000000", deviceId: "device-aaaa1" } })).statusCode, 401);
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/verify", payload: { email, code: good, deviceId: "device-aaaa1" } })).statusCode, 401);
+    await db.query("UPDATE otp_codes SET consumed_at=now()");
+    await db.query("DELETE FROM otp_codes");
+  });
+  it("signs in, then a second device logs out the first", async () => {
+    await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email } });
+    const r = await app.inject({ method: "POST", url: "/v1/auth/verify", payload: { email, code: await lastOtp(email), deviceId: "device-aaaa1" } });
+    assert.equal(r.statusCode, 200); tokens = r.json();
+    const h = { authorization: `Bearer ${tokens.accessToken}` };
+    assert.equal((await app.inject({ url: "/v1/me", headers: h })).statusCode, 200);
+    await db.query("DELETE FROM otp_codes");
+    await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email } });
+    const r2 = await app.inject({ method: "POST", url: "/v1/auth/verify", payload: { email, code: await lastOtp(email), deviceId: "device-bbbb2" } });
+    assert.equal(r2.statusCode, 200);
+    assert.equal((await app.inject({ url: "/v1/me", headers: h })).statusCode, 401, "old device must be revoked");
+    tokens = r2.json();
+  });
+  it("refresh rotates and replay revokes the session", async () => {
+    const r1 = await app.inject({ method: "POST", url: "/v1/auth/refresh", payload: { refreshToken: tokens.refreshToken } });
+    assert.equal(r1.statusCode, 200);
+    const replay = await app.inject({ method: "POST", url: "/v1/auth/refresh", payload: { refreshToken: tokens.refreshToken } });
+    assert.equal(replay.statusCode, 401);
+    const again = await app.inject({ method: "POST", url: "/v1/auth/refresh", payload: { refreshToken: r1.json().refreshToken } });
+    assert.equal(again.statusCode, 401, "session killed after replay");
+    // sign back in for later tests
+    await db.query("DELETE FROM otp_codes");
+    await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email } });
+    tokens = (await app.inject({ method: "POST", url: "/v1/auth/verify", payload: { email, code: await lastOtp(email), deviceId: "device-cccc3" } })).json();
+  });
+  it("saves, registers with capacity, lists", async () => {
+    const h = { authorization: `Bearer ${tokens.accessToken}` };
+    const ev = (await app.inject({ url: "/v1/events", headers: h })).json().events; eventId = ev[0].id;
+    assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/saved`, headers: h })).statusCode, 200);
+    assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/registration`, headers: h })).statusCode, 200);
+    const e2 = (await app.inject({ url: "/v1/events", headers: h })).json().events[0];
+    assert.equal(e2.saved, true); assert.equal(e2.registered, true); assert.equal(e2.spotsLeft, 0);
+    // capacity 1: a second user must be refused
+    await admin("POST", "/admin/api/users", { email: "sam@example.org", name: "Sam" });
+    await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "sam@example.org" } });
+    const s = (await app.inject({ method: "POST", url: "/v1/auth/verify", payload: { email: "sam@example.org", code: await lastOtp("sam@example.org"), deviceId: "device-dddd4" } })).json();
+    const full = await app.inject({ method: "PUT", url: `/v1/events/${eventId}/registration`, headers: { authorization: `Bearer ${s.accessToken}` } });
+    assert.equal(full.statusCode, 409);
+  });
+  it("tickets: user creates, admin replies, user sees reply", async () => {
+    const h = { authorization: `Bearer ${tokens.accessToken}` };
+    const t = await app.inject({ method: "POST", url: "/v1/tickets", headers: h, payload: { kind: "General", topic: "Wi-Fi & power", message: "Wi-Fi is down on floor 2" } });
+    assert.equal(t.statusCode, 201);
+    await admin("POST", `/admin/api/tickets/${t.json().id}/reply`, { body: "On it!" });
+    const list = (await app.inject({ url: "/v1/tickets", headers: h })).json();
+    assert.equal(list[0].messages.at(-1).body, "On it!"); assert.equal(list[0].status, "in_progress");
+  });
+});
+
+describe("rotating QR check-in", () => {
+  it("accepts a live code once, rejects duplicate, stale and forged", async () => {
+    const [u] = await db.query("SELECT pass_code, pass_secret FROM users WHERE email='alex@example.org'");
+    const secret = Buffer.from(u!.pass_secret); const scope = "day:2026-10-16";
+    const live = passPayload(secret, u!.pass_code);
+    assert.equal((await check("POST", "/check/api/scan", { payload: live, scope })).json().result, "ok");
+    assert.equal((await check("POST", "/check/api/scan", { payload: live, scope })).json().result, "duplicate");
+    assert.equal((await check("POST", "/check/api/scan", { payload: passPayload(secret, u!.pass_code, Date.now() - 5 * 60_000), scope: "day:2026-10-17" })).json().result, "expired");
+    assert.equal((await check("POST", "/check/api/scan", { payload: passPayload(Buffer.alloc(32, 1), u!.pass_code), scope: "day:2026-10-17" })).json().result, "invalid");
+  });
+  it("admin sees attendance recorded by the scanner", async () => {
+    const r = (await admin("GET", "/admin/api/attendance?scope=day:2026-10-16")).json();
+    assert.equal(r.rows.length, 1); assert.equal(r.rows[0].email, "alex@example.org");
+  });
+  it("old device secret stops working after re-login (device binding)", async () => {
+    const [u] = await db.query("SELECT pass_code FROM users WHERE email='alex@example.org'");
+    const stale = passPayload(Buffer.alloc(32, 7), u!.pass_code);
+    assert.equal((await check("POST", "/check/api/scan", { payload: stale, scope: "day:2026-10-18" })).json().result, "invalid");
+  });
+});
