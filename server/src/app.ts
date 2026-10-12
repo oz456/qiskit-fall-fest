@@ -63,6 +63,8 @@ export async function buildApp(db: Db) {
   const staticOpts = (decorateReply: boolean) => ({ index: ["index.html"], maxAge: "5m", decorateReply, setHeaders: (res: any, p: string) => { if (p.endsWith("index.html")) res.header("Cache-Control", "no-cache"); } });
   await app.register(fstatic, { root: join(pub, "admin"), prefix: "/admin/", ...staticOpts(true) });
   await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "check"), prefix: "/check/", ...staticOpts(false) }); });
+  await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "download"), prefix: "/download/", ...staticOpts(false) }); });
+  app.get("/download", async (_req, reply) => reply.redirect("/download/"));
   app.get("/", async (_req, reply) => reply.redirect("/admin/"));
   app.get("/admin", async (_req, reply) => reply.redirect("/admin/"));
   app.get("/scan", async (_req, reply) => reply.redirect("/check/"));
