@@ -111,7 +111,7 @@ final class AppState: ObservableObject {
 
     private func refreshToken() async throws -> String {
         if let t = refreshInFlight { return try await t.value }
-        let task = Task { [self] () -> String in
+        let task = Task { [self] () async throws -> String in
             guard let rt = keychain.get("refresh") else { wipe(); throw APIError(http: 401, code: "unauthorized", message: "Please sign in again.") }
             do {
                 let r: RefreshResponse = try await api.call("POST", "/v1/auth/refresh", body: ["refreshToken": rt])

@@ -29,8 +29,7 @@ struct EventSheet: View {
                     if !e.description.isEmpty { Text(e.description).font(T.body).foregroundStyle(P.muted) }
                     if e.registrationRequired || e.capacity != nil {
                         Card(radius: 20) {
-                            Label(e.registered ? "You have a seat." : e.spotsLeft == 0 ? "This event is full." : e.spotsLeft.map { "\($0) of \(e.capacity ?? 0) seats left" } ?? "Registration required",
-                                  systemImage: "chair.lounge").font(T.bodyM).foregroundStyle(P.ink).padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                            Label(seatText(e), systemImage: "chair.lounge").font(T.bodyM).foregroundStyle(P.ink).padding(16).frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                     HStack(spacing: 10) {
@@ -57,6 +56,13 @@ struct EventSheet: View {
         }
     }
 
+    private func seatText(_ e: Event) -> String {
+        if e.registered { return "You have a seat." }
+        if e.spotsLeft == 0 { return "This event is full." }
+        if let left = e.spotsLeft { return "\(left) of \(e.capacity ?? 0) seats left" }
+        return "Registration required"
+    }
+
     private func info(_ symbol: String, _ text: String) -> some View {
         HStack(spacing: 14) {
             Image(systemName: symbol).font(.system(size: 16)).foregroundStyle(P.muted).frame(width: 22)
@@ -71,7 +77,7 @@ struct EventSheet: View {
 enum CalendarFile {
     static func write(for e: Event) -> URL? {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "UTC"); f.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
-        func esc(_ s: String) -> String { s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: ";", with: "\;").replacingOccurrences(of: ",", with: "\\,").replacingOccurrences(of: "\n", with: "\\n") }
+        func esc(_ s: String) -> String { s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: ";", with: "\\;").replacingOccurrences(of: ",", with: "\\,").replacingOccurrences(of: "\n", with: "\\n") }
         let lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Qiskit Fall Fest//EN", "BEGIN:VEVENT", "UID:\(e.id)@qff",
                      "DTSTAMP:\(f.string(from: Date()))", "DTSTART:\(f.string(from: e.startsAt))", "DTEND:\(f.string(from: e.endsAt))",
                      "SUMMARY:\(esc(e.title + " · Qiskit Fall Fest"))", "LOCATION:\(esc(e.location))", "DESCRIPTION:\(esc(e.description))", "END:VEVENT", "END:VCALENDAR"]
