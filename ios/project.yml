@@ -1,0 +1,63 @@
+name: QFF
+options:
+  bundleIdPrefix: org.qiskit.fallfest
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    QFF_API_BASE: "https://qff-api-666549809539.us-east5.run.app"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+targets:
+  QFF:
+    type: application
+    platform: iOS
+    sources:
+      - path: QFF
+    info:
+      path: QFF/Info.plist
+      properties:
+        CFBundleDisplayName: "Fall Fest ’26"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        APIBase: "$(QFF_API_BASE)"
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchMark
+          UIImageRespectsSafeAreaInsets: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIAppFonts:
+          - manrope.ttf
+          - dmsans.ttf
+        ITSAppUsesNonExemptEncryption: false
+        UIRequiredDeviceCapabilities:
+          - arm64
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.qiskit.fallfest.amaravati
+        PRODUCT_NAME: QFF
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_EMIT_LOC_STRINGS: NO
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited)"
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG QFF_PREVIEW"
+schemes:
+  QFF:
+    build:
+      targets:
+        QFF: all
+    run:
+      config: Debug
+    archive:
+      config: Release

@@ -1,0 +1,7 @@
+QFF.xcodeproj/
+build/
+build-device/
+Payload/
+*.ipa
+*.log
+shots/

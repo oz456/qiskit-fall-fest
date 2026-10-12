@@ -1,0 +1,89 @@
+name: iOS build
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: ios
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build for Simulator (Debug, with screenshot preview mode)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project QFF.xcodeproj -scheme QFF -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build-sim.log | tail -5
+
+      - name: Render every screen in the Simulator
+        working-directory: ios
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)['devices']
+          c=[x for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 1') and 'Pro' in x['name'] and 'Max' not in x['name']]
+          c=c or [x for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')]
+          print(c[-1]['udid'])")
+          echo "Simulator $UDID"
+          xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
+          xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/QFF.app
+          mkdir -p shots
+          for s in signin hub event pass qr support ticket thread faq notifications profile; do
+            SIMCTL_CHILD_QFF_PREVIEW=1 SIMCTL_CHILD_QFF_SCREEN=$s xcrun simctl launch --terminate-running-process "$UDID" org.qiskit.fallfest.amaravati
+            sleep 5
+            xcrun simctl io "$UDID" screenshot "shots/$s.png"
+          done
+          xcrun simctl ui "$UDID" appearance dark
+          for s in hub pass; do
+            SIMCTL_CHILD_QFF_PREVIEW=1 SIMCTL_CHILD_QFF_SCREEN=$s xcrun simctl launch --terminate-running-process "$UDID" org.qiskit.fallfest.amaravati
+            sleep 5
+            xcrun simctl io "$UDID" screenshot "shots/dark-$s.png"
+          done
+
+      - name: Build device IPA (Release, unsigned)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project QFF.xcodeproj -scheme QFF -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build 2>&1 | tee build-device.log | tail -5
+          rm -rf Payload && mkdir Payload && cp -R build-device/Build/Products/Release-iphoneos/QFF.app Payload/
+          zip -qry FallFest-unsigned.ipa Payload
+          ls -la FallFest-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-screenshots
+          path: ios/shots
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-build-logs
+          path: ios/*.log
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FallFest-unsigned-ipa
+          path: ios/FallFest-unsigned.ipa
