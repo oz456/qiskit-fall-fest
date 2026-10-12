@@ -7,6 +7,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,7 +49,7 @@ fun HubScreen(app: AppState, onOpen: (Event) -> Unit, onNotifications: () -> Uni
     val events = app.events
     val first = events.minOfOrNull { it.startDay }
     val last = events.maxOfOrNull { it.endDay }
-    val days = remember(first, last) { if (first == null || last == null) emptyList() else generateSequence(first) { it.plusDays(1) }.takeWhile { !it.isAfter(last) }.take(7).toList() }
+    val days = remember(first, last) { if (first == null || last == null) emptyList() else generateSequence(first) { it.plusDays(1) }.takeWhile { !it.isAfter(last) }.take(60).toList() }
     var picked by remember { mutableStateOf<LocalDate?>(null) }
     val day = picked ?: days.firstOrNull { it == now.toLocalDate() } ?: days.firstOrNull()
     var filter by remember { mutableStateOf(Filter.All) }
@@ -154,12 +157,21 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
 
 @Composable
 private fun DayTabs(days: List<LocalDate>, selected: LocalDate?, onSelect: (LocalDate) -> Unit) {
-    Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        days.forEachIndexed { i, d ->
+    val state = rememberLazyListState()
+    // bring the selected day into view (first composition and whenever it changes)
+    LaunchedEffect(selected, days) { days.indexOf(selected).takeIf { it >= 0 }?.let { state.animateScrollToItem((it - 1).coerceAtLeast(0)) } }
+    LazyRow(state = state, contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        itemsIndexed(days, key = { _, d -> d.toEpochDay() }) { i, d ->
             val sel = d == selected
             val bg by animateColorAsState(if (sel) P.ink else P.surface, label = "d"); val fg by animateColorAsState(if (sel) P.bg else P.ink, label = "dfg")
-            Column(Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).clickable { onSelect(d) }.background(bg).border(1.dp, if (sel) Color.Transparent else P.line, RoundedCornerShape(20.dp)).padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("DAY ${i + 1}", style = T.label.copy(fontSize = 10.sp), color = fg.copy(alpha = .65f)); Text("${dayShort(d)} ${d.dayOfMonth}", style = T.title, color = fg)
+            val monthStart = i == 0 || days[i - 1].month != d.month
+            Column(
+                Modifier.width(66.dp).clip(RoundedCornerShape(20.dp)).clickable { onSelect(d) }.background(bg).border(1.dp, if (sel) Color.Transparent else P.line, RoundedCornerShape(20.dp)).padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(if (monthStart) d.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH).uppercase() else dayShort(d), style = T.label.copy(fontSize = 10.sp), color = fg.copy(alpha = .65f), maxLines = 1)
+                Text("${d.dayOfMonth}", style = T.title.copy(fontSize = 20.sp), color = fg)
+                Text(if (monthStart) dayShort(d) else "", style = T.label.copy(fontSize = 9.sp), color = fg.copy(alpha = .55f), maxLines = 1)
             }
         }
     }

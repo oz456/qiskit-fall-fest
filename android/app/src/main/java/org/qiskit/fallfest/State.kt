@@ -18,7 +18,7 @@ private const val STEP_SEC = 30L
 class AppState(context: Context) {
     private val prefs = context.getSharedPreferences("qff", Context.MODE_PRIVATE)
     private val secure = SecureStore(context)
-    private val api = Api(BuildConfig.API_BASE)
+    private val api = Api(BuildConfig.API_BASE) { prefs.edit().putLong("skew_ms", it).apply() }.also { it.skewMs = prefs.getLong("skew_ms", 0) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var accessToken: String? = null
     private val refreshLock = kotlinx.coroutines.sync.Mutex()

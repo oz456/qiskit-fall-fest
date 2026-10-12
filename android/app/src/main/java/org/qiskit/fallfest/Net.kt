@@ -10,7 +10,7 @@ import java.net.URL
 class ApiException(val http: Int, val code: String, override val message: String) : Exception(message)
 
 /** Thin JSON-over-HTTPS client. Auth/refresh policy lives in AppState. */
-class Api(private val base: String) {
+class Api(private val base: String, private val onSkew: (Long) -> Unit = {}) {
     /** serverTime - localTime in ms, derived from response Date headers; used to keep the rotating QR in sync. */
     @Volatile var skewMs: Long = 0
 
@@ -27,7 +27,7 @@ class Api(private val base: String) {
                 c.outputStream.use { it.write(body.toString().toByteArray()) }
             }
             val http = c.responseCode
-            c.getHeaderFieldDate("Date", 0L).takeIf { it > 0 }?.let { skewMs = it - System.currentTimeMillis() }
+            c.getHeaderFieldDate("Date", 0L).takeIf { it > 0 }?.let { skewMs = it - System.currentTimeMillis(); onSkew(skewMs) }
             val text = (if (http in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (http !in 200..299) {
                 val j = runCatching { JSONObject(text) }.getOrNull()

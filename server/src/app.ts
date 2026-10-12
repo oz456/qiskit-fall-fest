@@ -65,6 +65,8 @@ export async function buildApp(db: Db) {
   await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "check"), prefix: "/check/", ...staticOpts(false) }); });
   app.get("/", async (_req, reply) => reply.redirect("/admin/"));
   app.get("/admin", async (_req, reply) => reply.redirect("/admin/"));
+  app.get("/scan", async (_req, reply) => reply.redirect("/check/"));
+  app.get("/scan/", async (_req, reply) => reply.redirect("/check/"));
   app.get("/check", async (_req, reply) => reply.redirect("/check/"));
   return app;
 }

@@ -27,7 +27,7 @@ export function appRoutes(app: FastifyInstance, db: Db) {
     // Same response whether or not the email is registered (no account enumeration).
     if (!user || user.status !== "active") return GENERIC_SENT;
     const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '10 minutes'", [email]);
-    if (n >= 3) return reply.code(429).send({ error: "too_many_requests", message: "Too many codes requested. Try again in a few minutes." });
+    if (n >= 3) return GENERIC_SENT; // identical reply: a 429 here would reveal which emails are registered
     const code = otpCode();
     await db.query("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3)", [email, otpHash(email, code), new Date(Date.now() + OTP_TTL_MS)]);
     await sendMail(otpMail(email, code)).catch((e) => req.log.error({ err: e.message }, "otp mail failed"));
