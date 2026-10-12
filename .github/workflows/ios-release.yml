@@ -1,0 +1,52 @@
+name: iOS release (TestFlight)
+
+# Manual. Needs an Apple Developer Program membership and these repository secrets:
+#   APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (contents of the App Store Connect API key .p8 file)
+# and the app record (bundle id org.qiskit.fallfest.amaravati) created once in App Store Connect.
+on:
+  workflow_dispatch:
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      TEAM: ${{ secrets.APPLE_TEAM_ID }}
+      KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Generate project
+        working-directory: ios
+        run: xcodegen generate
+      - name: Write API key
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s' "${{ secrets.ASC_KEY_P8 }}" > "$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8"
+      - name: Archive (automatic signing through the App Store Connect API key)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild archive -project QFF.xcodeproj -scheme QFF -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/QFF.xcarchive \
+            DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8" \
+            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER" 2>&1 | tail -20
+      - name: Export + upload to TestFlight
+        working-directory: ios
+        run: |
+          cat > ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${TEAM}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath build/QFF.xcarchive -exportOptionsPlist ExportOptions.plist \
+            -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8" \
+            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER" 2>&1 | tail -20
