@@ -33,7 +33,7 @@ gcloud run services update qff-api --region us-east5 --update-labels rev=$(date 
 - **Where to create an app password:** Google Account → Security → 2-Step Verification (must be on) → App passwords → create one named “Fall Fest”. Workspace admins can disable app passwords; if sending fails with “Application-specific password required/disabled”, ask the domain admin to allow them.
 - Emails come “from” the SMTP account itself (Gmail rewrites the From address), with display name “Qiskit Fall Fest”. Codes can land in spam on first use — ask testers to mark “Not spam”.
 
-## First-run checklist (after SendGrid)
+## First-run checklist
 - `/admin` → Attendees → **Import CSV** (`email,name,college`). Only these emails can sign in.
 - `/admin` → Events: the six open Unstop programmes are loaded; add the extra (non-Unstop) sessions there. For multi-day events set the end on a later day.
 - `/admin` → Content: FAQs and venue text.
