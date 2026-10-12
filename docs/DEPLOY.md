@@ -33,9 +33,32 @@ gcloud run services update qff-api --region us-east5 --update-labels rev=$(date 
 - **Where to create an app password:** Google Account → Security → 2-Step Verification (must be on) → App passwords → create one named “Fall Fest”. Workspace admins can disable app passwords; if sending fails with “Application-specific password required/disabled”, ask the domain admin to allow them.
 - Emails come “from” the SMTP account itself (Gmail rewrites the From address), with display name “Qiskit Fall Fest”. Codes can land in spam on first use — ask testers to mark “Not spam”.
 
+## Backups
+- **Automatic:** Cloud Run Job `qff-backup` runs every 6 hours (Cloud Scheduler `qff-backup-6h`, us-east4) and writes `qff-backup-<time>.json.gz` to `gs://qiskit-511416-qff-backups/` (private bucket, files auto-deleted after 30 days). It covers attendees (incl. pass secrets), events, saved/registered, announcements, tickets, FAQs, settings, check-ins, audit log. Sign-in sessions and one-time codes are intentionally not backed up — after a restore people just sign in again.
+- **Run one now:** `gcloud run jobs execute qff-backup --region us-east5 --wait` (do this right before the event and right after).
+- **Restore (destructive — overwrites the target DB):**
+```bash
+gcloud storage ls gs://qiskit-511416-qff-backups/                         # pick a file
+gcloud storage cp gs://qiskit-511416-qff-backups/<file>.json.gz .
+cd server && DB_DRIVER= DATABASE_URL='<neon url>' node scripts/restore.ts ../<file>.json.gz --yes
+```
+(Needs a network that allows Postgres port 5432 to Neon; otherwise run it from Cloud Shell.) Restore is covered by an automated round-trip test.
+- Neon also keeps its own short point-in-time history; treat the bucket as the real backup.
+
+## Monitoring & alerts
+Emails go to **pree.makes@gmail.com** (the Google Cloud owner). Change/add recipients in Cloud Console → Monitoring → Alerting → Notification channels.
+| Alert | Fires when |
+|---|---|
+| Fall Fest is DOWN | the uptime check on `/ping` (every minute, checks the body) fails for ~2 min |
+| server errors (5xx) | more than 5 server errors in 5 min |
+| emails failing | 3+ failed login-code/ticket-reply emails in 10 min (e.g. Gmail throttling or a revoked app password) |
+| backup job failed | a scheduled backup execution fails |
+Logs: Cloud Run → `qff-api` → Logs. Failed emails appear as “otp mail failed”.
+
 ## First-run checklist
 - `/admin` → Attendees → **Import CSV** (`email,name,college`). Only these emails can sign in.
-- `/admin` → Events: the six open Unstop programmes are loaded; add the extra (non-Unstop) sessions there. For multi-day events set the end on a later day.
+- `/admin` → Events: the app covers the **offline phase (26–30 Oct, SRM University AP)**. Loaded so far: Project Q Grand Finale (28–29 Oct) and the Winner Announcement (30 Oct). Add every other on-campus session there; for multi-day events set the end on a later day.
+- `/admin` → Content → **Festival first/last day** (26–30 Oct) drives the app's countdown and guarantees those days are in the `/check` scanner even before sessions are entered.
 - `/admin` → Content: FAQs and venue text.
 - `/check`: hand the scanner login to door volunteers. Pick “Entry · today” (once per person per day) or a specific event. Use a phone with the camera, or a USB barcode/QR scanner into the “Backup” box.
 
