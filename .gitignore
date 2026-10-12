@@ -7,3 +7,4 @@ dist/
 *.jks
 local.properties
 *.apk
+!server/public/download/*.apk

@@ -10,7 +10,7 @@ PUBLIC_URL="${PUBLIC_URL:-https://$SERVICE-$PROJECT_NUMBER.$REGION.run.app}"
 cd "$(dirname "$0")"
 gcloud run deploy "$SERVICE" --quiet --project "$PROJECT" --region "$REGION" --source . \
   --service-account "qff-run@$PROJECT.iam.gserviceaccount.com" \
-  --allow-unauthenticated --min-instances "${MIN_INSTANCES:-0}" --max-instances 3 --concurrency 40 --cpu 1 --memory 512Mi --timeout 30 \
+  --allow-unauthenticated --min-instances "${MIN_INSTANCES:-1}" --max-instances 3 --concurrency 40 --cpu 1 --memory 512Mi --timeout 30 \
   --set-env-vars "NODE_ENV=production,EVENT_TZ=Asia/Kolkata,MAIL_FROM_NAME=Qiskit Fall Fest,SMTP_DAILY_LIMIT=${SMTP_DAILY_LIMIT:-1900},PUBLIC_URL=$PUBLIC_URL" \
   --set-secrets "DATABASE_URL=qff-database-url:latest,JWT_SECRET=qff-jwt-secret:latest,SESSION_SECRET=qff-session-secret:latest,OTP_PEPPER=qff-otp-pepper:latest,ADMIN_USERNAME=qff-admin-username:latest,ADMIN_PASSWORD_HASH=qff-admin-password-hash:latest,CHECK_USERNAME=qff-check-username:latest,CHECK_PASSWORD_HASH=qff-check-password-hash:latest,SMTP_ACCOUNTS=qff-smtp-accounts:latest"
 echo "URL: $PUBLIC_URL"
