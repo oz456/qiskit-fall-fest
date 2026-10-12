@@ -21,7 +21,7 @@ struct SignInView: View {
             Circle()
                 .fill(RadialGradient(colors: [P.qiskitPurple.opacity(0.18), .clear], center: .center, startRadius: 0, endRadius: 210))
                 .frame(width: 420, height: 420).offset(x: 110, y: -40).allowsHitTesting(false)
-            AtomOrb(period: 14, lineWidth: 1).frame(width: 330, height: 330).offset(x: 120, y: 70).opacity(0.8).allowsHitTesting(false)
+            AtomOrb(lineWidth: 1, period: 14).frame(width: 330, height: 330).offset(x: 120, y: 70).opacity(0.8).allowsHitTesting(false)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
