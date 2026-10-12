@@ -18,6 +18,15 @@ struct SignInView: View {
     var body: some View {
         ZStack {
             P.bg.ignoresSafeArea()
+            // decorative only: an overlay on a clear, parent-sized layer so its oversized frames never affect the layout width
+            Color.clear.overlay(alignment: .topTrailing) {
+                ZStack {
+                    Circle().fill(RadialGradient(colors: [P.qiskitPurple.opacity(0.18), .clear], center: .center, startRadius: 0, endRadius: 210)).frame(width: 420, height: 420).offset(x: 110, y: -40)
+                    AtomOrb(lineWidth: 1, period: 14).frame(width: 330, height: 330).offset(x: 120, y: 70).opacity(0.8)
+                }
+            }
+            .clipped().allowsHitTesting(false).ignoresSafeArea()
+            GeometryReader { geo in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .top) {
@@ -42,19 +51,11 @@ struct SignInView: View {
                         .opacity(entered ? 1 : 0).offset(y: entered ? 0 : 30)
                 }
                 .padding(.horizontal, 28).padding(.bottom, 16)
-                .frame(minHeight: UIScreen.main.bounds.height - 60)
+                .frame(minHeight: geo.size.height)
             }
             .scrollDismissesKeyboard(.interactively)
-        }
-        .background(alignment: .topTrailing) {
-            // decorative only: lives in a background so its oversized frames never affect the layout width
-            ZStack {
-                Circle().fill(RadialGradient(colors: [P.qiskitPurple.opacity(0.18), .clear], center: .center, startRadius: 0, endRadius: 210)).frame(width: 420, height: 420).offset(x: 110, y: -40)
-                AtomOrb(lineWidth: 1, period: 14).frame(width: 330, height: 330).offset(x: 120, y: 70).opacity(0.8)
             }
-            .allowsHitTesting(false)
         }
-        .clipped()
         .onAppear { withAnimation(.easeOut(duration: 0.8)) { entered = true } }
         .onReceive(tick) { _ in if cooldown > 0 { cooldown -= 1 } }
     }
@@ -64,11 +65,13 @@ struct SignInView: View {
             if step == 0 {
                 HStack(spacing: 12) {
                     Image(systemName: "envelope").foregroundStyle(focus == .email ? P.ink : P.muted)
-                    TextField("", text: $email, prompt: Text("you@example.com").foregroundColor(P.muted.opacity(0.8)))
-                        .font(T.body).foregroundStyle(P.ink)
+                    ZStack(alignment: .leading) {
+                        if email.isEmpty { Text("you@example.com").font(T.body).foregroundStyle(P.muted.opacity(0.8)) }
+                        TextField("", text: $email).font(T.body).foregroundStyle(P.ink)
                         .keyboardType(.emailAddress).textContentType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .submitLabel(.send).focused($focus, equals: .email).onSubmit(sendCode)
                         .onChange(of: email) { _ in error = nil }
+                    }
                 }
                 .padding(.horizontal, 18).frame(height: 60)
                 .background(P.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))

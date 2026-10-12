@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject var app: AppState
     @StateObject private var router = Router()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -23,6 +24,7 @@ struct RootView: View {
         .tint(P.primary)
         .task { await bootPreviewScreen() }
         .onChange(of: app.signedIn) { signedIn in if !signedIn { router.tab = .hub; router.sheet = nil } }
+        .onChange(of: scenePhase) { phase in if phase == .active { Task { await app.refresh() } } } // fresh schedule whenever the app comes back
     }
 
     /// Debug-only: lets CI open a specific screen for automated screenshots.
