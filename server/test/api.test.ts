@@ -124,6 +124,8 @@ describe("attendee flow", () => {
     e2 = (await app.inject({ url: "/v1/events", headers: h })).json().events[0];
     assert.equal(e2.registered, true); assert.equal(e2.spotsLeft, 0);
     assert.equal((await admin("GET", `/admin/api/events/${eventId}/enrolled`)).json().length, 1);
+    const who = (await admin("GET", "/admin/api/users?q=alex")).json()[0];
+    assert.equal(who.enrolled.length, 1);
     await admin("POST", "/admin/api/users", { email: "sam@example.org", name: "Sam" });
   });
 

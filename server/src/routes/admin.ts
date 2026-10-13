@@ -117,9 +117,10 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const like = q ? `%${q.replace(/[%_\\]/g, "\\$&").toLowerCase()}%` : "%";
       const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,
         EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL) AS has_app,
-        (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins
+        (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins,
+        (SELECT coalesce(json_agg(e.title ORDER BY e.starts_at), '[]'::json) FROM user_events r JOIN events e ON e.id=r.event_id WHERE r.user_id=u.id AND r.kind='registered') AS enrolled
         FROM users u WHERE lower(u.email) LIKE $1 OR lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1 ORDER BY u.created_at DESC LIMIT 500`, [like]);
-      return rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, hasApp: u.has_app, checkins: u.checkins }));
+      return rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, hasApp: u.has_app, checkins: u.checkins, enrolled: u.enrolled }));
     });
     api.post("/admin/api/users", async (req, reply) => {
       const b = UserInput.parse(req.body);

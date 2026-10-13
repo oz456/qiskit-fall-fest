@@ -159,8 +159,8 @@ async function people(m) {
   m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), q, h("div", { class: "row" }), out);
   async function load() {
     const list = await api("GET", "/users?q=" + encodeURIComponent(q.value)); clear(out);
-    out.append(h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "App", "Check-ins", "Status", ""].map((x) => h("th", {}, x))),
-      list.map((u) => h("tr", {}, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, u.college || "")), h("td", {}, u.email), h("td", {}, u.passCode),
+    out.append(h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Enrolled in", "App", "Check-ins", "Status", ""].map((x) => h("th", {}, x))),
+      list.map((u) => h("tr", {}, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, u.college || "")), h("td", {}, u.email), h("td", {}, u.passCode), h("td", {}, (u.enrolled || []).length ? (u.enrolled).map((t) => h("div", { class: "small" }, t)) : h("span", { class: "muted small" }, "—")),
         h("td", {}, u.hasApp ? h("span", { class: "pill ok" }, "SIGNED IN") : h("span", { class: "pill" }, "NOT YET")), h("td", {}, u.checkins),
         h("td", {}, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase())),
         h("td", {}, h("div", { class: "row" },
