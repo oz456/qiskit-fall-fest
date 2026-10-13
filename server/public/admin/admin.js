@@ -47,7 +47,7 @@ const localToIso = (local) => { // "2026-10-16T11:00" in TZ -> ISO instant
 const isoToLocal = (iso) => { const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(iso)).map((x) => [x.type, x.value])); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`; };
 
 // ---- shell ----
-const PAGES = [["events", "Events"], ["people", "Attendees"], ["announce", "Announcements"], ["support", "Support"], ["attendance", "Attendance"], ["content", "Content"], ["activity", "Activity"]];
+const PAGES = [["events", "Events"], ["people", "Attendees"], ["announce", "Announcements"], ["support", "Support"], ["attendance", "Attendance"], ["content", "Content"]];
 function showLogin() {
   clear($app);
   const err = h("div", { class: "err" }); const u = h("input", { autocomplete: "username", required: true }); const p = h("input", { type: "password", autocomplete: "current-password", required: true });
@@ -71,6 +71,8 @@ async function boot() {
   $app.append(h("div", { class: "shell" },
     h("nav", {}, h("div", { class: "brand" }, h("img", { src: "qiskit.svg", alt: "" }), "Fall Fest"),
       PAGES.map(([id, label]) => h("a", { href: "#" + id, "data-p": id }, label)),
+      h("div", { class: "grow" }),
+      h("a", { href: "#activity", "data-p": "activity" }, "Activity"),
       h("a", { href: "#", onclick: guard(async (e) => { e.preventDefault(); await api("POST", "/logout"); showLogin(); }) }, "Sign out")), main));
   route();
 }
@@ -224,18 +226,24 @@ async function support(m) {
 }
 
 async function attendance(m) {
-  const sum = await api("GET", "/attendance"); let scope = "";
-  const out = h("div", { class: "card" });
-  const label = (s) => s.startsWith("day:") ? "Entry · " + s.slice(4) : "Event · " + s.slice(6, 14);
-  const pick = h("select", { onchange: () => { scope = pick.value; load(); } }, h("option", { value: "" }, "Select a scan group…"), sum.summary.map((x) => h("option", { value: x.scope }, `${label(x.scope)} — ${x.count}`)));
-  m.append(head("Attendance"), h("p", { class: "muted" }, "Recorded by the door scanners at /check. Pick a group to see who was checked in."), pick, out);
+  const sum = await api("GET", "/attendance"); let scope = sum.summary[0]?.scope || "";
+  const out = h("div", { class: "card" }), chips = h("div", { class: "chips" });
+  const dayLabel = (d) => new Date(d + "T00:00:00Z").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const label = (x) => x.scope.startsWith("day:") ? ["Venue entry", dayLabel(x.scope.slice(4))] : ["Event", x.title || "Deleted event"];
+  m.append(head("Attendance"), h("p", { class: "muted" }, "Who the door scanners checked in. Venue entry counts people once per day at the gate; an event counts people at that session."), chips, out);
+  function drawChips() {
+    clear(chips);
+    sum.summary.forEach((x) => { const [kind, name] = label(x); chips.append(h("button", { class: "chip" + (x.scope === scope ? " on" : ""), onclick: () => { scope = x.scope; drawChips(); load(); } }, h("small", {}, kind), h("b", {}, name), h("span", {}, x.count + " in"))); });
+  }
   async function load() {
     clear(out); if (!scope) return;
     const r = await api("GET", "/attendance?scope=" + encodeURIComponent(scope));
     const csv = () => { const lines = ["name,email,college,pass,checked_in_at", ...r.rows.map((x) => [x.name, x.email, x.college || "", x.passCode, x.at].map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(","))]; const a = h("a", { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })), download: "attendance.csv" }); a.click(); };
-    out.append(h("div", { class: "row" }, h("b", {}, r.rows.length + " checked in"), h("button", { class: "btn ghost sm right", onclick: csv }, "Download CSV")),
+    out.append(h("div", { class: "row", style: "margin-bottom:12px" }, h("b", {}, r.rows.length + " checked in"), h("button", { class: "btn ghost sm right", onclick: csv }, "Download CSV")),
       h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Time"].map((x) => h("th", {}, x))), r.rows.map((x) => h("tr", {}, h("td", {}, x.name, h("div", { class: "muted small" }, x.college || "")), h("td", {}, x.email), h("td", {}, x.passCode), h("td", {}, fmt(x.at, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))))));
   }
+  if (!sum.summary.length) { out.append(h("p", { class: "muted" }, "No check-ins yet. They appear here as soon as the door scanners record entries.")); return; }
+  drawChips(); await load();
 }
 
 async function content(m) {

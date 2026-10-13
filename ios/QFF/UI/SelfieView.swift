@@ -10,13 +10,14 @@ struct SelfieView: View {
     @State private var jpeg: Data?
     @State private var uploading = false
     @State private var error: String?
+    @State private var confirming = false
 
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(text: "ONE-TIME SETUP")
-                Text("Take a quick selfie").font(Fonts.display(30, 700, style: .title1)).foregroundStyle(P.ink)
-                Text("Door volunteers match your face to your pass. It’s saved once and only event staff can see it.")
+                Text("Take a clear selfie").font(Fonts.display(30, 700, style: .title1)).foregroundStyle(P.ink)
+                Text("Use a clear, original picture of yourself. It can’t be changed later and will be used to verify your identity at the door.")
                     .font(T.body).foregroundStyle(P.muted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -25,6 +26,7 @@ struct SelfieView: View {
             frame
             Spacer(minLength: 16)
 
+            Label("Final once saved · only event staff can see it", systemImage: "lock").font(T.small).foregroundStyle(P.muted).padding(.bottom, 14)
             if let error { Text(error).font(T.small).foregroundStyle(P.danger).multilineTextAlignment(.center).padding(.bottom, 10) }
             controls
             Button("Not now") { app.skippedSelfie = true }
@@ -33,6 +35,10 @@ struct SelfieView: View {
         .padding(.horizontal, 28).padding(.top, 24).padding(.bottom, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Backdrop())
+        .alert("Use this photo?", isPresented: $confirming) {
+            Button("Yes, use it") { upload() }
+            Button("Retake", role: .cancel) { }
+        } message: { Text("It can’t be changed later and will be used to verify your identity.") }
         .task { if !app.isPreview { await camera.start() } }
         .onDisappear { camera.stop() }
         .onAppear {
@@ -81,7 +87,7 @@ struct SelfieView: View {
                         .frame(maxWidth: .infinity, minHeight: 58).background(P.surfaceAlt, in: Capsule())
                 }
                 .buttonStyle(PressStyle())
-                PrimaryButton(title: "USE PHOTO", loading: uploading) { upload() }.frame(maxWidth: .infinity)
+                PrimaryButton(title: "USE PHOTO", loading: uploading) { confirming = true }.frame(maxWidth: .infinity)
             }
         } else if camera.status == .authorized || app.isPreview {
             Button { Haptics.tap(); camera.capture() } label: {

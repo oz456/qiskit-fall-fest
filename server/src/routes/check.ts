@@ -48,10 +48,10 @@ export function checkRoutes(app: FastifyInstance, db: Db) {
       const m = /^QFF1\.([A-Z0-9-]{4,20})\.(\d{1,12})\.([A-Za-z0-9_-]{12})$/.exec(b.payload.trim());
       if (!m) return { result: "invalid", message: "Not a Fall Fest pass." };
       const [, code, stepStr, mac] = m as unknown as [string, string, string, string];
-      const [u] = await db.query("SELECT id,name,college,pass_code,pass_secret,status,photo_at FROM users WHERE pass_code=$1", [code]);
+      const [u] = await db.query("SELECT id,name,college,pass_code,pass_secret,status, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE pass_code=$1", [code]);
       if (!u) return { result: "invalid", message: "Unknown pass." };
       const step = Number(stepStr); const nowStep = Math.floor(Date.now() / 1000 / PASS_STEP_SEC);
-      const who = { name: u.name, college: u.college, passCode: u.pass_code, hasPhoto: !!u.photo_at };
+      const who = { name: u.name, college: u.college, passCode: u.pass_code, hasPhoto: u.has_photo };
       if (!safeEqual(mac, passMac(Buffer.from(u.pass_secret), code, step))) return { result: "invalid", message: "Pass signature is wrong. Possibly an old or forwarded code.", who: { ...who, hasPhoto: false } };
       if (Math.abs(nowStep - step) > 1) return { result: "expired", message: "This QR is stale (a screenshot?). Ask the attendee to open the live pass.", who: { ...who, hasPhoto: false } };
       if (u.status !== "active") return { result: "blocked", message: "This pass is blocked.", who: { ...who, hasPhoto: false } };
@@ -66,7 +66,7 @@ export function checkRoutes(app: FastifyInstance, db: Db) {
           if (!reg) warning = "Not enrolled: this event is pre-registration only.";
         }
       }
-      if (!u.photo_at) warning = [warning, "No selfie on file yet."].filter(Boolean).join(" ");
+      if (!u.has_photo) warning = [warning, "No selfie on file yet."].filter(Boolean).join(" ");
       return { result: "verify", message: "Check the face, then confirm.", warning, who, ticket };
     });
 
@@ -85,7 +85,7 @@ export function checkRoutes(app: FastifyInstance, db: Db) {
     api.get("/check/api/photo", async (req, reply) => {
       const { ticket } = z.object({ ticket: z.string().max(1000) }).parse(req.query);
       const t = ticketOf(ticket);
-      const img = t ? await getPhoto(t.uid) : null;
+      const img = t ? await getPhoto(db, t.uid) : null;
       if (!img) return reply.code(404).send({ error: "not_found" });
       return reply.header("Content-Type", "image/jpeg").header("Cache-Control", "no-store").send(img);
     });

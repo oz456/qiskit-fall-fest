@@ -6,7 +6,7 @@ import { config } from "../config.ts";
 import type { Db, Queryable } from "../db.ts";
 import { staffAuth } from "../lib/staff.ts";
 import { mailRemaining } from "../lib/mail.ts";
-import { deletePhoto, getPhoto } from "../lib/photos.ts";
+import { getPhoto, removePhoto } from "../lib/photos.ts";
 import { AnnouncementInput, EventInput, FaqInput, SettingsInput, TicketReply, TicketStatus, UserInput } from "../lib/schemas.ts";
 import { audit, eventDay, eventOut } from "../lib/util.ts";
 
@@ -117,7 +117,7 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const { q } = z.object({ q: z.string().max(100).optional() }).parse(req.query);
       const like = q ? `%${q.replace(/[%_\\]/g, "\\$&").toLowerCase()}%` : "%";
       const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,
-        EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL) AS has_app, (u.photo_at IS NOT NULL) AS has_photo,
+        EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL) AS has_app, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id) AS has_photo,
         (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins,
         (SELECT coalesce(json_agg(e.title ORDER BY e.starts_at), '[]'::json) FROM user_events r JOIN events e ON e.id=r.event_id WHERE r.user_id=u.id AND r.kind='registered') AS enrolled
         FROM users u WHERE lower(u.email) LIKE $1 OR lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1 ORDER BY u.created_at DESC LIMIT 500`, [like]);
@@ -125,14 +125,14 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     api.get("/admin/api/users/:id/photo", async (req, reply) => {
       const { id } = Id.parse(req.params);
-      const img = await getPhoto(id);
+      const img = await getPhoto(db, id);
       if (!img) return reply.code(404).send({ error: "not_found" });
       return reply.header("Content-Type", "image/jpeg").header("Cache-Control", "no-store").send(img);
     });
     // Lets someone retake their selfie (wrong person, bad photo): the app asks for a new one at next sign-in.
     api.delete("/admin/api/users/:id/photo", async (req) => {
       const { id } = Id.parse(req.params);
-      await deletePhoto(id); await db.query("UPDATE users SET photo_at=NULL WHERE id=$1", [id]);
+      await removePhoto(db, id);
       await audit(db, req, "user.photo_reset", "user", id); return { ok: true };
     });
     api.post("/admin/api/users", async (req, reply) => {
@@ -171,7 +171,7 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     api.delete("/admin/api/users/:id", async (req) => {
       const { id } = Id.parse(req.params);
-      await db.query("DELETE FROM users WHERE id=$1", [id]); await deletePhoto(id); await audit(db, req, "user.delete", "user", id); return { ok: true };
+      await removePhoto(db, id); await db.query("DELETE FROM users WHERE id=$1", [id]); await audit(db, req, "user.delete", "user", id); return { ok: true };
     });
 
     // ---- announcements ----
@@ -241,9 +241,10 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     // ---- attendance (read-only view of what the /check scanners recorded) ----
     api.get("/admin/api/attendance", async (req) => {
       const { scope } = z.object({ scope: z.string().max(60).optional() }).parse(req.query);
-      const summary = await db.query("SELECT scope, count(*)::int AS n, max(scanned_at) AS last FROM checkins GROUP BY scope ORDER BY scope");
+      const summary = await db.query("SELECT c.scope, e.title, count(*)::int AS n, max(c.scanned_at) AS last FROM checkins c LEFT JOIN events e ON c.scope = 'event:' || e.id::text GROUP BY c.scope, e.title ORDER BY c.scope"
+);
       const rows = scope ? await db.query(`SELECT u.name, u.email, u.college, u.pass_code, c.scanned_at FROM checkins c JOIN users u ON u.id=c.user_id WHERE c.scope=$1 ORDER BY c.scanned_at DESC LIMIT 2000`, [scope]) : [];
-      return { summary: summary.map((r) => ({ scope: r.scope, count: r.n, last: new Date(r.last).toISOString() })), rows: rows.map((r) => ({ name: r.name, email: r.email, college: r.college, passCode: r.pass_code, at: new Date(r.scanned_at).toISOString() })) };
+      return { summary: summary.map((r) => ({ scope: r.scope, title: r.title ?? null, count: r.n, last: new Date(r.last).toISOString() })), rows: rows.map((r) => ({ name: r.name, email: r.email, college: r.college, passCode: r.pass_code, at: new Date(r.scanned_at).toISOString() })) };
     });
 
     api.get("/admin/api/audit", async () => (await db.query("SELECT id, at, action, entity, entity_id, detail, ip FROM audit_log ORDER BY id DESC LIMIT 200")).map((a) => ({ ...a, at: new Date(a.at).toISOString() })));

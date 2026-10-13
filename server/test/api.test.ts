@@ -136,8 +136,10 @@ describe("attendee flow", () => {
     const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(8000, 1)]);
     const put = (body: Buffer) => app.inject({ method: "PUT", url: "/v1/me/photo", headers: { authorization: `Bearer ${tokens.accessToken}`, "content-type": "image/jpeg" }, payload: body });
     assert.equal((await put(Buffer.alloc(8000, 1))).statusCode, 400, "not a jpeg");
-    assert.equal((await put(jpeg)).statusCode, 200);
+    const both = await Promise.all([put(jpeg), put(jpeg)]); // two phones / a double tap at the same instant
+    assert.deepEqual(both.map((r) => r.statusCode).sort(), [200, 409], "exactly one upload wins");
     assert.equal((await put(jpeg)).statusCode, 409, "only once");
+    assert.equal((await db.query("SELECT 1 FROM user_photos WHERE user_id=$1", [u!.id])).length, 1);
     assert.equal((await me()).json().profile.hasPhoto, true);
     const v = (await check("POST", "/check/api/scan", { payload: passPayload(Buffer.from(u!.pass_secret), u!.pass_code), scope: "day:2026-10-19" })).json();
     assert.equal(v.who.hasPhoto, true);

@@ -22,6 +22,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -60,12 +64,13 @@ fun SelfieScreen(app: AppState) {
     var jpeg by remember { mutableStateOf<ByteArray?>(null) }
     var uploading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var confirm by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 28.dp).padding(top = 28.dp, bottom = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("ONE-TIME SETUP", style = T.label, color = P.muted)
-            Text("Take a quick selfie", style = T.h1.copy(fontSize = 30.sp, lineHeight = 34.sp), color = P.ink)
-            Text("Door volunteers match your face to your pass. It’s saved once and only event staff can see it.", style = T.body, color = P.muted)
+            Text("Take a clear selfie", style = T.h1.copy(fontSize = 30.sp, lineHeight = 34.sp), color = P.ink)
+            Text("Use a clear, original picture of yourself. It can’t be changed later and will be used to verify your identity at the door.", style = T.body, color = P.muted)
         }
         Spacer(Modifier.weight(1f))
 
@@ -87,20 +92,16 @@ fun SelfieScreen(app: AppState) {
         }
         Spacer(Modifier.weight(1f))
 
+        Row(Modifier.padding(bottom = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Outlined.Lock, null, tint = P.muted, modifier = Modifier.size(15.dp))
+            Text("Final once saved · only event staff can see it", style = T.small, color = P.muted)
+        }
         error?.let { Text(it, style = T.small, color = P.danger, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 10.dp)) }
 
         when {
             photo != null -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.height(58.dp).weight(1f).pressable(CircleShape) { photo = null; jpeg = null; error = null }.background(P.surfaceAlt), contentAlignment = Alignment.Center) { Text("RETAKE", style = T.button, color = P.ink) }
-                PrimaryButton("USE PHOTO", Modifier.weight(1.4f), loading = uploading) {
-                    val bytes = jpeg ?: return@PrimaryButton
-                    uploading = true; error = null
-                    scope.launch {
-                        try { app.uploadSelfie(bytes) }
-                        catch (x: ApiException) { error = x.message } catch (_: Exception) { error = "Couldn’t upload. Check your connection and try again." }
-                        finally { uploading = false }
-                    }
-                }
+                PrimaryButton("USE PHOTO", Modifier.weight(1.4f), loading = uploading) { confirm = true }
             }
             granted -> Box(Modifier.size(78.dp).clip(CircleShape).border(4.dp, P.primary, CircleShape).padding(7.dp).clip(CircleShape).background(P.primary)
                 .clickable(enabled = capture != null) {
@@ -122,6 +123,22 @@ fun SelfieScreen(app: AppState) {
                 }
             }
         }
+        if (confirm) AlertDialog(
+            onDismissRequest = { confirm = false }, containerColor = P.surface,
+            title = { Text("Use this photo?", style = T.title, color = P.ink) },
+            text = { Text("It can’t be changed later and will be used to verify your identity.", style = T.body, color = P.muted) },
+            confirmButton = { TextButton({
+                confirm = false
+                val bytes = jpeg ?: return@TextButton
+                uploading = true; error = null
+                scope.launch {
+                    try { app.uploadSelfie(bytes) }
+                    catch (x: ApiException) { error = x.message } catch (_: Exception) { error = "Couldn’t upload. Check your connection and try again." }
+                    finally { uploading = false }
+                }
+            }) { Text("Yes, use it", color = P.primary) } },
+            dismissButton = { TextButton({ confirm = false }) { Text("Retake", color = P.muted) } },
+        )
         Spacer(Modifier.height(10.dp))
         Text("Not now", style = T.small, color = P.muted, modifier = Modifier.pressable(RoundedCornerShape(10.dp)) { app.skippedSelfie = true }.padding(horizontal = 16.dp, vertical = 10.dp))
     }
