@@ -60,7 +60,7 @@ describe("check-in days", () => {
 
 describe("events: multi-day and validation", () => {
   it("creates a 3-day event and rejects end<start", async () => {
-    const ok = await admin("POST", "/admin/api/events", { title: "Hackathon", track: "Hackathon", startsAt: "2026-10-16T11:00:00+05:30", endsAt: "2026-10-18T14:00:00+05:30", capacity: 1, registrationRequired: true });
+    const ok = await admin("POST", "/admin/api/events", { title: "Hackathon", track: "Hackathon", startsAt: "2026-10-16T11:00:00+05:30", endsAt: "2026-10-18T14:00:00+05:30", capacity: 1, access: "prereg" });
     assert.equal(ok.statusCode, 201);
     const bad = await admin("POST", "/admin/api/events", { title: "Bad", track: "Talk", startsAt: "2026-10-16T11:00:00+05:30", endsAt: "2026-10-16T10:00:00+05:30" });
     assert.equal(bad.statusCode, 400);
@@ -109,20 +109,24 @@ describe("attendee flow", () => {
     await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email } });
     tokens = (await app.inject({ method: "POST", url: "/v1/auth/verify", payload: { email, code: await lastOtp(email), deviceId: "device-cccc3" } })).json();
   });
-  it("saves, registers with capacity, lists", async () => {
+  it("saving is the attendee's; enrolment is the admin's", async () => {
     const h = { authorization: `Bearer ${tokens.accessToken}` };
     const ev = (await app.inject({ url: "/v1/events", headers: h })).json().events; eventId = ev[0].id;
+    assert.equal(ev[0].access, "prereg"); assert.equal(ev[0].registrationRequired, true);
     assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/saved`, headers: h })).statusCode, 200);
-    assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/registration`, headers: h })).statusCode, 200);
-    const e2 = (await app.inject({ url: "/v1/events", headers: h })).json().events[0];
-    assert.equal(e2.saved, true); assert.equal(e2.registered, true); assert.equal(e2.spotsLeft, 0);
-    // capacity 1: a second user must be refused
+    // attendees cannot enrol themselves any more
+    assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/registration`, headers: h })).statusCode, 404);
+    let e2 = (await app.inject({ url: "/v1/events", headers: h })).json().events[0];
+    assert.equal(e2.saved, true); assert.equal(e2.registered, false);
+    // the admin enrols by email; unknown emails are reported back
+    const en = await admin("POST", `/admin/api/events/${eventId}/enrolled`, { emails: [email, "nobody@example.org"] });
+    assert.equal(en.statusCode, 200); assert.equal(en.json().added, 1); assert.deepEqual(en.json().notFound, ["nobody@example.org"]);
+    e2 = (await app.inject({ url: "/v1/events", headers: h })).json().events[0];
+    assert.equal(e2.registered, true); assert.equal(e2.spotsLeft, 0);
+    assert.equal((await admin("GET", `/admin/api/events/${eventId}/enrolled`)).json().length, 1);
     await admin("POST", "/admin/api/users", { email: "sam@example.org", name: "Sam" });
-    await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "sam@example.org" } });
-    const s = (await app.inject({ method: "POST", url: "/v1/auth/verify", payload: { email: "sam@example.org", code: await lastOtp("sam@example.org"), deviceId: "device-dddd4" } })).json();
-    const full = await app.inject({ method: "PUT", url: `/v1/events/${eventId}/registration`, headers: { authorization: `Bearer ${s.accessToken}` } });
-    assert.equal(full.statusCode, 409);
   });
+
   it("tickets: user creates, admin replies, user sees reply", async () => {
     const h = { authorization: `Bearer ${tokens.accessToken}` };
     const t = await app.inject({ method: "POST", url: "/v1/tickets", headers: h, payload: { kind: "General", topic: "Wi-Fi & power", message: "Wi-Fi is down on floor 2" } });

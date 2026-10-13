@@ -267,7 +267,8 @@ struct EventRow: View {
     }
     @ViewBuilder private var extraPills: some View {
         if event.isMultiDay { Pill(text: "\(event.durationDays) DAYS", bg: P.surfaceAlt, fg: P.muted) }
-        if event.registered { Pill(text: "REGISTERED", bg: P.mint, fg: P.mintInk) }
+        if event.registered { Pill(text: "ENROLLED", bg: P.mint, fg: P.mintInk) }
+        else if event.access == "prereg" { Pill(text: "PRE-REG", bg: P.surfaceAlt, fg: P.muted) }
     }
 
     var body: some View {

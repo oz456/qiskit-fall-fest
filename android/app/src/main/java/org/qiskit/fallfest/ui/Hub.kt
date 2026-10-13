@@ -234,7 +234,7 @@ fun EventRow(e: Event, app: AppState, day: LocalDate?, modifier: Modifier = Modi
                     Icon(Icons.Outlined.LocationOn, null, tint = P.muted, modifier = Modifier.size(14.dp))
                     Text(e.location, style = T.small, color = P.muted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                     if (e.isMultiDay) Pill("${e.durationDays} DAYS", P.surfaceAlt, P.muted)
-                    if (e.registered) Pill("REGISTERED", P.mint, P.mintInk)
+                    if (e.registered) Pill("ENROLLED", P.mint, P.mintInk) else if (e.access == "prereg") Pill("PRE-REG", P.surfaceAlt, P.muted)
                 }
             }
             if (trailing) {
@@ -266,18 +266,10 @@ fun EventSheet(id: String, app: AppState, onDismiss: () -> Unit) {
                 if (e.speaker.isNotBlank()) InfoRow(Icons.Outlined.Person, e.speaker)
             }
             if (e.description.isNotBlank()) Text(e.description, style = T.body, color = P.muted)
-            if (e.registrationRequired || e.capacity != null) {
-                Card(Modifier.fillMaxWidth(), RoundedCornerShape(20.dp)) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(Icons.Outlined.EventSeat, null, tint = P.muted)
-                        Text(when { e.registered -> "You have a seat."; e.spotsLeft == 0 -> "This event is full."; e.spotsLeft != null -> "${e.spotsLeft} of ${e.capacity} seats left"; else -> "Registration required" }, style = T.bodyM, color = P.ink, modifier = Modifier.weight(1f))
-                    }
-                }
-            }
+            AccessCard(e)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
-                    if (e.registrationRequired) PrimaryButton(if (e.registered) "CANCEL REGISTRATION" else "REGISTER", enabled = e.registered || e.spotsLeft != 0 && status != Status.Done) { app.toggleRegistered(e); hf.performHapticFeedback(HapticFeedbackType.ContextClick) }
-                    else PrimaryButton(if (e.saved) "SAVED TO PASS" else "ADD TO MY PASS", icon = { Icon(if (e.saved) Icons.Outlined.Check else Icons.Outlined.Add, null, tint = P.onPrimary, modifier = Modifier.size(20.dp)) }) { app.toggleSaved(e); hf.performHapticFeedback(HapticFeedbackType.ContextClick) }
+                    PrimaryButton(if (e.saved) "SAVED TO PASS" else "ADD TO MY PASS", icon = { Icon(if (e.saved) Icons.Outlined.Check else Icons.Outlined.Add, null, tint = P.onPrimary, modifier = Modifier.size(20.dp)) }) { app.toggleSaved(e); hf.performHapticFeedback(HapticFeedbackType.ContextClick) }
                 }
                 Box(Modifier.size(58.dp).pressable(CircleShape, true) {
                     runCatching { ctx.startActivity(Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI)
@@ -288,6 +280,26 @@ fun EventSheet(id: String, app: AppState, onDismiss: () -> Unit) {
         }
     }
 }
+
+/** How you get in: open to all, on-spot registration, or admin-managed pre-registration (enrolled = paid / approved). */
+@Composable
+private fun AccessCard(e: Event) {
+    val a = when {
+        e.registered -> Access(Icons.Outlined.CheckCircle, "You’re enrolled", "Your entry is confirmed. Show your pass at the door.", true)
+        e.access == "prereg" -> Access(Icons.Outlined.Lock, "Pre-registration required", "Only enrolled attendees can enter. If you paid and don’t see “Enrolled”, contact Support.", false)
+        e.access == "onspot" -> Access(Icons.Outlined.HowToReg, "On-spot registration", "Register at the venue desk when you arrive.", false)
+        else -> Access(Icons.Outlined.LockOpen, "Open to everyone", "No registration needed. Just walk in.", false)
+    }
+    val seats = if (e.capacity != null) (if (e.spotsLeft == 0) " · Full" else if (e.spotsLeft != null) " · ${e.spotsLeft} of ${e.capacity} seats left" else "") else ""
+    Card(Modifier.fillMaxWidth(), RoundedCornerShape(20.dp)) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            IconBubble(a.icon, 44.dp, if (a.good) P.mintInk else P.muted, if (a.good) P.mint else P.surfaceAlt)
+            Column { Text(a.title + seats, style = T.title, color = P.ink); Text(a.sub, style = T.small, color = P.muted) }
+        }
+    }
+}
+
+private class Access(val icon: androidx.compose.ui.graphics.vector.ImageVector, val title: String, val sub: String, val good: Boolean)
 
 @Composable
 private fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {

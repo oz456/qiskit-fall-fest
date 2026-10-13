@@ -176,20 +176,6 @@ final class AppState: ObservableObject {
         }
     }
 
-    func toggleRegistered(_ e: Event) {
-        let on = !e.registered
-        guard !isPreview else { patch(e.id) { $0.registered = on; $0.saved = $0.saved || on }; return }
-        Task { [self] in
-            do {
-                _ = try await authedData(on ? "PUT" : "DELETE", "/v1/events/\(e.id)/registration")
-                patch(e.id) { ev in ev.registered = on; ev.saved = ev.saved || on; ev.spotsLeft = ev.spotsLeft.map { on ? max(0, $0 - 1) : $0 + 1 } }
-                message = on ? "You're registered for \(e.title)" : "Registration cancelled"
-                Haptics.success()
-            } catch let x as APIError { message = x.message; Haptics.error() }
-            catch { message = "Couldn't update. Check your connection." }
-        }
-    }
-
     func createTicket(kind: String, topic: String, text: String) async throws -> String {
         if isPreview { return "QFF-1234" }
         let r: TicketCreated = try await authed("POST", "/v1/tickets", body: ["kind": kind, "topic": topic, "message": text])

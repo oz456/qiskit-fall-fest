@@ -126,28 +126,6 @@ export function appRoutes(app: FastifyInstance, db: Db) {
       await db.query("DELETE FROM user_events WHERE user_id=$1 AND event_id=$2 AND kind='saved'", [req.uid, id]);
       return { ok: true };
     });
-    api.put("/v1/events/:id/registration", async (req, reply) => {
-      const { id } = EventId.parse(req.params);
-      return db.tx(async (q) => {
-        const [e] = await q.query("SELECT * FROM events WHERE id=$1 AND published FOR UPDATE", [id]); // lock serializes capacity checks
-        if (!e) return reply.code(404).send({ error: "not_found" });
-        if (new Date(e.ends_at) < new Date()) return reply.code(409).send({ error: "ended", message: "This event has ended." });
-        const [{ n }] = await q.query<{ n: number }>("SELECT count(*)::int AS n FROM user_events WHERE event_id=$1 AND kind='registered'", [id]);
-        const [mine] = await q.query("SELECT 1 FROM user_events WHERE event_id=$1 AND user_id=$2 AND kind='registered'", [id, req.uid]);
-        if (!mine) {
-          if (e.capacity != null && n >= e.capacity) return reply.code(409).send({ error: "full", message: "This event is full." });
-          await q.query("INSERT INTO user_events (user_id,event_id,kind) VALUES ($1,$2,'registered')", [req.uid, id]);
-          await q.query("INSERT INTO user_events (user_id,event_id,kind) VALUES ($1,$2,'saved') ON CONFLICT DO NOTHING", [req.uid, id]);
-        }
-        return { ok: true };
-      });
-    });
-    api.delete("/v1/events/:id/registration", async (req) => {
-      const { id } = EventId.parse(req.params);
-      await db.query("DELETE FROM user_events WHERE user_id=$1 AND event_id=$2 AND kind='registered'", [req.uid, id]);
-      return { ok: true };
-    });
-
     api.get("/v1/announcements", async () =>
       (await db.query("SELECT id,title,body,created_at FROM announcements ORDER BY created_at DESC LIMIT 50"))
         .map((a) => ({ id: a.id, title: a.title, body: a.body, createdAt: new Date(a.created_at).toISOString() })));

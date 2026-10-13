@@ -27,17 +27,9 @@ struct EventSheet: View {
                         }
                     }
                     if !e.description.isEmpty { Text(e.description).font(T.body).foregroundStyle(P.muted) }
-                    if e.registrationRequired || e.capacity != nil {
-                        Card(radius: 20) {
-                            Label(seatText(e), systemImage: "chair.lounge").font(T.bodyM).foregroundStyle(P.ink).padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
+                    accessCard(e)
                     HStack(spacing: 10) {
-                        if e.registrationRequired {
-                            PrimaryButton(title: e.registered ? "CANCEL REGISTRATION" : "REGISTER", enabled: e.registered || (e.spotsLeft != 0 && status != .done)) { app.toggleRegistered(e) }
-                        } else {
-                            PrimaryButton(title: e.saved ? "SAVED TO PASS" : "ADD TO MY PASS", systemImage: e.saved ? "checkmark" : "plus") { app.toggleSaved(e) }
-                        }
+                        PrimaryButton(title: e.saved ? "SAVED TO PASS" : "ADD TO MY PASS", systemImage: e.saved ? "checkmark" : "plus") { app.toggleSaved(e) }
                         if let ics {
                             ShareLink(item: ics, subject: Text(e.title), message: Text("Add to your calendar")) {
                                 Image(systemName: "calendar.badge.plus").font(.system(size: 20)).foregroundStyle(P.ink)
@@ -56,11 +48,26 @@ struct EventSheet: View {
         }
     }
 
-    private func seatText(_ e: Event) -> String {
-        if e.registered { return "You have a seat." }
-        if e.spotsLeft == 0 { return "This event is full." }
-        if let left = e.spotsLeft { return "\(left) of \(e.capacity ?? 0) seats left" }
-        return "Registration required"
+    /// How you get in: open to all, on-spot registration, or admin-managed pre-registration (enrolled = paid / approved).
+    private func accessCard(_ e: Event) -> some View {
+        let symbol: String, title: String, sub: String, good: Bool
+        if e.registered { (symbol, title, sub, good) = ("checkmark.circle", "You’re enrolled", "Your entry is confirmed. Show your pass at the door.", true) }
+        else if e.access == "prereg" { (symbol, title, sub, good) = ("lock", "Pre-registration required", "Only enrolled attendees can enter. If you paid and don’t see “Enrolled”, contact Support.", false) }
+        else if e.access == "onspot" { (symbol, title, sub, good) = ("person.badge.plus", "On-spot registration", "Register at the venue desk when you arrive.", false) }
+        else { (symbol, title, sub, good) = ("lock.open", "Open to everyone", "No registration needed. Just walk in.", false) }
+        var seats = ""
+        if e.capacity != nil { if e.spotsLeft == 0 { seats = " · Full" } else if let left = e.spotsLeft { seats = " · \(left) of \(e.capacity ?? 0) seats left" } }
+        return Card(radius: 20) {
+            HStack(alignment: .top, spacing: 14) {
+                IconBubble(symbol: symbol, size: 44, tint: good ? P.mintInk : P.muted, bg: good ? P.mint : P.surfaceAlt)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title + seats).font(T.title).foregroundStyle(P.ink)
+                    Text(sub).font(T.small).foregroundStyle(P.muted)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+        }
     }
 
     private func info(_ symbol: String, _ text: String) -> some View {

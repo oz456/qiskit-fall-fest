@@ -54,10 +54,10 @@ export function checkRoutes(app: FastifyInstance, db: Db) {
       if (u.status !== "active") return { result: "blocked", message: "This pass is blocked.", who };
       let warning: string | undefined;
       if (b.scope.startsWith("event:")) {
-        const [e] = await db.query("SELECT registration_required FROM events WHERE id=$1", [b.scope.slice(6)]);
-        if (e?.registration_required) {
+        const [e] = await db.query("SELECT access FROM events WHERE id=$1", [b.scope.slice(6)]);
+        if (e?.access === "prereg") {
           const [reg] = await db.query("SELECT 1 FROM user_events WHERE user_id=$1 AND event_id=$2 AND kind='registered'", [u.id, b.scope.slice(6)]);
-          if (!reg) warning = "Not registered for this event.";
+          if (!reg) warning = "NOT ENROLLED — this event is pre-registration only.";
         }
       }
       const ins = await db.query("INSERT INTO checkins (user_id,scope) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING scanned_at", [u.id, b.scope]);

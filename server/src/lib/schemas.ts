@@ -12,7 +12,7 @@ export const EventInput = z.object({
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
   capacity: z.number().int().positive().max(100000).nullable().default(null),
-  registrationRequired: z.boolean().default(false),
+  access: z.enum(["open", "onspot", "prereg"]).default("open"),
   published: z.boolean().default(true),
 }).refine((v) => new Date(v.endsAt) > new Date(v.startsAt), { message: "End must be after start", path: ["endsAt"] });
 

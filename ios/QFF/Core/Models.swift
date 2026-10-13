@@ -83,6 +83,7 @@ struct Event: Identifiable, Equatable, Decodable {
     let endsAt: Date
     let capacity: Int?
     let registrationRequired: Bool
+    var access: String?
     var spotsLeft: Int?
     var saved: Bool
     var registered: Bool

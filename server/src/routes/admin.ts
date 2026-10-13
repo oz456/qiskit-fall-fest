@@ -64,17 +64,45 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     api.post("/admin/api/events", async (req, reply) => {
       const b = EventInput.parse(req.body);
-      const [r] = await db.query("INSERT INTO events (title,description,track,location,speaker,starts_at,ends_at,capacity,registration_required,published) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id",
-        [b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.capacity, b.registrationRequired, b.published]);
+      const [r] = await db.query("INSERT INTO events (title,description,track,location,speaker,starts_at,ends_at,capacity,access,registration_required,published) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9='prereg',$10) RETURNING id",
+        [b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.capacity, b.access, b.published]);
       await audit(db, req, "event.create", "event", r!.id, { title: b.title });
       return reply.code(201).send({ id: r!.id });
     });
     api.put("/admin/api/events/:id", async (req, reply) => {
       const { id } = Id.parse(req.params); const b = EventInput.parse(req.body);
-      const r = await db.query("UPDATE events SET title=$2,description=$3,track=$4,location=$5,speaker=$6,starts_at=$7,ends_at=$8,capacity=$9,registration_required=$10,published=$11,updated_at=now() WHERE id=$1 RETURNING id",
-        [id, b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.capacity, b.registrationRequired, b.published]);
+      const r = await db.query("UPDATE events SET title=$2,description=$3,track=$4,location=$5,speaker=$6,starts_at=$7,ends_at=$8,capacity=$9,access=$10,registration_required=($10='prereg'),published=$11,updated_at=now() WHERE id=$1 RETURNING id",
+        [id, b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.capacity, b.access, b.published]);
       if (!r[0]) return reply.code(404).send({ error: "not_found" });
       await audit(db, req, "event.update", "event", id, { title: b.title });
+      return { ok: true };
+    });
+    // ---- enrollment: who has paid / been approved for an event (attendees cannot self-enrol) ----
+    api.get("/admin/api/events/:id/enrolled", async (req) => {
+      const { id } = Id.parse(req.params);
+      return (await db.query(`SELECT u.id,u.name,u.email,u.pass_code,u.college FROM user_events r JOIN users u ON u.id=r.user_id
+        WHERE r.event_id=$1 AND r.kind='registered' ORDER BY u.name`, [id])).map((u) => ({ id: u.id, name: u.name, email: u.email, passCode: u.pass_code, college: u.college }));
+    });
+    api.post("/admin/api/events/:id/enrolled", async (req, reply) => {
+      const { id } = Id.parse(req.params);
+      const { emails } = z.object({ emails: z.array(z.string().max(200)).min(1).max(2000) }).parse(req.body);
+      const [e] = await db.query("SELECT capacity FROM events WHERE id=$1", [id]);
+      if (!e) return reply.code(404).send({ error: "not_found" });
+      const wanted = [...new Set(emails.map((x) => x.trim().toLowerCase()).filter(Boolean))];
+      const users = await db.query("SELECT id,email FROM users WHERE lower(email) = ANY($1::text[])", [wanted]);
+      const found = new Set(users.map((u) => u.email.toLowerCase()));
+      let added = 0;
+      for (const u of users) {
+        const r = await db.query("INSERT INTO user_events (user_id,event_id,kind) VALUES ($1,$2,'registered') ON CONFLICT DO NOTHING RETURNING 1", [u.id, id]);
+        added += r.length;
+      }
+      await audit(db, req, "event.enroll", "event", id, { added });
+      return { added, notFound: wanted.filter((x) => !found.has(x)) };
+    });
+    api.delete("/admin/api/events/:id/enrolled/:userId", async (req) => {
+      const { id, userId } = z.object({ id: z.string().uuid(), userId: z.string().uuid() }).parse(req.params);
+      await db.query("DELETE FROM user_events WHERE event_id=$1 AND user_id=$2 AND kind='registered'", [id, userId]);
+      await audit(db, req, "event.unenroll", "event", id, { userId });
       return { ok: true };
     });
     api.delete("/admin/api/events/:id", async (req) => {

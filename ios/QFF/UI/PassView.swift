@@ -8,7 +8,8 @@ struct PassView: View {
     @State private var captured = UIScreen.main.isCaptured
     @State private var fullQR = false
 
-    private var mine: [Event] { app.events.filter { $0.saved || $0.registered } }
+    private var enrolled: [Event] { app.events.filter(\.registered) }
+    private var savedOnly: [Event] { app.events.filter { $0.saved && !$0.registered } }
     private var hidden: Bool { captured || scenePhase != .active }
 
     var body: some View {
@@ -30,26 +31,30 @@ struct PassView: View {
 
                 HStack(spacing: 10) {
                     stat("Saved", app.events.filter(\.saved).count)
-                    stat("Registered", app.events.filter(\.registered).count)
+                    stat("Enrolled", enrolled.count)
                     stat("Check-ins", app.checkins.count)
                 }
                 .padding(.horizontal, 24)
 
-                SectionLabel(text: "MY ENROLLED EVENTS").padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 8)
-                if mine.isEmpty {
+                if !enrolled.isEmpty {
+                    SectionLabel(text: "ENROLLED").padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 8)
+                    ForEach(enrolled) { e in EventRow(event: e, day: nil, trailing: false).padding(.horizontal, 24).padding(.vertical, 6) }
+                }
+                SectionLabel(text: "SAVED BY YOU").padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 8)
+                if savedOnly.isEmpty {
                     Button { router.tab = .hub; Haptics.tap() } label: {
                         Card {
                             VStack(spacing: 12) {
                                 IconBubble(symbol: "bookmark", size: 56, tint: P.mintInk, bg: P.mint)
-                                Text("Your line-up is open").font(T.title).foregroundStyle(P.ink)
-                                Text("Save or register for events from the Hub and they’ll show up here.").font(T.small).foregroundStyle(P.muted).multilineTextAlignment(.center)
+                                Text("Nothing saved yet").font(T.title).foregroundStyle(P.ink)
+                                Text("Tap the bookmark on any event in the Hub to keep it here.").font(T.small).foregroundStyle(P.muted).multilineTextAlignment(.center)
                             }
                             .padding(24).frame(maxWidth: .infinity)
                         }
                     }
                     .buttonStyle(PressStyle()).padding(.horizontal, 24)
                 }
-                ForEach(mine) { e in EventRow(event: e, day: nil, trailing: false).padding(.horizontal, 24).padding(.vertical, 6) }
+                ForEach(savedOnly) { e in EventRow(event: e, day: nil, trailing: false).padding(.horizontal, 24).padding(.vertical, 6) }
             }
             .padding(.bottom, 24)
         }

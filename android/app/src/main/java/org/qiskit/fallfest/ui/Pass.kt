@@ -61,7 +61,8 @@ private fun rememberLivePass(app: AppState): Pair<String?, Float> {
 fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
     var qrOpen by remember { mutableStateOf(false) }
     SecureWindow((LocalContext.current as? Activity)?.window)
-    val mine = app.events.filter { it.saved || it.registered }
+    val enrolled = app.events.filter { it.registered }
+    val saved = app.events.filter { it.saved && !it.registered }
     val (payload, progress) = rememberLivePass(app)
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 130.dp)) {
@@ -78,22 +79,25 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
             Spacer(Modifier.height(16.dp))
             Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Stat("Saved", app.events.count { it.saved }.toString(), Modifier.weight(1f))
-                Stat("Registered", app.events.count { it.registered }.toString(), Modifier.weight(1f))
+                Stat("Enrolled", enrolled.size.toString(), Modifier.weight(1f))
                 Stat("Check-ins", app.checkins.size.toString(), Modifier.weight(1f))
             }
-            Spacer(Modifier.height(28.dp))
-            SectionLabel("MY ENROLLED EVENTS", Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
         }
-        if (mine.isEmpty()) item {
+        if (enrolled.isNotEmpty()) {
+            item { SectionLabel("ENROLLED", Modifier.padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 8.dp)) }
+            items(enrolled, key = { "r" + it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen, trailing = false) }
+        }
+        item { SectionLabel("SAVED BY YOU", Modifier.padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 8.dp)) }
+        if (saved.isEmpty()) item {
             Card(Modifier.padding(horizontal = 24.dp).fillMaxWidth(), onClick = goHub) {
                 Column(Modifier.padding(24.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     IconBubble(Icons.Outlined.BookmarkAdd, 56.dp, P.mintInk, P.mint); Spacer(Modifier.height(12.dp))
-                    Text("Your line-up is open", style = T.title, color = P.ink)
-                    Text("Save or register for events from the Hub and they’ll show up here.", style = T.small, color = P.muted, textAlign = TextAlign.Center)
+                    Text("Nothing saved yet", style = T.title, color = P.ink)
+                    Text("Tap the bookmark on any event in the Hub to keep it here.", style = T.small, color = P.muted, textAlign = TextAlign.Center)
                 }
             }
         }
-        items(mine, key = { it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen, trailing = false) }
+        items(saved, key = { "s" + it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen, trailing = false) }
     }
     if (qrOpen) FullQr(app, payload, progress) { qrOpen = false }
 }

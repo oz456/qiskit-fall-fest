@@ -93,17 +93,18 @@ async function dashboard(m) {
     h("div", { class: "card", }, h("h2", {}, "Quick start"), h("p", { class: "muted" }, "Add or import attendees (only registered emails can sign in), create events (multi-day events are supported), post announcements and answer support tickets. Door scanning happens on the separate /check site, and results show up under Attendance.")));
 }
 
+const ACCESS = { open: "OPEN TO ALL", onspot: "ON-SPOT", prereg: "PRE-REG ONLY" };
 async function events(m) {
   const list = await api("GET", "/events");
   m.append(head("Events", h("button", { class: "btn", onclick: () => editEvent() }, "New event")));
-  m.append(h("div", { class: "card" }, h("table", {}, h("tr", {}, ["When", "Event", "Track", "Where", "Reg / Saved", ""].map((x) => h("th", {}, x))),
+  m.append(h("div", { class: "card" }, h("table", {}, h("tr", {}, ["When", "Event", "Track", "Where", "Entry", "Enrolled · Saved", ""].map((x) => h("th", {}, x))),
     list.map((e) => h("tr", { class: "click", onclick: () => editEvent(e) },
       h("td", {}, fmtRange(e.startsAt, e.endsAt)), h("td", {}, h("b", {}, e.title), " ", !e.published && h("span", { class: "pill warn" }, "HIDDEN"), " ", fmt(e.startsAt, { dateStyle: "short" }) !== fmt(e.endsAt, { dateStyle: "short" }) && h("span", { class: "pill" }, "MULTI-DAY")),
-      h("td", {}, e.track), h("td", {}, e.location), h("td", {}, `${e.registered}${e.capacity ? " / " + e.capacity : ""} · ${e.saved}`), h("td", {}, "›"))))));
+      h("td", {}, e.track), h("td", {}, e.location), h("td", {}, h("span", { class: "pill" + (e.access === "prereg" ? " warn" : "") }, ACCESS[e.access] || "OPEN")), h("td", {}, `${e.registered}${e.capacity ? " / " + e.capacity : ""} · ${e.saved}`), h("td", {}, "›"))))));
   if (!list.length) m.append(h("p", { class: "muted" }, "No events yet."));
 }
 function editEvent(e) {
-  const v = e || { title: "", description: "", track: "Main", location: "", speaker: "", startsAt: null, endsAt: null, capacity: null, registrationRequired: false, published: true };
+  const v = e || { title: "", description: "", track: "Main", location: "", speaker: "", startsAt: null, endsAt: null, capacity: null, access: "open", published: true };
   const f = {
     title: h("input", { value: v.title, maxlength: 120, required: true }),
     track: h("select", {}, ["Main", "Workshop", "Talk", "Hackathon", "Social", "Competition"].map((t) => h("option", { value: t, selected: t === v.track }, t))),
@@ -112,12 +113,13 @@ function editEvent(e) {
     location: h("input", { value: v.location, maxlength: 120 }), speaker: h("input", { value: v.speaker, maxlength: 120 }),
     desc: h("textarea", { maxlength: 2000 }, v.description),
     cap: h("input", { type: "number", min: 1, value: v.capacity ?? "", placeholder: "Unlimited" }),
-    reg: h("input", { type: "checkbox", checked: v.registrationRequired }), pub: h("input", { type: "checkbox", checked: v.published }),
+    access: h("select", {}, [["open", "Open to all — anyone can walk in"], ["onspot", "On-spot registration at the venue"], ["prereg", "Pre-registration required (you enrol people)"]].map(([k, t]) => h("option", { value: k, selected: k === v.access }, t))),
+    pub: h("input", { type: "checkbox", checked: v.published }),
   };
   const body = h("form", { onsubmit: guard(async (ev) => {
     ev.preventDefault();
     const payload = { title: f.title.value, track: f.track.value, location: f.location.value, speaker: f.speaker.value, description: f.desc.value,
-      startsAt: localToIso(f.start.value), endsAt: localToIso(f.end.value), capacity: f.cap.value ? Number(f.cap.value) : null, registrationRequired: f.reg.checked, published: f.pub.checked };
+      startsAt: localToIso(f.start.value), endsAt: localToIso(f.end.value), capacity: f.cap.value ? Number(f.cap.value) : null, access: f.access.value, published: f.pub.checked };
     if (new Date(payload.endsAt) <= new Date(payload.startsAt)) throw new Error("End must be after start");
     await api(e ? "PUT" : "POST", "/events" + (e ? "/" + e.id : ""), payload);
     bg.remove(); toast("Saved"); route();
@@ -126,9 +128,29 @@ function editEvent(e) {
     h("div", { class: "grid g2" }, field("Starts (" + TZ + ")", f.start), field("Ends (" + TZ + ")", f.end)),
     h("p", { class: "muted small" }, "For a multi-day event (e.g. a hackathon), set the end on a later day. It will appear on every day it spans."),
     field("Speaker / host", f.speaker), field("Description", f.desc),
-    h("div", { class: "grid g2" }, field("Capacity", f.cap), h("div", {}, h("label", {}, "Options"), h("label", { class: "check" }, f.reg, "Registration required (seat-limited)"), h("label", { class: "check" }, f.pub, "Visible in the app"))),
+    field("Entry", f.access), h("div", { class: "grid g2" }, field("Capacity (optional)", f.cap), h("div", {}, h("label", {}, "Options"), h("label", { class: "check" }, f.pub, "Visible in the app"))),
+    e && h("div", { class: "card" }, h("h3", {}, `Enrolled attendees: ${e.registered}`), h("p", { class: "muted small" }, "People who paid or were approved for this event. Only they see “Enrolled” in their app; the door scanner flags anyone else at pre-registration events."), h("button", { type: "button", class: "btn ghost sm", onclick: () => enrollment(e) }, "Manage enrolled attendees…")),
     h("div", { class: "row" }, h("button", { class: "btn" }, "Save"), e && h("button", { type: "button", class: "btn danger right", onclick: () => confirmDo("Delete this event? Saved/registered links are removed too.", async () => { await api("DELETE", "/events/" + e.id); bg.remove(); route(); }) }, "Delete")));
   const bg = modal(e ? "Edit event" : "New event", body);
+}
+
+async function enrollment(e) {
+  const box = h("div", {});
+  const ta = h("textarea", { placeholder: "Paste emails — one per line, or separated by commas/spaces", rows: 4 });
+  const draw = async () => {
+    const list = await api("GET", `/events/${e.id}/enrolled`);
+    box.replaceChildren(h("p", { class: "muted small" }, `${list.length} enrolled`),
+      ...list.map((u) => h("div", { class: "row", style: "border-top:1px solid var(--line);padding:6px 0" }, h("div", { class: "grow" }, h("b", {}, u.name), " ", h("span", { class: "muted small" }, u.email)),
+        h("button", { class: "btn danger sm", onclick: guard(async () => { await api("DELETE", `/events/${e.id}/enrolled/${u.id}`); await draw(); }) }, "Remove"))));
+  };
+  const body = h("div", {}, field("Add attendees by email", ta),
+    h("div", { class: "row" }, h("button", { class: "btn sm", onclick: guard(async () => {
+      const emails = ta.value.split(/[\s,;]+/).filter(Boolean);
+      if (!emails.length) return;
+      const r = await api("POST", `/events/${e.id}/enrolled`, { emails });
+      ta.value = ""; toast(`Enrolled ${r.added}` + (r.notFound.length ? ` · not found: ${r.notFound.join(", ")}` : "")); await draw();
+    }) }, "Enrol")), box);
+  modal(`Enrolled — ${e.title}`, body); await draw();
 }
 
 async function people(m) {

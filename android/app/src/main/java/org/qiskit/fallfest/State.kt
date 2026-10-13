@@ -144,17 +144,6 @@ class AppState(context: Context) {
         scope.launch { runCatching { authed(if (on) "PUT" else "DELETE", "/v1/events/${e.id}/saved") }.onFailure { patch(e.id) { it.withUser(saved = !on) }; message = "Couldn't update. Check your connection." } }
     }
 
-    fun toggleRegistered(e: Event) {
-        scope.launch {
-            val on = !e.registered
-            try {
-                authed(if (on) "PUT" else "DELETE", "/v1/events/${e.id}/registration")
-                patch(e.id) { it.withUser(saved = it.saved || on, registered = on, spots = it.spotsLeft?.let { s -> if (on) maxOf(0, s - 1) else s + 1 }) }
-                message = if (on) "You're registered for ${e.title}" else "Registration cancelled"
-            } catch (x: ApiException) { message = x.message } catch (_: Exception) { message = "Couldn't update. Check your connection." }
-        }
-    }
-
     suspend fun createTicket(kind: String, topic: String, text: String): String {
         val r = authed("POST", "/v1/tickets", JSONObject().put("kind", kind).put("topic", topic).put("message", text)) as JSONObject
         loadTickets(); return r.str("code")

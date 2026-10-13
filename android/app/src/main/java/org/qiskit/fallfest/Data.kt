@@ -24,7 +24,7 @@ enum class Status { Live, Upcoming, Done }
 data class Event(
     val id: String, val title: String, val description: String, val track: Track, val location: String, val speaker: String,
     val start: ZonedDateTime, val end: ZonedDateTime, val capacity: Int?, val registrationRequired: Boolean,
-    val spotsLeft: Int?, val saved: Boolean, val registered: Boolean,
+    val spotsLeft: Int?, val saved: Boolean, val registered: Boolean, val access: String = "open",
 ) {
     val startDay: LocalDate get() = start.toLocalDate()
     val endDay: LocalDate get() = end.toLocalDate()
@@ -54,6 +54,7 @@ data class Event(
             o.str("id"), o.str("title"), o.str("description"), Track.of(o.str("track")), o.str("location"), o.str("speaker"),
             Instant.parse(o.str("startsAt")).atZone(IST), Instant.parse(o.str("endsAt")).atZone(IST),
             o.intOrNull("capacity"), o.optBoolean("registrationRequired"), o.intOrNull("spotsLeft"), o.optBoolean("saved"), o.optBoolean("registered"),
+            o.optString("access", if (o.optBoolean("registrationRequired")) "prereg" else "open"),
         )
     }
 }
