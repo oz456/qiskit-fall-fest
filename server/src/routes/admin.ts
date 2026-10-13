@@ -5,7 +5,7 @@ import { z } from "zod";
 import { config } from "../config.ts";
 import type { Db, Queryable } from "../db.ts";
 import { staffAuth } from "../lib/staff.ts";
-import { announcementMail, mailRemaining, sendMail, ticketReplyMail } from "../lib/mail.ts";
+import { mailRemaining } from "../lib/mail.ts";
 import { AnnouncementInput, EventInput, FaqInput, SettingsInput, TicketReply, TicketStatus, UserInput } from "../lib/schemas.ts";
 import { audit, eventDay, eventOut } from "../lib/util.ts";
 
@@ -165,22 +165,10 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     api.get("/admin/api/announcements", async () => (await db.query("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 100")).map((a) => ({ id: a.id, title: a.title, body: a.body, emailed: a.emailed, createdAt: new Date(a.created_at).toISOString() })));
     api.post("/admin/api/announcements", async (req, reply) => {
       const b = AnnouncementInput.parse(req.body);
-      const users = b.sendEmail ? await db.query("SELECT email FROM users WHERE status='active'") : [];
-      if (b.sendEmail) { // keep headroom so login codes can still be sent today
-        const left = await mailRemaining();
-        if (users.length + 100 > left) return reply.code(409).send({ error: "mail_quota", message: `Not enough email quota left today (${Number.isFinite(left) ? left : "∞"} left, ${users.length} attendees + 100 reserved for login codes). Post without email, or send tomorrow.` });
-      }
+      // Announcements are in-app only: the daily mail quota is reserved for login codes.
       const [a] = await db.query("INSERT INTO announcements (title,body) VALUES ($1,$2) RETURNING id", [b.title, b.body]);
-      let sent = 0, failed = 0;
-      if (b.sendEmail) {
-        for (let i = 0; i < users.length; i += 10) {
-          const res = await Promise.allSettled(users.slice(i, i + 10).map((u) => sendMail(announcementMail(u.email, b.title, b.body))));
-          for (const r of res) r.status === "fulfilled" ? sent++ : failed++;
-        }
-        await db.query("UPDATE announcements SET emailed=$2 WHERE id=$1", [a!.id, sent]);
-      }
-      await audit(db, req, "announcement.create", "announcement", a!.id, { sent, failed });
-      return reply.code(201).send({ id: a!.id, emailed: sent, failed });
+      await audit(db, req, "announcement.create", "announcement", a!.id);
+      return reply.code(201).send({ id: a!.id });
     });
     api.delete("/admin/api/announcements/:id", async (req) => {
       const { id } = Id.parse(req.params);
@@ -209,7 +197,6 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       if (!t) return reply.code(404).send({ error: "not_found" });
       await db.query("INSERT INTO ticket_messages (ticket_id,author,body) VALUES ($1,'admin',$2)", [id, body]);
       await db.query("UPDATE tickets SET updated_at=now(), status=CASE WHEN status='open' THEN 'in_progress' ELSE status END WHERE id=$1", [id]);
-      sendMail(ticketReplyMail(t.email, t.code, body)).catch((e) => req.log.error({ err: e.message }, "reply mail failed"));
       await audit(db, req, "ticket.reply", "ticket", id); return { ok: true };
     });
     api.patch("/admin/api/tickets/:id", async (req) => {

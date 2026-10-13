@@ -75,17 +75,3 @@ export const otpMail = (to: string, code: string): Mail => ({
   text: `Your Qiskit Fall Fest sign-in code is ${code}. It expires in 10 minutes. If you didn't request it, ignore this email.`,
   html: shell("Your sign-in code", `<p style="font-size:34px;letter-spacing:8px;font-weight:700;margin:16px 0">${esc(code)}</p><p style="color:#6b7470">It expires in 10 minutes. If you didn't request it, you can ignore this email.</p>`),
 });
-
-export const announcementMail = (to: string, title: string, body: string): Mail => ({
-  to,
-  subject: title,
-  text: `${title}\n\n${body}`,
-  html: shell(title, `<p style="white-space:pre-wrap;line-height:1.6">${esc(body)}</p>`),
-});
-
-export const ticketReplyMail = (to: string, code: string, body: string): Mail => ({
-  to,
-  subject: `Update on your ticket ${code}`,
-  text: `The Fall Fest team replied to ${code}:\n\n${body}\n\nOpen the app to respond.`,
-  html: shell(`Reply on ${code}`, `<p style="white-space:pre-wrap;line-height:1.6">${esc(body)}</p><p style="color:#6b7470">Open the app to respond.</p>`),
-});

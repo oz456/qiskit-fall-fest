@@ -47,21 +47,21 @@ const localToIso = (local) => { // "2026-10-16T11:00" in TZ -> ISO instant
 const isoToLocal = (iso) => { const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(iso)).map((x) => [x.type, x.value])); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`; };
 
 // ---- shell ----
-const PAGES = [["dashboard", "Overview"], ["events", "Events"], ["people", "Attendees"], ["announce", "Announcements"], ["support", "Support"], ["attendance", "Attendance"], ["content", "Content"], ["activity", "Activity"]];
+const PAGES = [["events", "Events"], ["people", "Attendees"], ["announce", "Announcements"], ["support", "Support"], ["attendance", "Attendance"], ["content", "Content"], ["activity", "Activity"]];
 function showLogin() {
   clear($app);
   const err = h("div", { class: "err" }); const u = h("input", { autocomplete: "username", required: true }); const p = h("input", { type: "password", autocomplete: "current-password", required: true });
   const form = h("form", { onsubmit: async (e) => {
     e.preventDefault(); err.textContent = "";
-    try { const r = await api("POST", "/login", { username: u.value, password: p.value }); csrf = r.csrf; await boot(); } catch (x) { err.textContent = x.message; }
+    try { await api("POST", "/login", { username: u.value, password: p.value }); csrf = r.csrf; await boot(); } catch (x) { err.textContent = x.message; }
   } }, h("label", {}, "Username"), u, h("label", {}, "Password"), p, err, h("div", { class: "row" }, h("button", { class: "btn grow" }, "Sign in")));
   $app.append(h("div", { class: "login" }, h("div", { class: "brand" }, h("img", { src: "qiskit.svg", alt: "" }), "Fall Fest Admin"), h("div", { class: "card" }, form)));
 }
 let main;
 function route() {
-  const page = (location.hash.slice(1) || "dashboard"); clear(main);
+  const page = (location.hash.slice(1) || "events"); clear(main);
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("on", a.dataset.p === page));
-  const fn = { dashboard, events, people, announce, support, attendance, content, activity }[page] || dashboard;
+  const fn = { events, people, announce, support, attendance, content, activity }[page] || events;
   guard(fn)(main);
 }
 async function boot() {
@@ -81,18 +81,10 @@ function modal(title, body) {
   const bg = h("div", { class: "modal-bg", onmousedown: (e) => { if (e.target === bg) bg.remove(); } }, h("div", { class: "modal" }, h("div", { class: "head" }, h("h2", {}, title), h("button", { class: "btn ghost sm right", onclick: () => bg.remove() }, "Close")), body));
   document.body.append(bg); return bg;
 }
-const field = (label, input) => h("div", {}, h("label", {}, label), input);
+const field = (label, input) => h("div", { class: "field" }, h("label", {}, label), input);
 const confirmDo = (msg, fn) => { if (confirm(msg)) guard(fn)(); };
 
 // ---- pages ----
-async function dashboard(m) {
-  const s = await api("GET", "/stats");
-  m.append(head("Overview"), h("div", { class: "grid g4" },
-    [["Registered attendees", s.users], ["Using the app", s.app_users], ["Checked in today", s.checked_in_today], ["Open tickets", s.open_tickets], ["Events", s.events], ["Emails left today", s.mail_remaining ?? "∞"]]
-      .map(([l, v]) => h("div", { class: "card stat" }, h("b", {}, v), h("span", { class: "muted" }, l)))),
-    h("div", { class: "card", }, h("h2", {}, "Quick start"), h("p", { class: "muted" }, "Add or import attendees (only registered emails can sign in), create events (multi-day events are supported), post announcements and answer support tickets. Door scanning happens on the separate /check site, and results show up under Attendance.")));
-}
-
 const ACCESS = { open: "OPEN TO ALL", onspot: "ON-SPOT", prereg: "PRE-REG ONLY" };
 async function events(m) {
   const list = await api("GET", "/events");
@@ -140,7 +132,7 @@ async function enrollment(e) {
   const draw = async () => {
     const list = await api("GET", `/events/${e.id}/enrolled`);
     box.replaceChildren(h("p", { class: "muted small" }, `${list.length} enrolled`),
-      ...list.map((u) => h("div", { class: "row", style: "border-top:1px solid var(--line);padding:6px 0" }, h("div", { class: "grow" }, h("b", {}, u.name), " ", h("span", { class: "muted small" }, u.email)),
+      ...list.map((u) => h("div", { class: "row item" }, h("div", { class: "grow" }, h("b", {}, u.name), " ", h("span", { class: "muted small" }, u.email)),
         h("button", { class: "btn danger sm", onclick: guard(async () => { await api("DELETE", `/events/${e.id}/enrolled/${u.id}`); await draw(); }) }, "Remove"))));
   };
   const body = h("div", {}, field("Add attendees by email", ta),
@@ -156,13 +148,12 @@ async function enrollment(e) {
 async function people(m) {
   const q = h("input", { placeholder: "Search name, email or pass code…", oninput: debounce(guard(load), 250) });
   const out = h("div", { class: "card" });
-  m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), q, h("div", { class: "row" }), out);
+  m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), q, out);
   async function load() {
     const list = await api("GET", "/users?q=" + encodeURIComponent(q.value)); clear(out);
-    out.append(h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Enrolled in", "App", "Check-ins", "Status", ""].map((x) => h("th", {}, x))),
+    out.append(h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Enrolled in", "Status", ""].map((x) => h("th", {}, x))),
       list.map((u) => h("tr", {}, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, u.college || "")), h("td", {}, u.email), h("td", {}, u.passCode), h("td", {}, (u.enrolled || []).length ? (u.enrolled).map((t) => h("div", { class: "small" }, t)) : h("span", { class: "muted small" }, "—")),
-        h("td", {}, u.hasApp ? h("span", { class: "pill ok" }, "SIGNED IN") : h("span", { class: "pill" }, "NOT YET")), h("td", {}, u.checkins),
-        h("td", {}, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase())),
+        h("td", {}, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), h("div", { class: "muted small", style: "margin-top:4px" }, (u.hasApp ? "Signed in" : "Not signed in") + (u.checkins ? ` · ${u.checkins} check-in${u.checkins > 1 ? "s" : ""}` : ""))),
         h("td", {}, h("div", { class: "row" },
           h("button", { class: "btn ghost sm", onclick: guard(async () => { await api("PATCH", "/users/" + u.id, { status: u.status === "active" ? "blocked" : "active" }); load(); }) }, u.status === "active" ? "Block" : "Unblock"),
           h("button", { class: "btn ghost sm", title: "Sign the user out of their phone so they can log in on a new one", onclick: () => confirmDo("Sign " + u.name + " out of their device?", async () => { await api("POST", `/users/${u.id}/reset-device`); toast("Device reset"); load(); }) }, "Reset device"),
@@ -185,14 +176,14 @@ async function people(m) {
 
 async function announce(m) {
   const list = await api("GET", "/announcements");
-  const t = h("input", { maxlength: 120 }), b = h("textarea", { maxlength: 2000 }), mail = h("input", { type: "checkbox" });
+  const t = h("input", { maxlength: 120 }), b = h("textarea", { maxlength: 2000 });
   m.append(head("Announcements"), h("div", { class: "card" }, h("h2", {}, "New announcement"), field("Title", t), field("Message", b),
-    h("label", { class: "check" }, mail, "Also email every active attendee"),
+    h("p", { class: "muted small", style: "margin-top:12px" }, "Appears in every attendee’s notifications inside the app. It is not emailed."),
     h("div", { class: "row" }, h("button", { class: "btn", onclick: guard(async (ev) => {
       const btn = ev.currentTarget; btn.disabled = true;
-      try { const r = await api("POST", "/announcements", { title: t.value, body: b.value, sendEmail: mail.checked }); toast(mail.checked ? `Sent. Emailed ${r.emailed}${r.failed ? ", " + r.failed + " failed" : ""}` : "Posted"); route(); } finally { btn.disabled = false; }
+      try { const r = await api("POST", "/announcements", { title: t.value, body: b.value }); toast("Published"); route(); } finally { btn.disabled = false; }
     }) }, "Publish"))),
-    h("div", { class: "card" }, h("h2", {}, "Previous"), list.length ? list.map((a) => h("div", { class: "row" }, h("div", { class: "grow" }, h("b", {}, a.title), " ", h("span", { class: "muted small" }, fmt(a.createdAt, { dateStyle: "medium", timeStyle: "short" }) + (a.emailed ? ` · emailed ${a.emailed}` : "")), h("div", { class: "muted" }, a.body)),
+    h("div", { class: "card" }, h("h2", {}, "Previous"), list.length ? list.map((a) => h("div", { class: "row item" }, h("div", { class: "grow" }, h("b", {}, a.title), " ", h("span", { class: "muted small" }, fmt(a.createdAt, { dateStyle: "medium", timeStyle: "short" })), h("div", { class: "muted" }, a.body)),
       h("button", { class: "btn danger sm", onclick: () => confirmDo("Delete this announcement?", async () => { await api("DELETE", "/announcements/" + a.id); route(); }) }, "Delete"))) : h("p", { class: "muted" }, "Nothing yet.")));
 }
 
@@ -211,7 +202,7 @@ async function support(m) {
   }
   await load();
   async function openTicket(id) {
-    const t = await api("GET", "/tickets/" + id); const reply = h("textarea", { placeholder: "Write a reply (the attendee is also emailed)…", maxlength: 2000 });
+    const t = await api("GET", "/tickets/" + id); const reply = h("textarea", { placeholder: "Write a reply (the attendee sees it in the app)…", maxlength: 2000 });
     const bg = modal(`${t.code} · ${t.kind}`, h("div", {}, h("p", { class: "muted" }, `${t.name} · ${t.email} · ${t.passCode} — ${t.topic}`),
       h("div", { class: "thread" }, t.messages.map((x) => h("div", { class: "msg " + x.author }, x.body, h("div", { class: "muted small" }, fmt(x.at, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))))), reply,
       h("div", { class: "row" }, h("button", { class: "btn", onclick: guard(async () => { await api("POST", `/tickets/${id}/reply`, { body: reply.value }); bg.remove(); load(); }) }, "Send reply"),
@@ -224,7 +215,7 @@ async function attendance(m) {
   const out = h("div", { class: "card" });
   const label = (s) => s.startsWith("day:") ? "Entry · " + s.slice(4) : "Event · " + s.slice(6, 14);
   const pick = h("select", { onchange: () => { scope = pick.value; load(); } }, h("option", { value: "" }, "Select a scan group…"), sum.summary.map((x) => h("option", { value: x.scope }, `${label(x.scope)} — ${x.count}`)));
-  m.append(head("Attendance"), h("p", { class: "muted" }, "Recorded by the door scanners at /check. Pick a group to see who was checked in."), pick, h("div", { class: "row" }), out);
+  m.append(head("Attendance"), h("p", { class: "muted" }, "Recorded by the door scanners at /check. Pick a group to see who was checked in."), pick, out);
   async function load() {
     clear(out); if (!scope) return;
     const r = await api("GET", "/attendance?scope=" + encodeURIComponent(scope));
@@ -242,7 +233,7 @@ async function content(m) {
     h("p", { class: "muted small" }, "These days always appear in the check-in scanner and drive the countdown in the app, even before sessions are added."), field("Support note (shown in the app)", f.support_note),
     h("div", { class: "row" }, h("button", { class: "btn", onclick: guard(async () => { await api("PUT", "/settings", { fest_name: f.fest_name.value, venue: f.venue.value, support_note: f.support_note.value, ...(f.fest_start.value ? { fest_start: f.fest_start.value } : {}), ...(f.fest_end.value ? { fest_end: f.fest_end.value } : {}) }); toast("Saved"); }) }, "Save"))),
     h("div", { class: "head" }, h("h2", {}, "FAQs"), h("button", { class: "btn sm right", onclick: () => editFaq() }, "Add FAQ")),
-    h("div", { class: "card" }, faqs.length ? faqs.map((q) => h("div", { class: "row" }, h("div", { class: "grow" }, h("b", {}, q.question), h("div", { class: "muted" }, q.answer)), h("button", { class: "btn ghost sm", onclick: () => editFaq(q) }, "Edit"))) : h("p", { class: "muted" }, "No FAQs yet.")));
+    h("div", { class: "card" }, faqs.length ? faqs.map((q) => h("div", { class: "row item" }, h("div", { class: "grow" }, h("b", {}, q.question), h("div", { class: "muted" }, q.answer)), h("button", { class: "btn ghost sm", onclick: () => editFaq(q) }, "Edit"))) : h("p", { class: "muted" }, "No FAQs yet.")));
   function editFaq(q) {
     const qq = h("input", { value: q?.question || "", maxlength: 200 }), aa = h("textarea", { maxlength: 2000 }, q?.answer || ""), pos = h("input", { type: "number", min: 0, value: q?.position ?? faqs.length });
     const bg = modal(q ? "Edit FAQ" : "New FAQ", h("div", {}, field("Question", qq), field("Answer", aa), field("Order", pos), h("div", { class: "row" },
