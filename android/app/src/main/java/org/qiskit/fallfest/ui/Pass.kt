@@ -141,7 +141,7 @@ private fun TiltPass(app: AppState, onQr: () -> Unit) {
             .clip(shape).background(Brush.linearGradient(listOf(P.hero1, P.hero2))).pressable(shape, false, onQr).border(1.dp, Color.White.copy(alpha = .12f), shape),
     ) {
         AtomOrb(Modifier.size(260.dp).align(Alignment.TopEnd).offset(70.dp, (-50).dp).alpha(.3f), Color.White, speed = 16000)
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        Column(Modifier.padding(26.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.VerifiedUser, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
                 Text("Secure Pass", style = T.bodyM, color = Color.White.copy(alpha = .8f), modifier = Modifier.weight(1f))

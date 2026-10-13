@@ -134,9 +134,9 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
     val before = now.isBefore(firstStart); val after = now.isAfter(lastEnd)
     val target = live ?: next ?: app.events.first()
     val shape = RoundedCornerShape(30.dp)
-    Box(Modifier.padding(horizontal = 24.dp).fillMaxWidth().height(206.dp).clip(shape).background(Brush.linearGradient(listOf(P.hero1, P.hero2))).pressable(shape, true) { onOpen(target) }) {
-        AtomOrb(Modifier.size(250.dp).align(Alignment.CenterEnd).offset(x = 80.dp).alpha(.5f), color = Color.White, speed = 12000)
-        Column(Modifier.padding(24.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+    Box(Modifier.padding(horizontal = 24.dp).fillMaxWidth().heightIn(min = 226.dp).clip(shape).background(Brush.linearGradient(listOf(P.hero1, P.hero2))).pressable(shape, true) { onOpen(target) }) {
+        AtomOrb(Modifier.size(250.dp).align(Alignment.CenterEnd).offset(x = 80.dp).alpha(.32f), color = Color.White, speed = 12000)
+        Column(Modifier.padding(horizontal = 26.dp, vertical = 24.dp).fillMaxWidth().heightIn(min = 178.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Column {
                 when {
                     live != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { PulseDot(P.accent); Text("LIVE NOW · ${live.location.uppercase()}", style = T.label, color = P.accent, maxLines = 1, overflow = TextOverflow.Ellipsis) }
@@ -153,9 +153,10 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
                         Spacer(Modifier.height(8.dp))
                         Text(app.settings["venue"] ?: "First up · ${target.title}", style = T.small, color = Color.White.copy(alpha = .7f), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     after -> Text("See you at\nFall Fest 2027", style = T.h1, color = Color.White)
-                    else -> Text(target.title, style = T.h1.copy(fontSize = 30.sp, lineHeight = 34.sp), color = Color.White, maxLines = 2)
+                    else -> Text(target.title, style = T.h1.copy(fontSize = 26.sp, lineHeight = 30.sp), color = Color.White, maxLines = 2, modifier = Modifier.padding(end = 40.dp))
                 }
             }
+            Spacer(Modifier.height(18.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (before) app.settings["fest_name"] ?: "" else target.rangeLabel, style = T.small, color = Color.White.copy(alpha = .75f), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Box(Modifier.size(46.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Outlined.ArrowForward, "Open", tint = P.ink, modifier = Modifier.size(22.dp)) }
@@ -222,14 +223,14 @@ fun StatusBadge(status: Status, checkedIn: Boolean = false) = when {
 fun EventRow(e: Event, app: AppState, day: LocalDate?, modifier: Modifier = Modifier, onOpen: (Event) -> Unit, trailing: Boolean = true) {
     val status = app.statusOf(e); val hf = LocalHapticFeedback.current
     Card(modifier.fillMaxWidth(), RoundedCornerShape(24.dp), onClick = { onOpen(e) }) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            IconBubble(e.track.icon, 52.dp, if (status == Status.Live) P.mintInk else P.ink, if (status == Status.Live) P.mint else P.surfaceAlt)
+        Row(Modifier.padding(horizontal = 18.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            IconBubble(e.track.icon, 50.dp, if (status == Status.Live) P.mintInk else P.ink, if (status == Status.Live) P.mint else P.surfaceAlt)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (day != null) e.timeLabelOn(day) else e.start.format(DateTimeFormatter.ofPattern("d MMM, h:mm a")), style = T.small, color = P.muted)
                     StatusBadge(status, app.isCheckedIn(e))
                 }
-                Text(e.title, style = T.title, color = P.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(e.title, style = T.title, color = P.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Outlined.LocationOn, null, tint = P.muted, modifier = Modifier.size(14.dp))
                     Text(e.location, style = T.small, color = P.muted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))

@@ -50,7 +50,7 @@ fun SupportScreen(app: AppState, open: (SheetKind) -> Unit) {
         }
         item {
             Card(Modifier.padding(horizontal = 24.dp).fillMaxWidth(), onClick = { open(SheetKind.Form("General")) }) {
-                Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(Modifier.padding(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     IconBubble(Icons.Outlined.SupportAgent, 54.dp, P.mintInk, P.mint)
                     Column(Modifier.weight(1f)) {
                         Text("Need help?", style = T.title, color = P.ink)
@@ -59,11 +59,13 @@ fun SupportScreen(app: AppState, open: (SheetKind) -> Unit) {
                     Chevron()
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Column(Modifier.padding(horizontal = 24.dp)) {
+            Spacer(Modifier.height(14.dp))
+            Card(Modifier.padding(horizontal = 24.dp).fillMaxWidth()) {
+              Column(Modifier.padding(horizontal = 18.dp)) {
                 Option(Icons.Outlined.Groups, "Request mentor help", "Stuck on your quantum circuit? Ping an expert.") { open(SheetKind.Form("Mentor help")) }
                 Option(Icons.Outlined.WarningAmber, "Submit a grievance", "Report an issue, bug, or team dispute.") { open(SheetKind.Form("Grievance")) }
                 Option(Icons.AutoMirrored.Outlined.MenuBook, "FAQs & rules", "Hackathon guidelines.", last = true) { open(SheetKind.Faq) }
+              }
             }
             Spacer(Modifier.height(20.dp))
             Box(Modifier.padding(horizontal = 24.dp)) {
@@ -77,7 +79,7 @@ fun SupportScreen(app: AppState, open: (SheetKind) -> Unit) {
             items(app.tickets, key = { it.id }) { t ->
                 val replied = t.messages.lastOrNull()?.fromAdmin == true
                 Card(Modifier.animateItem().padding(horizontal = 24.dp, vertical = 5.dp).fillMaxWidth(), RoundedCornerShape(20.dp), onClick = { open(SheetKind.Thread(t.id)) }) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(t.code, style = T.bodyM, color = P.ink)
                             when { t.status == "resolved" -> Pill("RESOLVED", P.mint, P.mintInk); replied -> Pill("NEW REPLY", P.primary, P.onPrimary); else -> Pill(t.status.replace('_', ' ').uppercase(), P.surfaceAlt, P.muted) }

@@ -17,7 +17,7 @@ struct PassView: View {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
                     SectionLabel(text: "MY PASS")
-                    Text("One pass.\nEvery moment.").font(Fonts.display(32, 700, style: .largeTitle)).foregroundStyle(P.ink)
+                    Text("One pass.\nEvery moment.").font(Fonts.display(32, 700, style: .largeTitle)).lineSpacing(-6).foregroundStyle(P.ink)
                 }
                 .padding(.horizontal, 24).padding(.vertical, 18)
 
@@ -121,7 +121,7 @@ private struct TiltPass: View {
                 }
                 .buttonStyle(PressStyle())
             }
-            .padding(24)
+            .padding(26)
         }
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).stroke(.white.opacity(0.12)))

@@ -9,7 +9,7 @@ struct SupportView: View {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
                     SectionLabel(text: "SUPPORT & GRIEVANCES")
-                    Text("We’ve got\nyour back.").font(Fonts.display(32, 700, style: .largeTitle)).foregroundStyle(P.ink)
+                    Text("We’ve got\nyour back.").font(Fonts.display(32, 700, style: .largeTitle)).lineSpacing(-6).foregroundStyle(P.ink)
                 }
                 .padding(.horizontal, 24).padding(.vertical, 18)
 
@@ -24,19 +24,22 @@ struct SupportView: View {
                             Spacer(minLength: 0)
                             Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(P.muted)
                         }
-                        .padding(20)
+                        .padding(22)
                     }
                 }
                 .buttonStyle(PressStyle()).padding(.horizontal, 24)
 
-                VStack(spacing: 0) {
+                Card {
+                  VStack(spacing: 0) {
                     option("person.3", "Request mentor help", "Stuck on your quantum circuit? Ping an expert.") { router.sheet = .form("Mentor help") }
                     Divider().overlay(P.line)
                     option("exclamationmark.triangle", "Submit a grievance", "Report an issue, bug, or team dispute.") { router.sheet = .form("Grievance") }
                     Divider().overlay(P.line)
                     option("book", "FAQs & rules", "Hackathon guidelines.") { router.sheet = .faq }
+                  }
+                  .padding(.horizontal, 18)
                 }
-                .padding(.horizontal, 24).padding(.top, 10)
+                .padding(.horizontal, 24).padding(.top, 14)
 
                 Button { router.sheet = .form("General"); Haptics.tap() } label: {
                     Label("NEW SUPPORT TICKET", systemImage: "ticket").font(T.button).tracking(1).foregroundStyle(P.mintInk)
@@ -62,7 +65,7 @@ struct SupportView: View {
                                     Text("\(t.kind) · \(t.topic)").font(Fonts.display(15, 600, style: .subheadline)).foregroundStyle(P.ink)
                                     if let m = t.messages.last { Text((m.fromAdmin ? "Team: " : "You: ") + m.body).font(T.small).foregroundStyle(P.muted).lineLimit(2).multilineTextAlignment(.leading) }
                                 }
-                                .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(18).frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
                         .buttonStyle(PressStyle()).padding(.horizontal, 24).padding(.vertical, 5)

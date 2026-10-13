@@ -163,7 +163,7 @@ private struct Hero: View {
         } label: {
             ZStack(alignment: .leading) {
                 LinearGradient(colors: [P.hero1, P.hero2], startPoint: .topLeading, endPoint: .bottomTrailing)
-                AtomOrb(color: .white, period: 12).frame(width: 250, height: 250).opacity(0.5).offset(x: 150)
+                AtomOrb(color: .white, period: 12).frame(width: 250, height: 250).opacity(0.32).offset(x: 160, y: 20)
                 VStack(alignment: .leading, spacing: 0) {
                     Group {
                         if let l = live { HStack(spacing: 6) { PulseDot(color: P.accent); Text("LIVE NOW · \(l.location.uppercased())").lineLimit(1) } }
@@ -172,7 +172,7 @@ private struct Hero: View {
                         else { Text("UP NEXT · \(next.map { Fmt.weekdayTime.string(from: $0.startsAt).uppercased() } ?? "")") }
                     }
                     .font(T.label).tracking(1.3).foregroundStyle(P.accent)
-                    Spacer(minLength: 8)
+                    Spacer(minLength: 14)
                     if before {
                         let s = Int(firstStart.timeIntervalSince(now))
                         HStack(spacing: 8) {
@@ -180,11 +180,11 @@ private struct Hero: View {
                         }
                         Text(app.settings["venue"] ?? "First up · \(target?.title ?? "")").font(T.body).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
                     } else if after {
-                        Text("See you at\nFall Fest 2027").font(T.h1).foregroundStyle(.white)
+                        Text("See you at\nFall Fest 2027").font(T.h1).lineSpacing(-4).foregroundStyle(.white)
                     } else {
-                        Text(target?.title ?? "").font(Fonts.display(28, 700, style: .title1)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.75).multilineTextAlignment(.leading)
+                        Text(target?.title ?? "").font(Fonts.display(26, 700, style: .title2)).foregroundStyle(.white).lineLimit(2).lineSpacing(-3).minimumScaleFactor(0.8).multilineTextAlignment(.leading).padding(.trailing, 40)
                     }
-                    Spacer(minLength: 8)
+                    Spacer(minLength: 18)
                     HStack {
                         Text(before ? (app.settings["fest_name"] ?? "") : (target?.rangeLabel ?? "")).font(T.small).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                         Spacer()
@@ -192,10 +192,9 @@ private struct Hero: View {
                             .frame(width: 46, height: 46).background(.white, in: Circle())
                     }
                 }
-                .padding(24)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.horizontal, 26).padding(.vertical, 24)
+                .frame(maxWidth: .infinity, minHeight: 226, alignment: .topLeading)
             }
-            .frame(height: 214)
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         }
         .buttonStyle(PressStyle())
@@ -277,13 +276,13 @@ struct EventRow: View {
             HStack(spacing: 14) {
                 Button { router.sheet = .event(event.id); Haptics.tap() } label: {
                     HStack(spacing: 14) {
-                        IconBubble(symbol: event.track.symbol, size: 52, tint: status == .live ? P.mintInk : P.ink, bg: status == .live ? P.mint : P.surfaceAlt)
+                        IconBubble(symbol: event.track.symbol, size: 50, tint: status == .live ? P.mintInk : P.ink, bg: status == .live ? P.mint : P.surfaceAlt)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 8) {
                                 Text(day.map { event.timeLabel(on: $0) } ?? Fmt.dmTime.string(from: event.startsAt)).font(T.small).foregroundStyle(P.muted)
                                 StatusBadge(status: status, checkedIn: app.isCheckedIn(event))
                             }
-                            Text(event.title).font(T.title).foregroundStyle(P.ink).lineLimit(1)
+                            Text(event.title).font(T.title).foregroundStyle(P.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                             ViewThatFits(in: .horizontal) {
                                 HStack(spacing: 6) { locationLabel; extraPills }
                                 locationLabel
@@ -306,7 +305,7 @@ struct EventRow: View {
                     .accessibilityLabel(event.saved ? "Remove \(event.title) from pass" : "Save \(event.title) to pass")
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 18).padding(.vertical, 18)
         }
     }
 }

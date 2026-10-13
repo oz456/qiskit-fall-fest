@@ -22,7 +22,6 @@ struct SignInView: View {
             Color.clear.overlay(alignment: .topTrailing) {
                 ZStack {
                     Circle().fill(RadialGradient(colors: [P.qiskitPurple.opacity(0.18), .clear], center: .center, startRadius: 0, endRadius: 210)).frame(width: 420, height: 420).offset(x: 110, y: -40)
-                    AtomOrb(lineWidth: 1, period: 14).frame(width: 330, height: 330).offset(x: 120, y: 70).opacity(0.8)
                 }
             }
             .clipped().allowsHitTesting(false).ignoresSafeArea()
@@ -39,13 +38,14 @@ struct SignInView: View {
 
                     Spacer(minLength: 64)
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("QISKIT\nFALL FEST ’26").font(T.hero).tracking(-1.8).foregroundStyle(P.ink).lineSpacing(-2)
+                        Text("QISKIT\nFALL FEST ’26").font(T.hero).tracking(-1.8).foregroundStyle(P.ink).lineSpacing(-9)
                         Text("The ultimate quantum computing fest by hackers, for hackers.")
                             .font(Fonts.body(17, 400, style: .body)).foregroundStyle(P.muted).frame(maxWidth: 300, alignment: .leading)
                     }
                     .opacity(entered ? 1 : 0).offset(y: entered ? 0 : 30)
 
-                    Spacer(minLength: 36)
+                    Color.clear.frame(maxWidth: .infinity, minHeight: 36, maxHeight: .infinity)
+                        .overlay(alignment: .trailing) { AtomOrb(lineWidth: 1, period: 14).frame(width: 210, height: 210).offset(x: 36).opacity(0.7).allowsHitTesting(false) }
                     form
                         .offset(x: shake)
                         .opacity(entered ? 1 : 0).offset(y: entered ? 0 : 30)

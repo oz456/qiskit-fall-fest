@@ -85,7 +85,6 @@ fun SignInScreen(app: AppState) {
             Modifier.size(420.dp).align(Alignment.TopEnd).offset(110.dp, (-40).dp)
                 .background(Brush.radialGradient(listOf(Color(0xFF6929C4).copy(alpha = .16f), Color.Transparent)), CircleShape)
         )
-        AtomOrb(Modifier.size(330.dp).align(Alignment.TopEnd).offset(120.dp, 70.dp).alpha(.8f), speed = 14000, stroke = 1.dp)
 
         Column(
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
@@ -98,11 +97,11 @@ fun SignInScreen(app: AppState) {
             Spacer(Modifier.height(80.dp))
             val a1 by animateFloatAsState(if (entered) 1f else 0f, stagger(1), label = "a1")
             Column(Modifier.alpha(a1).offset { IntOffset(0, ((1 - a1) * 40).dp.roundToPx()) }) {
-                Text("QISKIT\nFALL FEST ’26", style = T.hero, color = P.ink)
+                Text("QISKIT\nFALL FEST ’26", style = T.hero.copy(lineHeight = 44.sp), color = P.ink)
                 Spacer(Modifier.height(16.dp))
                 Text("The ultimate quantum computing fest by hackers, for hackers.", style = T.body.copy(fontSize = 17.sp, lineHeight = 25.sp), color = P.muted, modifier = Modifier.widthIn(max = 300.dp))
             }
-            Spacer(Modifier.weight(1f).heightIn(min = 36.dp))
+            Box(Modifier.weight(1f).fillMaxWidth().heightIn(min = 36.dp)) { AtomOrb(Modifier.size(210.dp).align(Alignment.CenterEnd).offset(x = 36.dp).alpha(.7f), speed = 14000, stroke = 1.dp) }
             val a2 by animateFloatAsState(if (entered) 1f else 0f, stagger(2), label = "a2")
             Column(Modifier.alpha(a2).offset { IntOffset(shake.value.dp.roundToPx(), ((1 - a2) * 40).dp.roundToPx()) }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 AnimatedContent(step, label = "step", transitionSpec = { (fadeIn(tween(300)) + slideInHorizontally { it / 8 }) togetherWith fadeOut(tween(150)) }) { s ->
