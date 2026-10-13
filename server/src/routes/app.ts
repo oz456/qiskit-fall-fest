@@ -91,6 +91,11 @@ export function appRoutes(app: FastifyInstance, db: Db) {
       const [s] = await db.query("SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.status='active'", [p.sid]);
       if (!s) return reply.code(401).send({ error: "unauthorized" });
       req.uid = p.sub; req.sid = p.sid;
+      // The selfie is mandatory: until it exists the only things an attendee can do are read their profile, upload the photo, or sign out.
+      if (!/^\/v1\/(me|me\/photo|auth\/logout)(\?|$)/.test(req.url)) {
+        const [ph] = await db.query("SELECT 1 FROM user_photos WHERE user_id=$1", [req.uid]);
+        if (!ph) return reply.code(403).send({ error: "photo_required", message: "Add your selfie to continue." });
+      }
     });
 
     api.post("/v1/auth/logout", async (req) => { await db.query("UPDATE sessions SET revoked_at = now() WHERE id=$1", [req.sid]); return { ok: true }; });

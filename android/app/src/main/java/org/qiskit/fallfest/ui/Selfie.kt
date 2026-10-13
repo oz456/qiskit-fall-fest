@@ -140,7 +140,7 @@ fun SelfieScreen(app: AppState) {
             dismissButton = { TextButton({ confirm = false }) { Text("Retake", color = P.muted) } },
         )
         Spacer(Modifier.height(10.dp))
-        Text("Not now", style = T.small, color = P.muted, modifier = Modifier.pressable(RoundedCornerShape(10.dp)) { app.skippedSelfie = true }.padding(horizontal = 16.dp, vertical = 10.dp))
+        Text("Not you? Sign out", style = T.small, color = P.muted, modifier = Modifier.pressable(RoundedCornerShape(10.dp)) { app.signOut() }.padding(horizontal = 16.dp, vertical = 10.dp))
     }
 }
 

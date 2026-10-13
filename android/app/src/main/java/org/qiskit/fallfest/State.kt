@@ -34,7 +34,6 @@ class AppState(context: Context) {
     var offline by mutableStateOf(false); private set
     /** First sign-in: the attendee has no selfie on file yet. Door staff compare faces, so we ask once. */
     var needsSelfie by mutableStateOf(prefs.getBoolean("needs_selfie", false)); private set
-    var skippedSelfie by mutableStateOf(false)
     var message by mutableStateOf<String?>(null)
     var nowMs by mutableLongStateOf(System.currentTimeMillis())
     private var seenAnnouncement by mutableStateOf(prefs.getString("seen_ann", null))
@@ -68,7 +67,7 @@ class AppState(context: Context) {
         val p = r.getJSONObject("profile")
         // Learn whether a selfie exists BEFORE showing the app, so first sign-in goes straight to the selfie step.
         val hasPhoto = runCatching { (api.call("GET", "/v1/me", null, accessToken) as JSONObject).getJSONObject("profile").optBoolean("hasPhoto", true) }.getOrDefault(true)
-        needsSelfie = !hasPhoto; skippedSelfie = false
+        needsSelfie = !hasPhoto
         prefs.edit().putString("profile", p.toString()).putBoolean("needs_selfie", needsSelfie).apply()
         profile = Profile(p.str("name"), p.str("email"), p.strOrNull("college"), p.str("passCode"))
         refresh()
@@ -122,7 +121,10 @@ class AppState(context: Context) {
                 }
                 offline = false
                 prefs.edit().putString("cache_events", ev.toString()).putString("cache_ann", announcementsJson()).apply()
-            } catch (e: ApiException) { if (e.http != 401) offline = true }
+            } catch (e: ApiException) {
+                if (e.code == "photo_required") { needsSelfie = true; prefs.edit().putBoolean("needs_selfie", true).apply() } // the server blocks the app until the selfie exists
+                else if (e.http != 401) offline = true
+            }
             catch (_: Exception) { offline = true }
             finally { refreshing = false }
         }

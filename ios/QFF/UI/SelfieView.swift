@@ -29,7 +29,7 @@ struct SelfieView: View {
             Label("Final once saved · only event staff can see it", systemImage: "lock").font(T.small).foregroundStyle(P.muted).padding(.bottom, 14)
             if let error { Text(error).font(T.small).foregroundStyle(P.danger).multilineTextAlignment(.center).padding(.bottom, 10) }
             controls
-            Button("Not now") { app.skippedSelfie = true }
+            Button("Not you? Sign out") { app.signOut() }
                 .font(T.small).foregroundStyle(P.muted).padding(.top, 14).padding(.bottom, 4)
         }
         .padding(.horizontal, 28).padding(.top, 24).padding(.bottom, 12)

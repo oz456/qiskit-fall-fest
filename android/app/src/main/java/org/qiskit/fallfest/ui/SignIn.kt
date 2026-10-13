@@ -98,8 +98,6 @@ fun SignInScreen(app: AppState) {
             val a1 by animateFloatAsState(if (entered) 1f else 0f, stagger(1), label = "a1")
             Column(Modifier.alpha(a1).offset { IntOffset(0, ((1 - a1) * 40).dp.roundToPx()) }) {
                 Text("QISKIT\nFALL FEST ’26", style = T.hero.copy(lineHeight = 44.sp), color = P.ink)
-                Spacer(Modifier.height(16.dp))
-                Text("The ultimate quantum computing fest by hackers, for hackers.", style = T.body.copy(fontSize = 17.sp, lineHeight = 25.sp), color = P.muted, modifier = Modifier.widthIn(max = 300.dp))
             }
             Box(Modifier.weight(1f).fillMaxWidth().heightIn(min = 36.dp)) { AtomOrb(Modifier.size(210.dp).align(Alignment.CenterEnd).offset(x = 36.dp).alpha(.7f), speed = 14000, stroke = 1.dp) }
             val a2 by animateFloatAsState(if (entered) 1f else 0f, stagger(2), label = "a2")

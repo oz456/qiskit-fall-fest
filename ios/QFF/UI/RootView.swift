@@ -8,7 +8,7 @@ struct RootView: View {
     var body: some View {
         ZStack {
             if app.signedIn {
-                if app.needsSelfie && !app.skippedSelfie { SelfieView().transition(.opacity) }
+                if app.needsSelfie { SelfieView().transition(.opacity) }
                 else { MainView().environmentObject(router).transition(.opacity.combined(with: .scale(scale: 0.98))) }
             } else {
                 SignInView().transition(.opacity)

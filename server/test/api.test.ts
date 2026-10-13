@@ -109,6 +109,30 @@ describe("attendee flow", () => {
     await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email } });
     tokens = (await app.inject({ method: "POST", url: "/v1/auth/verify", payload: { email, code: await lastOtp(email), deviceId: "device-cccc3" } })).json();
   });
+  it("selfie: one upload, scanner sees it by ticket, admin can reset", async () => {
+    const [u] = await db.query("SELECT id, pass_code, pass_secret FROM users WHERE email='alex@example.org'");
+    const me = () => app.inject({ url: "/v1/me", headers: { authorization: `Bearer ${tokens.accessToken}` } });
+    assert.equal((await me()).json().profile.hasPhoto, false);
+    assert.equal((await app.inject({ url: "/v1/events", headers: { authorization: `Bearer ${tokens.accessToken}` } })).json().error, "photo_required", "no photo, no app");
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(8000, 1)]);
+    const put = (body: Buffer) => app.inject({ method: "PUT", url: "/v1/me/photo", headers: { authorization: `Bearer ${tokens.accessToken}`, "content-type": "image/jpeg" }, payload: body });
+    assert.equal((await put(Buffer.alloc(8000, 1))).statusCode, 400, "not a jpeg");
+    const both = await Promise.all([put(jpeg), put(jpeg)]); // two phones / a double tap at the same instant
+    assert.deepEqual(both.map((r) => r.statusCode).sort(), [200, 409], "exactly one upload wins");
+    assert.equal((await put(jpeg)).statusCode, 409, "only once");
+    assert.equal((await db.query("SELECT 1 FROM user_photos WHERE user_id=$1", [u!.id])).length, 1);
+    assert.equal((await me()).json().profile.hasPhoto, true);
+    const v = (await check("POST", "/check/api/scan", { payload: passPayload(Buffer.from(u!.pass_secret), u!.pass_code), scope: "day:2026-10-19" })).json();
+    assert.equal(v.who.hasPhoto, true);
+    const img = await app.inject({ url: `/check/api/photo?ticket=${encodeURIComponent(v.ticket)}`, headers: { cookie: ccookie } });
+    assert.equal(img.statusCode, 200); assert.equal(img.rawPayload.length, jpeg.length);
+    assert.equal((await app.inject({ url: `/check/api/photo?ticket=${encodeURIComponent(v.ticket)}` })).statusCode, 401, "needs the scanner login");
+    assert.equal((await admin("GET", `/admin/api/users/${u!.id}/photo`)).statusCode, 200);
+    await admin("DELETE", `/admin/api/users/${u!.id}/photo`);
+    assert.equal((await me()).json().profile.hasPhoto, false);
+    assert.equal((await put(jpeg)).statusCode, 200, "after a reset they can retake it");
+    assert.equal((await app.inject({ url: "/v1/events", headers: { authorization: `Bearer ${tokens.accessToken}` } })).statusCode, 200);
+  });
   it("saving is the attendee's; enrolment is the admin's", async () => {
     const h = { authorization: `Bearer ${tokens.accessToken}` };
     const ev = (await app.inject({ url: "/v1/events", headers: h })).json().events; eventId = ev[0].id;
@@ -129,27 +153,6 @@ describe("attendee flow", () => {
     await admin("POST", "/admin/api/users", { email: "sam@example.org", name: "Sam" });
   });
 
-  it("selfie: one upload, scanner sees it by ticket, admin can reset", async () => {
-    const [u] = await db.query("SELECT id, pass_code, pass_secret FROM users WHERE email='alex@example.org'");
-    const me = () => app.inject({ url: "/v1/me", headers: { authorization: `Bearer ${tokens.accessToken}` } });
-    assert.equal((await me()).json().profile.hasPhoto, false);
-    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(8000, 1)]);
-    const put = (body: Buffer) => app.inject({ method: "PUT", url: "/v1/me/photo", headers: { authorization: `Bearer ${tokens.accessToken}`, "content-type": "image/jpeg" }, payload: body });
-    assert.equal((await put(Buffer.alloc(8000, 1))).statusCode, 400, "not a jpeg");
-    const both = await Promise.all([put(jpeg), put(jpeg)]); // two phones / a double tap at the same instant
-    assert.deepEqual(both.map((r) => r.statusCode).sort(), [200, 409], "exactly one upload wins");
-    assert.equal((await put(jpeg)).statusCode, 409, "only once");
-    assert.equal((await db.query("SELECT 1 FROM user_photos WHERE user_id=$1", [u!.id])).length, 1);
-    assert.equal((await me()).json().profile.hasPhoto, true);
-    const v = (await check("POST", "/check/api/scan", { payload: passPayload(Buffer.from(u!.pass_secret), u!.pass_code), scope: "day:2026-10-19" })).json();
-    assert.equal(v.who.hasPhoto, true);
-    const img = await app.inject({ url: `/check/api/photo?ticket=${encodeURIComponent(v.ticket)}`, headers: { cookie: ccookie } });
-    assert.equal(img.statusCode, 200); assert.equal(img.rawPayload.length, jpeg.length);
-    assert.equal((await app.inject({ url: `/check/api/photo?ticket=${encodeURIComponent(v.ticket)}` })).statusCode, 401, "needs the scanner login");
-    assert.equal((await admin("GET", `/admin/api/users/${u!.id}/photo`)).statusCode, 200);
-    await admin("DELETE", `/admin/api/users/${u!.id}/photo`);
-    assert.equal((await me()).json().profile.hasPhoto, false);
-  });
   it("tickets: user creates, admin replies, user sees reply", async () => {
     const h = { authorization: `Bearer ${tokens.accessToken}` };
     const t = await app.inject({ method: "POST", url: "/v1/tickets", headers: h, payload: { kind: "General", topic: "Wi-Fi & power", message: "Wi-Fi is down on floor 2" } });
@@ -181,7 +184,7 @@ describe("rotating QR check-in", () => {
     const live = passPayload(secret, u!.pass_code);
     // 1) scan only verifies; nothing is recorded until the volunteer confirms
     const v = (await check("POST", "/check/api/scan", { payload: live, scope })).json();
-    assert.equal(v.result, "verify"); assert.equal(v.who.hasPhoto, false);
+    assert.equal(v.result, "verify"); assert.equal(v.who.hasPhoto, true);
     assert.equal((await admin("GET", `/admin/api/attendance?scope=${scope}`)).json().rows.length, 0);
     // 2) reject records nothing; confirm records once
     assert.equal((await check("POST", "/check/api/confirm", { ticket: v.ticket, decision: "reject" })).json().result, "rejected");

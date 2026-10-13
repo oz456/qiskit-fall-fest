@@ -39,8 +39,6 @@ struct SignInView: View {
                     Spacer(minLength: 64)
                     VStack(alignment: .leading, spacing: 16) {
                         Text("QISKIT\nFALL FEST ’26").font(T.hero).tracking(-1.8).foregroundStyle(P.ink).lineSpacing(-9)
-                        Text("The ultimate quantum computing fest by hackers, for hackers.")
-                            .font(Fonts.body(17, 400, style: .body)).foregroundStyle(P.muted).frame(maxWidth: 300, alignment: .leading)
                     }
                     .opacity(entered ? 1 : 0).offset(y: entered ? 0 : 30)
 

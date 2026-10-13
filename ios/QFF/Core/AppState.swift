@@ -18,7 +18,6 @@ final class AppState: ObservableObject {
     @Published var seenAnnouncement: String?
     /// First sign-in: no selfie on file yet. Door staff compare faces, so we ask once.
     @Published var needsSelfie = UserDefaults.standard.bool(forKey: "needs_selfie")
-    @Published var skippedSelfie = false
 
     let api: API
     let isPreview: Bool
@@ -80,7 +79,7 @@ final class AppState: ObservableObject {
         passSecret = Data(base64Encoded: r.passSecret)
         // Learn whether a selfie exists BEFORE showing the app, so first sign-in goes straight to the selfie step.
         let me: MeResponse? = try? await api.call("GET", "/v1/me", token: r.accessToken)
-        needsSelfie = me?.profile.hasPhoto == false; skippedSelfie = false
+        needsSelfie = me?.profile.hasPhoto == false
         defaults.set(needsSelfie, forKey: "needs_selfie")
         defaults.set(try? JSONEncoder().encode(r.profile), forKey: "profile")
         profile = r.profile
@@ -153,7 +152,8 @@ final class AppState: ObservableObject {
             if let has = me.profile.hasPhoto, needsSelfie == has { needsSelfie = !has; defaults.set(needsSelfie, forKey: "needs_selfie") }
             offline = false
             defaults.set(evData, forKey: "cache_events"); defaults.set(annData, forKey: "cache_ann")
-        } catch let e as APIError where e.http == 401 { /* signed out by refreshToken() */ }
+        } catch let e as APIError where e.code == "photo_required" { needsSelfie = true; defaults.set(true, forKey: "needs_selfie") } // the server blocks the app until the selfie exists
+        catch let e as APIError where e.http == 401 { /* signed out by refreshToken() */ }
         catch { offline = true }
     }
 
