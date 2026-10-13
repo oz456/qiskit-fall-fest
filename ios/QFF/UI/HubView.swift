@@ -59,6 +59,7 @@ struct HubView: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.98)))
                     }
                     .animation(.spring(response: 0.4, dampingFraction: 0.85), value: shown.map(\.id))
+                    PartnerLine()
                 }
             }
             .padding(.bottom, 24)
@@ -174,7 +175,9 @@ private struct Hero: View {
                     Spacer(minLength: 8)
                     if before {
                         let s = Int(firstStart.timeIntervalSince(now))
-                        Text("\(s / 86400)d \((s / 3600) % 24)h \((s / 60) % 60)m").font(Fonts.display(36, 700, style: .largeTitle)).foregroundStyle(.white)
+                        HStack(spacing: 8) {
+                            CountUnit(value: s / 86400, label: "DAYS"); CountUnit(value: (s / 3600) % 24, label: "HRS"); CountUnit(value: (s / 60) % 60, label: "MIN")
+                        }
                         Text(app.settings["venue"] ?? "First up · \(target?.title ?? "")").font(T.body).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
                     } else if after {
                         Text("See you at\nFall Fest 2027").font(T.h1).foregroundStyle(.white)
@@ -185,7 +188,7 @@ private struct Hero: View {
                     HStack {
                         Text(before ? (app.settings["fest_name"] ?? "") : (target?.rangeLabel ?? "")).font(T.small).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                         Spacer()
-                        Image(systemName: "arrow.right").font(.system(size: 18, weight: .semibold)).foregroundStyle(Color(hex: 0x0B1A13))
+                        Image(systemName: "arrow.right").font(.system(size: 18, weight: .semibold)).foregroundStyle(P.ink)
                             .frame(width: 46, height: 46).background(.white, in: Circle())
                     }
                 }
@@ -304,5 +307,18 @@ struct EventRow: View {
             }
             .padding(16)
         }
+    }
+}
+
+private struct CountUnit: View {
+    let value: Int
+    let label: String
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(String(format: "%02d", value)).font(Fonts.display(28, 700, style: .title1)).foregroundStyle(.white)
+            Text(label).font(Fonts.body(9, 700, style: .caption2)).tracking(1.1).foregroundStyle(P.accent)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

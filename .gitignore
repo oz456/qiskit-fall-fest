@@ -9,3 +9,4 @@ local.properties
 *.apk
 !server/public/download/*.apk
 ios-artifacts/
+android-artifacts/

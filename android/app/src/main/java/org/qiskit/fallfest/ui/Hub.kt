@@ -116,6 +116,7 @@ fun HubScreen(app: AppState, onOpen: (Event) -> Unit, onNotifications: () -> Uni
                 }
                 if (shown.isEmpty()) item { EmptyState(if (filter == Filter.Saved) "Nothing saved yet" else "No events here", if (filter == Filter.Saved) "Tap the bookmark on any event to add it to your pass." else "Try a different day or filter.", if (filter == Filter.Saved) Icons.Outlined.BookmarkBorder else Icons.Outlined.EventAvailable) }
                 items(shown, key = { it.id }) { e -> EventRow(e, app, day, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen) }
+                item { PartnerLine() }
             }
         }
     }
@@ -145,17 +146,37 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
                 }
                 Spacer(Modifier.height(10.dp))
                 when {
-                    before -> { val d = Duration.between(now, firstStart); Text("${d.toDays()}d ${d.toHours() % 24}h ${d.toMinutes() % 60}m", style = T.h1.copy(fontSize = 36.sp, lineHeight = 40.sp), color = Color.White)
-                        Text(app.settings["venue"] ?: "First up · ${target.title}", style = T.body, color = Color.White.copy(alpha = .7f), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    before -> { val d = Duration.between(now, firstStart)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CountUnit(d.toDays(), "DAYS"); CountUnit(d.toHours() % 24, "HRS"); CountUnit(d.toMinutes() % 60, "MIN")
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(app.settings["venue"] ?: "First up · ${target.title}", style = T.small, color = Color.White.copy(alpha = .7f), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     after -> Text("See you at\nFall Fest 2027", style = T.h1, color = Color.White)
                     else -> Text(target.title, style = T.h1.copy(fontSize = 30.sp, lineHeight = 34.sp), color = Color.White, maxLines = 2)
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (before) app.settings["fest_name"] ?: "" else target.rangeLabel, style = T.small, color = Color.White.copy(alpha = .75f), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Box(Modifier.size(46.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Outlined.ArrowForward, "Open", tint = Color(0xFF0B1A13), modifier = Modifier.size(22.dp)) }
+                Box(Modifier.size(46.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Outlined.ArrowForward, "Open", tint = P.ink, modifier = Modifier.size(22.dp)) }
             }
         }
+    }
+}
+
+@Composable
+private fun CountUnit(value: Long, label: String) {
+    Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .12f)).padding(horizontal = 14.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("%02d".format(value), style = T.h1.copy(fontSize = 28.sp, lineHeight = 30.sp), color = Color.White)
+        Text(label, style = T.label.copy(fontSize = 9.sp), color = P.accent)
+    }
+}
+
+@Composable
+fun PartnerLine(modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        QiskitMark(18.dp); Spacer(Modifier.width(8.dp))
+        Text("In partnership with IBM", style = T.small, color = P.muted)
     }
 }
 
@@ -219,7 +240,7 @@ fun EventRow(e: Event, app: AppState, day: LocalDate?, modifier: Modifier = Modi
             if (trailing) {
                 val sc by animateFloatAsState(if (e.saved) 1f else 0.92f, spring(0.4f, 500f), label = "bm")
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { app.toggleSaved(e); hf.performHapticFeedback(HapticFeedbackType.ContextClick) }, contentAlignment = Alignment.Center) {
-                    Icon(if (e.saved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder, if (e.saved) "Remove from pass" else "Save to pass", tint = if (e.saved) (if (P.dark) P.accent else P.mintInk) else P.muted, modifier = Modifier.size(24.dp).scale(sc))
+                    Icon(if (e.saved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder, if (e.saved) "Remove from pass" else "Save to pass", tint = if (e.saved) P.mintInk else P.muted, modifier = Modifier.size(24.dp).scale(sc))
                 }
             }
         }

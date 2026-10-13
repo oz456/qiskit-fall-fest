@@ -8,29 +8,25 @@ extension UIColor {
     }
 }
 extension Color {
-    /// Adaptive colour: follows the system light/dark appearance automatically.
-    init(light: UInt32, dark: UInt32) {
-        self.init(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark) : UIColor(hex: light) })
-    }
     init(hex: UInt32) { self.init(UIColor(hex: hex)) }
 }
 
-/// Brand palette (same tokens as the Android app and the admin sites).
+/// Brand palette (same tokens as the Android app and the admin sites). Light only: the app never switches to dark mode.
 enum P {
-    static let bg = Color(light: 0xF6F5F0, dark: 0x0C1511)
-    static let surface = Color(light: 0xFFFFFF, dark: 0x142019)
-    static let surfaceAlt = Color(light: 0xEFEEE8, dark: 0x1B2A22)
-    static let ink = Color(light: 0x111A16, dark: 0xF0F5F2)
-    static let muted = Color(light: 0x6B7470, dark: 0x93A29A)
-    static let line = Color(light: 0xE6E4DB, dark: 0x243529)
-    static let primary = Color(light: 0x163226, dark: 0x7BE0AD)
-    static let onPrimary = Color(light: 0xFFFFFF, dark: 0x0A1A12)
-    static let mint = Color(light: 0xDDF3E6, dark: 0x1B3A2C)
-    static let mintInk = Color(light: 0x17583C, dark: 0x8FE8BA)
-    static let accent = Color(hex: 0x7BE0AD)
-    static let hero1 = Color(hex: 0x1F4A39)
-    static let hero2 = Color(light: 0x0B1A13, dark: 0x08110D)
-    static let danger = Color(light: 0xC0392B, dark: 0xFF8A7A)
+    static let bg = Color(hex: 0xF5F6FB)
+    static let surface = Color(hex: 0xFFFFFF)
+    static let surfaceAlt = Color(hex: 0xECEEF8)
+    static let ink = Color(hex: 0x0E1030)
+    static let muted = Color(hex: 0x666B8A)
+    static let line = Color(hex: 0xE2E4F0)
+    static let primary = Color(hex: 0x3A1FA8)
+    static let onPrimary = Color(hex: 0xFFFFFF)
+    static let mint = Color(hex: 0xE9E4FB)
+    static let mintInk = Color(hex: 0x4A22B8)
+    static let accent = Color(hex: 0x7DE3FF)
+    static let hero1 = Color(hex: 0x3B22A8)
+    static let hero2 = Color(hex: 0x0B0A2A)
+    static let danger = Color(hex: 0xC0392B)
     static let qiskitPurple = Color(hex: 0x6929C4)
 }
 

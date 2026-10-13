@@ -20,6 +20,7 @@ struct QFFApp: App {
             RootView()
                 .environmentObject(app)
                 .background(P.bg.ignoresSafeArea())
+                .preferredColorScheme(.light)
         }
     }
 }

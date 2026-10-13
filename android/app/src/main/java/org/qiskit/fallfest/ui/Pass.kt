@@ -72,9 +72,9 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
             }
         }
         item {
-            TiltPass(app, payload, progress) { qrOpen = true }
+            TiltPass(app) { qrOpen = true }
             Spacer(Modifier.height(12.dp))
-            Text("Live code · refreshes every 30 seconds. Screenshots won’t scan.", style = T.small, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
+            Text("Your QR stays hidden until you tap. It refreshes every 30 seconds, so screenshots won’t scan.", style = T.small, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
             Spacer(Modifier.height(16.dp))
             Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Stat("Saved", app.events.count { it.saved }.toString(), Modifier.weight(1f))
@@ -121,7 +121,7 @@ private fun CountdownRing(progress: Float, modifier: Modifier, color: Color, cor
 }
 
 @Composable
-private fun TiltPass(app: AppState, payload: String?, progress: Float, onQr: () -> Unit) {
+private fun TiltPass(app: AppState, onQr: () -> Unit) {
     val rx = remember { Animatable(0f) }; val ry = remember { Animatable(0f) }
     val scope = rememberCoroutineScope(); val shape = RoundedCornerShape(32.dp)
     val p = app.profile
@@ -134,30 +134,24 @@ private fun TiltPass(app: AppState, payload: String?, progress: Float, onQr: () 
                     onDragCancel = { scope.launch { rx.animateTo(0f); ry.animateTo(0f) } },
                 ) { _, d -> scope.launch { ry.snapTo((ry.value + d.x * .08f).coerceIn(-14f, 14f)); rx.snapTo((rx.value - d.y * .08f).coerceIn(-14f, 14f)) } }
             }
-            .clip(shape).background(Brush.linearGradient(listOf(P.hero1, P.hero2))).border(1.dp, Color.White.copy(alpha = .12f), shape),
+            .clip(shape).background(Brush.linearGradient(listOf(P.hero1, P.hero2))).pressable(shape, false, onQr).border(1.dp, Color.White.copy(alpha = .12f), shape),
     ) {
         AtomOrb(Modifier.size(260.dp).align(Alignment.TopEnd).offset(70.dp, (-50).dp).alpha(.3f), Color.White, speed = 16000)
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.VerifiedUser, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
                 Text("Secure Pass", style = T.bodyM, color = Color.White.copy(alpha = .8f), modifier = Modifier.weight(1f))
-                Pill("ACTIVE", Color(0xFF7BE0AD), Color(0xFF08281A))
+                Pill("ACTIVE", P.accent, P.hero2)
             }
-            Row(verticalAlignment = Alignment.Bottom) {
-                Column(Modifier.weight(1f)) {
-                    Text("ATTENDEE", style = T.label, color = Color.White.copy(alpha = .55f)); Spacer(Modifier.height(4.dp))
-                    Text((p?.name ?: "").uppercase(), style = T.h1.copy(fontSize = 24.sp, lineHeight = 28.sp), color = Color.White)
-                    Spacer(Modifier.height(6.dp))
-                    Text("ID: ${p?.passCode.orEmpty()}", style = T.small, color = Color.White.copy(alpha = .75f))
-                    p?.college?.let { Text(it, style = T.small, color = Color.White.copy(alpha = .55f), maxLines = 1) }
-                }
-                Box(Modifier.size(112.dp).pressable(RoundedCornerShape(18.dp), true, onQr).background(Color.White), contentAlignment = Alignment.Center) {
-                    if (payload != null) QrCode(payload, Modifier.fillMaxSize().padding(10.dp))
-                    CountdownRing(progress, Modifier.fillMaxSize().padding(1.dp), Color(0xFF163226), 18.dp)
-                }
+            Column {
+                Text("ATTENDEE", style = T.label, color = Color.White.copy(alpha = .55f)); Spacer(Modifier.height(4.dp))
+                Text((p?.name ?: "").uppercase(), style = T.h1.copy(fontSize = 26.sp, lineHeight = 30.sp), color = Color.White, maxLines = 2)
+                Spacer(Modifier.height(6.dp))
+                Text("ID: ${p?.passCode.orEmpty()}", style = T.body, color = Color.White.copy(alpha = .8f))
+                p?.college?.let { Text(it, style = T.small, color = Color.White.copy(alpha = .55f), maxLines = 1) }
             }
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = .1f)).pressable(RoundedCornerShape(16.dp), onClick = onQr).padding(vertical = 12.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.QrCode2, null, tint = Color.White, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("TAP TO ENLARGE QR", style = T.label, color = Color.White)
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).pressable(RoundedCornerShape(18.dp), true, onQr).padding(vertical = 16.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.QrCode2, null, tint = P.hero2, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(10.dp)); Text("TAP TO SHOW QR", style = T.button, color = P.hero2)
             }
         }
     }
@@ -179,7 +173,7 @@ private fun FullQr(app: AppState, payload: String?, progress: Float, onDismiss: 
                 Text("ID: ${app.profile?.passCode.orEmpty()}", style = T.body, color = P.muted)
                 Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(28.dp)).background(Color.White).border(1.dp, P.line, RoundedCornerShape(28.dp)), contentAlignment = Alignment.Center) {
                     if (payload != null) QrCode(payload, Modifier.fillMaxSize().padding(28.dp))
-                    CountdownRing(progress, Modifier.fillMaxSize().padding(2.dp), Color(0xFF163226), 28.dp)
+                    CountdownRing(progress, Modifier.fillMaxSize().padding(2.dp), P.primary, 28.dp)
                 }
                 Text("Live code — it changes every 30 seconds.\nHold steady at the scanner. Tap anywhere to close.", style = T.small, color = P.muted, textAlign = TextAlign.Center)
             }

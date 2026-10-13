@@ -1,6 +1,5 @@
 package org.qiskit.fallfest.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -17,7 +16,6 @@ import androidx.compose.ui.unit.sp
 import org.qiskit.fallfest.R
 
 class Palette(
-    val dark: Boolean,
     val bg: Color,
     val surface: Color,
     val surfaceAlt: Color,
@@ -34,21 +32,13 @@ class Palette(
     val danger: Color,
 )
 
+/** Single light palette (no dark mode): quantum indigo + IBM-style violet, cyan electrons. */
 val LightPalette = Palette(
-    dark = false,
-    bg = Color(0xFFF6F5F0), surface = Color(0xFFFFFFFF), surfaceAlt = Color(0xFFEFEEE8),
-    ink = Color(0xFF111A16), muted = Color(0xFF6B7470), line = Color(0xFFE6E4DB),
-    primary = Color(0xFF163226), onPrimary = Color(0xFFFFFFFF),
-    mint = Color(0xFFDDF3E6), mintInk = Color(0xFF17583C), accent = Color(0xFF7BE0AD),
-    hero1 = Color(0xFF1F4A39), hero2 = Color(0xFF0B1A13), danger = Color(0xFFC0392B),
-)
-val DarkPalette = Palette(
-    dark = true,
-    bg = Color(0xFF0C1511), surface = Color(0xFF142019), surfaceAlt = Color(0xFF1B2A22),
-    ink = Color(0xFFF0F5F2), muted = Color(0xFF93A29A), line = Color(0xFF243529),
-    primary = Color(0xFF7BE0AD), onPrimary = Color(0xFF0A1A12),
-    mint = Color(0xFF1B3A2C), mintInk = Color(0xFF8FE8BA), accent = Color(0xFF7BE0AD),
-    hero1 = Color(0xFF1F4A39), hero2 = Color(0xFF08110D), danger = Color(0xFFFF8A7A),
+    bg = Color(0xFFF5F6FB), surface = Color(0xFFFFFFFF), surfaceAlt = Color(0xFFECEEF8),
+    ink = Color(0xFF0E1030), muted = Color(0xFF666B8A), line = Color(0xFFE2E4F0),
+    primary = Color(0xFF3A1FA8), onPrimary = Color(0xFFFFFFFF),
+    mint = Color(0xFFE9E4FB), mintInk = Color(0xFF4A22B8), accent = Color(0xFF7DE3FF),
+    hero1 = Color(0xFF3B22A8), hero2 = Color(0xFF0B0A2A), danger = Color(0xFFC0392B),
 )
 
 val LocalPalette = staticCompositionLocalOf { LightPalette }
@@ -78,7 +68,7 @@ object T {
 
 @Composable
 fun QffTheme(content: @Composable () -> Unit) {
-    val p = if (isSystemInDarkTheme()) DarkPalette else LightPalette
+    val p = LightPalette
     CompositionLocalProvider(LocalPalette provides p) {
         MaterialTheme(
             colorScheme = lightColorScheme(primary = p.primary, background = p.bg, surface = p.surface, onSurface = p.ink),

@@ -25,6 +25,7 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         APIBase: "$(QFF_API_BASE)"
+        UIUserInterfaceStyle: Light
         UILaunchScreen:
           UIColorName: LaunchBackground
           UIImageName: LaunchMark

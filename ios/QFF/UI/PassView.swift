@@ -20,13 +20,11 @@ struct PassView: View {
                 }
                 .padding(.horizontal, 24).padding(.vertical, 18)
 
-                TimelineView(.periodic(from: .now, by: 0.25)) { _ in
-                    TiltPass(payload: app.passPayload(), progress: app.passProgress(), hidden: hidden) { fullQR = true }
-                }
-                .padding(.horizontal, 24)
+                TiltPass { fullQR = true }
+                    .padding(.horizontal, 24)
 
                 Text(captured ? "The code is hidden while your screen is being recorded or shared."
-                              : "Live code · refreshes every 30 seconds. Screenshots won’t scan.")
+                              : "Your QR stays hidden until you tap. It refreshes every 30 seconds, so screenshots won’t scan.")
                     .font(T.small).foregroundStyle(P.muted).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                     .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 16)
 
@@ -77,7 +75,7 @@ struct PassView: View {
 struct CountdownRing: View {
     let progress: Double
     var corner: CGFloat = 18
-    var color: Color = Color(hex: 0x163226)
+    var color: Color = P.primary
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: corner, style: .continuous).stroke(color.opacity(0.15), lineWidth: 3)
@@ -90,9 +88,6 @@ struct CountdownRing: View {
 
 private struct TiltPass: View {
     @EnvironmentObject var app: AppState
-    let payload: String?
-    let progress: Double
-    let hidden: Bool
     let onQR: () -> Void
     @State private var rx: Double = 0
     @State private var ry: Double = 0
@@ -106,30 +101,18 @@ private struct TiltPass: View {
                 HStack {
                     Label("Secure Pass", systemImage: "checkmark.shield").font(T.bodyM).foregroundStyle(.white.opacity(0.8))
                     Spacer()
-                    Pill(text: "ACTIVE", bg: Color(hex: 0x7BE0AD), fg: Color(hex: 0x08281A))
+                    Pill(text: "ACTIVE", bg: P.accent, fg: P.hero2)
                 }
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("ATTENDEE").font(T.label).tracking(1.3).foregroundStyle(.white.opacity(0.55))
-                        Text((p?.name ?? "").uppercased()).font(Fonts.display(24, 700, style: .title2)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.7)
-                        Text("ID: \(p?.passCode ?? "")").font(T.small).foregroundStyle(.white.opacity(0.75)).padding(.top, 2)
-                        if let c = p?.college { Text(c).font(T.small).foregroundStyle(.white.opacity(0.55)).lineLimit(1) }
-                    }
-                    Spacer(minLength: 8)
-                    Button(action: onQR) {
-                        ZStack {
-                            Color.white
-                            if let payload, !hidden { QRView(payload: payload).padding(10) }
-                            else { Image(systemName: "eye.slash").font(.system(size: 28)).foregroundStyle(Color(hex: 0x163226)) }
-                            CountdownRing(progress: progress, corner: 16).padding(1.5)
-                        }
-                        .frame(width: 112, height: 112).clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    }
-                    .buttonStyle(PressStyle()).accessibilityLabel("Enlarge pass QR code")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("ATTENDEE").font(T.label).tracking(1.3).foregroundStyle(.white.opacity(0.55))
+                    Text((p?.name ?? "").uppercased()).font(Fonts.display(26, 700, style: .title2)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.7)
+                    Text("ID: \(p?.passCode ?? "")").font(T.body).foregroundStyle(.white.opacity(0.8)).padding(.top, 2)
+                    if let c = p?.college { Text(c).font(T.small).foregroundStyle(.white.opacity(0.55)).lineLimit(1) }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Button(action: onQR) {
-                    Label("TAP TO ENLARGE QR", systemImage: "qrcode").font(T.label).tracking(1.3).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, minHeight: 44).background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    Label("TAP TO SHOW QR", systemImage: "qrcode").font(T.button).tracking(1).foregroundStyle(P.hero2)
+                        .frame(maxWidth: .infinity, minHeight: 52).background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
                 .buttonStyle(PressStyle())
             }
@@ -166,7 +149,7 @@ private struct FullQR: View {
                     ZStack {
                         Color.white
                         if let payload, !hidden { QRView(payload: payload).padding(28) }
-                        else { Image(systemName: "eye.slash").font(.system(size: 48)).foregroundStyle(Color(hex: 0x163226)) }
+                        else { Image(systemName: "eye.slash").font(.system(size: 48)).foregroundStyle(P.primary) }
                         CountdownRing(progress: app.passProgress(), corner: 24).padding(4)
                     }
                     .aspectRatio(1, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))

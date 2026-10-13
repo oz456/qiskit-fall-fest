@@ -147,19 +147,24 @@ struct AtomOrb: View {
     }
 }
 
-/// Official Qiskit mark on a brand tile.
+/// Official Qiskit mark, no tile: the glyph sits directly on the page.
 struct QiskitMark: View {
-    var size: CGFloat = 38
+    var size: CGFloat = 40
+    var tint: Color = P.qiskitPurple
     var body: some View {
-        Image("QiskitMark")
-            .renderingMode(.template)
-            .resizable().scaledToFit()
-            .foregroundStyle(.white)
-            .padding(size * 0.19)
-            .frame(width: size, height: size)
-            .background(LinearGradient(colors: [Color(hex: 0x8A4DE0), Color(hex: 0x4A1C96)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                        in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
+        Image("QiskitMark").renderingMode(.template).resizable().scaledToFit()
+            .foregroundStyle(tint).frame(width: size, height: size)
             .accessibilityLabel("Qiskit")
+    }
+}
+
+struct PartnerLine: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            QiskitMark(size: 18)
+            Text("In partnership with IBM").font(T.small).foregroundStyle(P.muted)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 28)
     }
 }
 
@@ -187,7 +192,7 @@ struct QRView: View {
             guard let m, let n = m.first?.count, n > 0 else { return }
             let cell = size.width / CGFloat(n)
             for y in 0..<n { for x in 0..<n where m[y][x] {
-                gc.fill(Path(roundedRect: CGRect(x: CGFloat(x) * cell, y: CGFloat(y) * cell, width: cell + 0.6, height: cell + 0.6), cornerRadius: cell * 0.28), with: .color(Color(hex: 0x0B1A13)))
+                gc.fill(Path(roundedRect: CGRect(x: CGFloat(x) * cell, y: CGFloat(y) * cell, width: cell + 0.6, height: cell + 0.6), cornerRadius: cell * 0.28), with: .color(P.ink))
             } }
         }
         .aspectRatio(1, contentMode: .fit)

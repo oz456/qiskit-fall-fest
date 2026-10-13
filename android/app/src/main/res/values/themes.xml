@@ -1,5 +1,5 @@
 <resources>
-    <color name="splash_bg">#F6F5F0</color>
+    <color name="splash_bg">#F5F6FB</color>
     <style name="Theme.QFF.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_bg</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_atom</item>

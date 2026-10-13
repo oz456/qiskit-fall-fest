@@ -49,6 +49,7 @@ struct SignInView: View {
                     form
                         .offset(x: shake)
                         .opacity(entered ? 1 : 0).offset(y: entered ? 0 : 30)
+                    PartnerLine()
                 }
                 .padding(.horizontal, 28).padding(.bottom, 16)
                 .frame(minHeight: geo.size.height)

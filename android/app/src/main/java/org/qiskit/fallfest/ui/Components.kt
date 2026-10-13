@@ -78,13 +78,10 @@ fun AtomOrb(
     }
 }
 
-/** Official Qiskit mark on a brand tile, with the event wordmark. */
+/** Official Qiskit mark, no tile: the glyph sits directly on the page. */
 @Composable
-fun QiskitMark(size: Dp = 38.dp) {
-    Box(
-        Modifier.size(size).clip(RoundedCornerShape(size * 0.3f)).background(Brush.linearGradient(listOf(Color(0xFF8A4DE0), Color(0xFF4A1C96)))),
-        contentAlignment = Alignment.Center,
-    ) { androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(org.qiskit.fallfest.R.drawable.ic_qiskit), "Qiskit", tint = Color.White, modifier = Modifier.size(size * 0.62f)) }
+fun QiskitMark(size: Dp = 40.dp, tint: Color = Color(0xFF6929C4)) {
+    androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(org.qiskit.fallfest.R.drawable.ic_qiskit), "Qiskit", tint = tint, modifier = Modifier.size(size))
 }
 
 @Composable
@@ -155,7 +152,7 @@ fun IconBubble(icon: androidx.compose.ui.graphics.vector.ImageVector, size: Dp =
 
 /** Real, scannable QR drawn with soft rounded modules. */
 @Composable
-fun QrCode(content: String, modifier: Modifier = Modifier, fg: Color = Color(0xFF0B1A13), bg: Color = Color.White) {
+fun QrCode(content: String, modifier: Modifier = Modifier, fg: Color = Color(0xFF0E1030), bg: Color = Color.White) {
     val matrix = remember(content) {
         QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.MARGIN to 0, EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M))
     }

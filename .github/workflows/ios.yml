@@ -67,12 +67,6 @@ jobs:
             sleep 5
             xcrun simctl io "$UDID" screenshot "shots/$s.png"
           done
-          xcrun simctl ui "$UDID" appearance dark
-          for s in hub pass; do
-            SIMCTL_CHILD_QFF_PREVIEW=1 SIMCTL_CHILD_QFF_SCREEN=$s xcrun simctl launch --terminate-running-process "$UDID" org.qiskit.fallfest.amaravati
-            sleep 5
-            xcrun simctl io "$UDID" screenshot "shots/dark-$s.png"
-          done
 
       - name: Build device IPA (Release, unsigned)
         working-directory: ios

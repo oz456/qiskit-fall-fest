@@ -83,7 +83,7 @@ fun SignInScreen(app: AppState) {
     Box(Modifier.fillMaxSize().background(P.bg)) {
         Box(
             Modifier.size(420.dp).align(Alignment.TopEnd).offset(110.dp, (-40).dp)
-                .background(Brush.radialGradient(listOf(Color(0xFF6929C4).copy(alpha = if (P.dark) .22f else .16f), Color.Transparent)), CircleShape)
+                .background(Brush.radialGradient(listOf(Color(0xFF6929C4).copy(alpha = .16f), Color.Transparent)), CircleShape)
         )
         AtomOrb(Modifier.size(330.dp).align(Alignment.TopEnd).offset(120.dp, 70.dp).alpha(.8f), speed = 14000, stroke = 1.dp)
 
@@ -129,7 +129,7 @@ fun SignInScreen(app: AppState) {
                         modifier = Modifier.pressable(RoundedCornerShape(8.dp)) { if (cooldown == 0) sendCode() }.padding(10.dp))
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            PartnerLine(Modifier.padding(top = 0.dp))
         }
     }
 }
