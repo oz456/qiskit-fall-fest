@@ -129,6 +129,25 @@ describe("attendee flow", () => {
     await admin("POST", "/admin/api/users", { email: "sam@example.org", name: "Sam" });
   });
 
+  it("selfie: one upload, scanner sees it by ticket, admin can reset", async () => {
+    const [u] = await db.query("SELECT id, pass_code, pass_secret FROM users WHERE email='alex@example.org'");
+    const me = () => app.inject({ url: "/v1/me", headers: { authorization: `Bearer ${tokens.accessToken}` } });
+    assert.equal((await me()).json().profile.hasPhoto, false);
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(8000, 1)]);
+    const put = (body: Buffer) => app.inject({ method: "PUT", url: "/v1/me/photo", headers: { authorization: `Bearer ${tokens.accessToken}`, "content-type": "image/jpeg" }, payload: body });
+    assert.equal((await put(Buffer.alloc(8000, 1))).statusCode, 400, "not a jpeg");
+    assert.equal((await put(jpeg)).statusCode, 200);
+    assert.equal((await put(jpeg)).statusCode, 409, "only once");
+    assert.equal((await me()).json().profile.hasPhoto, true);
+    const v = (await check("POST", "/check/api/scan", { payload: passPayload(Buffer.from(u!.pass_secret), u!.pass_code), scope: "day:2026-10-19" })).json();
+    assert.equal(v.who.hasPhoto, true);
+    const img = await app.inject({ url: `/check/api/photo?ticket=${encodeURIComponent(v.ticket)}`, headers: { cookie: ccookie } });
+    assert.equal(img.statusCode, 200); assert.equal(img.rawPayload.length, jpeg.length);
+    assert.equal((await app.inject({ url: `/check/api/photo?ticket=${encodeURIComponent(v.ticket)}` })).statusCode, 401, "needs the scanner login");
+    assert.equal((await admin("GET", `/admin/api/users/${u!.id}/photo`)).statusCode, 200);
+    await admin("DELETE", `/admin/api/users/${u!.id}/photo`);
+    assert.equal((await me()).json().profile.hasPhoto, false);
+  });
   it("tickets: user creates, admin replies, user sees reply", async () => {
     const h = { authorization: `Bearer ${tokens.accessToken}` };
     const t = await app.inject({ method: "POST", url: "/v1/tickets", headers: h, payload: { kind: "General", topic: "Wi-Fi & power", message: "Wi-Fi is down on floor 2" } });
@@ -158,8 +177,16 @@ describe("rotating QR check-in", () => {
     const [u] = await db.query("SELECT pass_code, pass_secret FROM users WHERE email='alex@example.org'");
     const secret = Buffer.from(u!.pass_secret); const scope = "day:2026-10-16";
     const live = passPayload(secret, u!.pass_code);
-    assert.equal((await check("POST", "/check/api/scan", { payload: live, scope })).json().result, "ok");
+    // 1) scan only verifies; nothing is recorded until the volunteer confirms
+    const v = (await check("POST", "/check/api/scan", { payload: live, scope })).json();
+    assert.equal(v.result, "verify"); assert.equal(v.who.hasPhoto, false);
+    assert.equal((await admin("GET", `/admin/api/attendance?scope=${scope}`)).json().rows.length, 0);
+    // 2) reject records nothing; confirm records once
+    assert.equal((await check("POST", "/check/api/confirm", { ticket: v.ticket, decision: "reject" })).json().result, "rejected");
+    assert.equal((await check("POST", "/check/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
+    assert.equal((await check("POST", "/check/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "duplicate");
     assert.equal((await check("POST", "/check/api/scan", { payload: live, scope })).json().result, "duplicate");
+    assert.equal((await check("POST", "/check/api/confirm", { ticket: "garbage", decision: "confirm" })).statusCode, 400);
     assert.equal((await check("POST", "/check/api/scan", { payload: passPayload(secret, u!.pass_code, Date.now() - 5 * 60_000), scope: "day:2026-10-17" })).json().result, "expired");
     assert.equal((await check("POST", "/check/api/scan", { payload: passPayload(Buffer.alloc(32, 1), u!.pass_code), scope: "day:2026-10-17" })).json().result, "invalid");
   });

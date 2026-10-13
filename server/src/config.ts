@@ -21,6 +21,8 @@ const Env = z.object({
   MAIL_FROM_NAME: z.string().default("Qiskit Fall Fest"),
   PUBLIC_URL: z.string().url().optional(),
   EVENT_TZ: z.string().default("Asia/Kolkata"),
+  PHOTO_BUCKET: z.string().optional(), // private GCS bucket for attendee selfies (prod); dev/tests use PHOTO_DIR
+  PHOTO_DIR: z.string().default(".photos"),
 });
 
 const parsed = Env.safeParse(process.env);
@@ -33,7 +35,7 @@ export const isProd = e.NODE_ENV === "production";
 
 // Fail fast in production: never boot with missing security-critical config.
 if (isProd) {
-  const missing = ["DATABASE_URL", "JWT_SECRET", "SESSION_SECRET", "OTP_PEPPER", "ADMIN_USERNAME", "CHECK_USERNAME", "SMTP_ACCOUNTS"].filter(
+  const missing = ["DATABASE_URL", "JWT_SECRET", "SESSION_SECRET", "OTP_PEPPER", "ADMIN_USERNAME", "CHECK_USERNAME", "SMTP_ACCOUNTS", "PHOTO_BUCKET"].filter(
     (k) => !(e as Record<string, unknown>)[k],
   );
   if (!e.ADMIN_PASSWORD && !e.ADMIN_PASSWORD_HASH) missing.push("ADMIN_PASSWORD_HASH");
@@ -49,6 +51,8 @@ if (isProd) {
 const dev = (s: string) => `dev-only-${s}-`.padEnd(40, "x");
 export const config = {
   env: e.NODE_ENV,
+  photoBucket: e.PHOTO_BUCKET,
+  photoDir: e.PHOTO_DIR,
   port: e.PORT,
   databaseUrl: e.DATABASE_URL,
   jwtSecret: e.JWT_SECRET ?? dev("jwt"),

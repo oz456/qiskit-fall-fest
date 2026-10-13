@@ -10,3 +10,4 @@ local.properties
 !server/public/download/*.apk
 ios-artifacts/
 android-artifacts/
+.photos/

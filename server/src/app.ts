@@ -20,6 +20,9 @@ export async function buildApp(db: Db) {
     bodyLimit: 100_000,
   });
 
+  // Selfie upload: raw JPEG bytes (validated in the route).
+  app.addContentTypeParser("image/jpeg", { parseAs: "buffer", bodyLimit: 400_000 }, (_req, body, done) => done(null, body));
+
   await app.register(helmet, {
     contentSecurityPolicy: {
       useDefaults: false,

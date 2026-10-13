@@ -48,10 +48,10 @@ async function boot() {
   const sc = await api("GET", "/scopes");
   clear($app);
   const scope = h("select", { onchange: () => { refresh(); } },
-    h("optgroup", { label: "Venue entry · once per day" }, sc.days.map((d) => h("option", { value: "day:" + d, selected: "day:" + d === sc.defaultScope }, (d === sc.today ? "Today · " : "") + d))),
+    h("optgroup", { label: "Venue entry · once per day" }, sc.days.map((d) => h("option", { value: "day:" + d, selected: "day:" + d === sc.defaultScope }, (d === sc.today ? "Today · " : "") + new Date(d + "T00:00:00Z").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })))),
     h("optgroup", { label: "Event attendance" }, sc.events.map((e) => h("option", { value: "event:" + e.id }, e.title))));
-  const count = h("b", {}, "–"), totalEl = h("b", {}, "–"), recent = h("div"), result = h("div", { class: "result" });
-  const manual = h("input", { placeholder: "Hardware scanner / paste code…", autocomplete: "off", autocapitalize: "none", onkeydown: (e) => { if (e.key === "Enter" && manual.value.trim()) { submit(manual.value.trim()); manual.value = ""; } } });
+  const count = h("b", {}, "–"), totalEl = h("span", {}, ""), recent = h("div", { class: "recent" }), sheet = h("div", { class: "sheet" }), toastEl = h("div", { class: "toast" });
+  const manual = h("input", { placeholder: "Paste or type a pass code", autocomplete: "off", autocapitalize: "none", onkeydown: (e) => { if (e.key === "Enter" && manual.value.trim()) { submit(manual.value.trim()); manual.value = ""; } } });
   const video = h("video", { playsinline: true, muted: true });
   const startBtn = h("button", { class: "btn", onclick: startCam }, "Start camera");
   const startWrap = h("div", { class: "start" }, startBtn);
@@ -59,26 +59,54 @@ async function boot() {
   async function refresh() {
     try {
       const s = await api("GET", "/stats?scope=" + encodeURIComponent(scope.value));
-      count.textContent = s.count; totalEl.textContent = s.total; clear(recent);
-      recent.append(h("h3", {}, "Latest check-ins"), s.recent.length ? s.recent.map((r) => h("div", { class: "row" }, h("div", { class: "grow" }, h("div", { class: "name" }, r.name), h("div", { class: "muted small" }, [r.passCode, r.college].filter(Boolean).join(" · "))), h("div", { class: "muted small" }, fmtTime(r.at)))) : h("div", { class: "muted small" }, "None yet."));
+      count.textContent = s.count; totalEl.textContent = " of " + s.total; clear(recent);
+      if (s.recent.length) recent.append(h("h3", {}, "Latest"), s.recent.slice(0, 5).map((r) => h("div", { class: "item" }, h("div", { class: "grow" }, h("div", { class: "name" }, r.name), h("div", { class: "muted small" }, [r.passCode, r.college].filter(Boolean).join(" · "))), h("div", { class: "muted small" }, fmtTime(r.at)))));
     } catch {}
   }
+  const flash = (text, kind) => { toastEl.textContent = text; toastEl.className = "toast show " + kind; clearTimeout(flash.t); flash.t = setTimeout(() => (toastEl.className = "toast"), 1600); };
 
-  let busy = false, last = "", hideT;
+  // ---- the verification sheet: face first, then Confirm / Reject ----
+  let busy = false, last = "", dismissT;
+  const initials = (n) => n.split(/\s+/).slice(0, 2).map((x) => x[0]).join("").toUpperCase();
+  function closeSheet() { clearTimeout(dismissT); sheet.className = "sheet"; busy = false; }
+  function openSheet(r) {
+    clearTimeout(dismissT); clear(sheet);
+    const bad = !r.who || ["invalid", "expired", "blocked"].includes(r.result);
+    const tone = bad ? "bad" : r.result === "duplicate" ? "warn" : "go";
+    const photo = !bad && r.who.hasPhoto
+      ? h("img", { class: "photo", alt: "", src: "/check/api/photo?ticket=" + encodeURIComponent(r.ticket), onerror: (e) => e.target.replaceWith(h("div", { class: "photo none" }, initials(r.who.name))) })
+      : h("div", { class: "photo none" }, bad ? "!" : initials(r.who.name));
+    const title = r.result === "verify" ? "" : { duplicate: "Already checked in", expired: "Stale QR", blocked: "Pass blocked", invalid: "Invalid pass" }[r.result] || "Error";
+    const body = [photo];
+    if (!bad || r.who) body.push(h("div", { class: "name" }, r.who ? r.who.name : ""), h("div", { class: "muted" }, r.who ? [r.who.passCode, r.who.college].filter(Boolean).join(" · ") : ""));
+    if (title) body.push(h("div", { class: "state" }, title));
+    if (r.result === "duplicate" && r.at) body.push(h("div", { class: "muted small" }, "First scanned at " + fmtTime(r.at)));
+    if (bad) body.push(h("div", { class: "muted msg" }, r.message));
+    if (r.warning) body.push(h("div", { class: "warnbox" }, r.warning));
+    const actions = r.result === "verify"
+      ? h("div", { class: "actions" },
+          h("button", { class: "btn reject", onclick: () => decide(r, "reject") }, "Reject"),
+          h("button", { class: "btn confirm", onclick: () => decide(r, "confirm") }, "Confirm entry"))
+      : h("div", { class: "actions" }, h("button", { class: "btn dismiss", onclick: closeSheet }, "Done"));
+    sheet.append(h("div", { class: "panel " + tone }, h("div", { class: "who" }, body), actions));
+    sheet.className = "sheet show";
+    beep(r.result === "verify" ? "warn" : bad ? "bad" : "warn");
+    if (r.result !== "verify") dismissT = setTimeout(closeSheet, 6000);
+  }
+  async function decide(r, decision) {
+    try {
+      const d = await api("POST", "/confirm", { ticket: r.ticket, decision });
+      closeSheet();
+      if (d.result === "ok") { flash("✔ " + r.who.name + " checked in", "ok"); beep("ok"); refresh(); }
+      else if (d.result === "rejected") flash("Entry rejected", "bad");
+      else flash(d.message, "warn");
+    } catch (x) { closeSheet(); flash(x.message, "bad"); beep("bad"); }
+  }
   async function submit(payload) {
     if (busy || payload === last) return;
     busy = true; last = payload; setTimeout(() => { last = ""; }, 4000);
-    try {
-      const r = await api("POST", "/scan", { payload, scope: scope.value });
-      const cls = r.result === "ok" ? (r.warning ? "warn" : "ok") : r.result === "duplicate" ? "warn" : "bad";
-      clear(result); result.className = "result show " + cls;
-      result.append(h("div", { class: "big" }, { ok: "✔ Checked in", duplicate: "Already checked in", expired: "Stale QR — screenshot?", blocked: "Pass blocked", invalid: "Invalid pass" }[r.result] || "Error"),
-        r.who && h("div", { class: "who" }, r.who.name), r.who && h("div", {}, [r.who.passCode, r.who.college].filter(Boolean).join(" · ")),
-        h("p", {}, r.warning || r.message), r.at && h("p", { class: "small" }, "First scanned at " + fmtTime(r.at)));
-      beep(cls); clearTimeout(hideT); hideT = setTimeout(() => result.classList.remove("show"), cls === "ok" ? 1800 : 4200);
-      if (r.result === "ok") refresh();
-    } catch (x) { clear(result); result.className = "result show bad"; result.append(h("div", { class: "big" }, "Error"), h("p", {}, x.message)); beep("bad"); hideT = setTimeout(() => result.classList.remove("show"), 3500); }
-    finally { busy = false; }
+    try { openSheet(await api("POST", "/scan", { payload, scope: scope.value })); }
+    catch (x) { busy = false; flash(x.message, "bad"); beep("bad"); }
   }
   async function startCam() {
     try {
@@ -91,15 +119,15 @@ async function boot() {
         const q = window.jsQR(ctx.getImageData(0, 0, w, hgt).data, w, hgt, { inversionAttempts: "dontInvert" });
         if (q && q.data) submit(q.data);
       }, 150);
-    } catch (x) { startBtn.textContent = "Camera blocked — allow it in the browser, then tap again"; }
+    } catch (x) { startBtn.textContent = "Camera blocked. Allow it, then tap again"; }
   }
 
   $app.append(h("div", { class: "wrap" },
-    h("div", { class: "top" }, h("img", { src: "qiskit.svg", alt: "" }), h("b", {}, "Check-in"), h("button", { class: "btn ghost right", onclick: async () => { stopCam(); await api("POST", "/logout"); showLogin(); } }, "Sign out")),
-    h("label", {}, "Scanning for"), scope,
-    h("div", { class: "counter" }, h("div", { class: "card" }, count, h("span", { class: "muted small" }, "checked in")), h("div", { class: "card" }, totalEl, h("span", { class: "muted small" }, "registered"))),
-    h("div", { class: "cam" }, video, h("div", { class: "frame" }), h("div", { class: "hint" }, "Point at the attendee’s live pass QR"), startWrap),
-    h("label", {}, "Backup"), manual, h("div", { class: "recent" }, recent), result));
+    h("div", { class: "top" }, h("img", { src: "qiskit.svg", alt: "" }), h("b", {}, "Check-in"), h("button", { class: "link right", onclick: async () => { stopCam(); await api("POST", "/logout"); showLogin(); } }, "Sign out")),
+    h("div", { class: "scopebar" }, scope, h("div", { class: "tally" }, count, totalEl)),
+    h("div", { class: "cam" }, video, h("div", { class: "corners" }), h("div", { class: "hint" }, "Point at the live pass QR"), startWrap),
+    h("details", { class: "manual" }, h("summary", {}, "Enter a code manually"), manual),
+    recent, sheet, toastEl));
   refresh(); setInterval(refresh, 20000);
   startCam();
 }

@@ -3,9 +3,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { config } from "../config.ts";
 import type { Db } from "../db.ts";
-import { PASS_STEP_SEC, passMac, safeEqual } from "../lib/crypto.ts";
+import { PASS_STEP_SEC, passMac, safeEqual, signJwt, verifyJwt } from "../lib/crypto.ts";
+import { getPhoto } from "../lib/photos.ts";
 import { staffAuth } from "../lib/staff.ts";
-import { eventDay } from "../lib/util.ts";
+import { audit, eventDay } from "../lib/util.ts";
 
 const Scope = z.string().regex(/^(day:\d{4}-\d{2}-\d{2}|event:[0-9a-f-]{36})$/);
 
@@ -40,32 +41,53 @@ export function checkRoutes(app: FastifyInstance, db: Db) {
       return { count: c!.n, total: t!.n, recent: recent.map((r) => ({ name: r.name, college: r.college, passCode: r.pass_code, at: new Date(r.scanned_at).toISOString() })) };
     });
 
+    // Scanning only VERIFIES the pass. The door volunteer compares the face with the attendee's selfie, then confirms or rejects;
+    // the check-in is recorded on confirm. The short-lived ticket binds that decision to this attendee and scope.
     api.post("/check/api/scan", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req) => {
       const b = z.object({ payload: z.string().max(200), scope: Scope }).parse(req.body);
       const m = /^QFF1\.([A-Z0-9-]{4,20})\.(\d{1,12})\.([A-Za-z0-9_-]{12})$/.exec(b.payload.trim());
       if (!m) return { result: "invalid", message: "Not a Fall Fest pass." };
       const [, code, stepStr, mac] = m as unknown as [string, string, string, string];
-      const [u] = await db.query("SELECT id,name,college,pass_code,pass_secret,status FROM users WHERE pass_code=$1", [code]);
+      const [u] = await db.query("SELECT id,name,college,pass_code,pass_secret,status,photo_at FROM users WHERE pass_code=$1", [code]);
       if (!u) return { result: "invalid", message: "Unknown pass." };
       const step = Number(stepStr); const nowStep = Math.floor(Date.now() / 1000 / PASS_STEP_SEC);
-      const who = { name: u.name, college: u.college, passCode: u.pass_code };
-      if (!safeEqual(mac, passMac(Buffer.from(u.pass_secret), code, step))) return { result: "invalid", message: "Pass signature is wrong. Possibly an old or forwarded code.", who };
-      if (Math.abs(nowStep - step) > 1) return { result: "expired", message: "This QR is stale (a screenshot?). Ask the attendee to open the live pass.", who };
-      if (u.status !== "active") return { result: "blocked", message: "This pass is blocked.", who };
+      const who = { name: u.name, college: u.college, passCode: u.pass_code, hasPhoto: !!u.photo_at };
+      if (!safeEqual(mac, passMac(Buffer.from(u.pass_secret), code, step))) return { result: "invalid", message: "Pass signature is wrong. Possibly an old or forwarded code.", who: { ...who, hasPhoto: false } };
+      if (Math.abs(nowStep - step) > 1) return { result: "expired", message: "This QR is stale (a screenshot?). Ask the attendee to open the live pass.", who: { ...who, hasPhoto: false } };
+      if (u.status !== "active") return { result: "blocked", message: "This pass is blocked.", who: { ...who, hasPhoto: false } };
+      const ticket = signJwt({ aud: "check-ticket", uid: u.id, scope: b.scope }, config.sessionSecret, 120);
+      const [prev] = await db.query("SELECT scanned_at FROM checkins WHERE user_id=$1 AND scope=$2", [u.id, b.scope]);
+      if (prev) return { result: "duplicate", message: "Already checked in.", at: new Date(prev.scanned_at).toISOString(), who, ticket };
       let warning: string | undefined;
       if (b.scope.startsWith("event:")) {
         const [e] = await db.query("SELECT access FROM events WHERE id=$1", [b.scope.slice(6)]);
         if (e?.access === "prereg") {
           const [reg] = await db.query("SELECT 1 FROM user_events WHERE user_id=$1 AND event_id=$2 AND kind='registered'", [u.id, b.scope.slice(6)]);
-          if (!reg) warning = "NOT ENROLLED — this event is pre-registration only.";
+          if (!reg) warning = "Not enrolled: this event is pre-registration only.";
         }
       }
-      const ins = await db.query("INSERT INTO checkins (user_id,scope) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING scanned_at", [u.id, b.scope]);
-      if (!ins[0]) {
-        const [prev] = await db.query("SELECT scanned_at FROM checkins WHERE user_id=$1 AND scope=$2", [u.id, b.scope]);
-        return { result: "duplicate", message: "Already checked in.", at: new Date(prev!.scanned_at).toISOString(), who };
-      }
-      return { result: "ok", message: "Checked in.", warning, who };
+      if (!u.photo_at) warning = [warning, "No selfie on file yet."].filter(Boolean).join(" ");
+      return { result: "verify", message: "Check the face, then confirm.", warning, who, ticket };
+    });
+
+    const ticketOf = (t: string) => { const c = verifyJwt<{ aud: string; uid: string; scope: string }>(t, config.sessionSecret); return c && c.aud === "check-ticket" ? c : null; };
+
+    api.post("/check/api/confirm", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req, reply) => {
+      const b = z.object({ ticket: z.string().max(1000), decision: z.enum(["confirm", "reject"]) }).parse(req.body);
+      const t = ticketOf(b.ticket);
+      if (!t) return reply.code(400).send({ result: "expired", message: "That scan timed out. Scan the pass again." });
+      if (b.decision === "reject") { await audit(db, req, "check.rejected", "user", t.uid, { scope: t.scope }); return { result: "rejected", message: "Entry rejected." }; }
+      const ins = await db.query("INSERT INTO checkins (user_id,scope) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING scanned_at", [t.uid, t.scope]);
+      if (!ins[0]) return { result: "duplicate", message: "Already checked in." };
+      return { result: "ok", message: "Checked in." };
+    });
+
+    api.get("/check/api/photo", async (req, reply) => {
+      const { ticket } = z.object({ ticket: z.string().max(1000) }).parse(req.query);
+      const t = ticketOf(ticket);
+      const img = t ? await getPhoto(t.uid) : null;
+      if (!img) return reply.code(404).send({ error: "not_found" });
+      return reply.header("Content-Type", "image/jpeg").header("Cache-Control", "no-store").send(img);
     });
   });
 }

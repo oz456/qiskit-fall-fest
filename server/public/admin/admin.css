@@ -69,3 +69,4 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--bg)}
 @media(max-width:860px){.shell{grid-template-columns:1fr}nav{position:static;height:auto;flex-direction:row;overflow:auto;padding:12px}.brand{padding:0 12px}nav a{white-space:nowrap}nav a:last-child{margin-top:0;border:0;padding-top:10px}main{padding:24px 16px 48px}.g2{grid-template-columns:1fr}.card:has(>table){overflow:auto}}
 .grid>.field+.field{margin-top:0}.grid+.muted{margin-top:12px}.card>p:last-child{margin-bottom:0}
 main>.card+.head{margin-top:36px;margin-bottom:16px}main>.card+.head+.card{margin-top:0}
+.avatar{width:104px;height:130px;border-radius:18px;object-fit:cover;background:var(--alt);flex:none}.avatar.none{display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:700;color:var(--muted)}

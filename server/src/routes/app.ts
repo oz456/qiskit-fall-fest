@@ -5,6 +5,7 @@ import { config } from "../config.ts";
 import type { Db } from "../db.ts";
 import { hmac, otpCode, passPayload, randomToken, sha256, signJwt, verifyJwt } from "../lib/crypto.ts";
 import { otpMail, sendMail } from "../lib/mail.ts";
+import { looksLikeJpeg, putPhoto } from "../lib/photos.ts";
 import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
 import { randomBytes } from "node:crypto";
@@ -95,9 +96,20 @@ export function appRoutes(app: FastifyInstance, db: Db) {
     api.post("/v1/auth/logout", async (req) => { await db.query("UPDATE sessions SET revoked_at = now() WHERE id=$1", [req.sid]); return { ok: true }; });
 
     api.get("/v1/me", async (req) => {
-      const [u] = await db.query("SELECT name,email,college,pass_code FROM users WHERE id=$1", [req.uid]);
+      const [u] = await db.query("SELECT name,email,college,pass_code,photo_at FROM users WHERE id=$1", [req.uid]);
       const checkins = await db.query("SELECT scope, scanned_at FROM checkins WHERE user_id=$1", [req.uid]);
-      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code }, checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString() })) };
+      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: !!u!.photo_at }, checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString() })) };
+    });
+
+    // One selfie per attendee, taken on first sign-in so door staff can match the face to the pass. Only an admin can reset it.
+    api.put("/v1/me/photo", { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } }, async (req, reply) => {
+      const body = req.body as Buffer;
+      if (!Buffer.isBuffer(body) || !looksLikeJpeg(body)) return reply.code(400).send({ error: "bad_image", message: "That photo couldn't be used. Please try again." });
+      const [u] = await db.query("SELECT photo_at FROM users WHERE id=$1", [req.uid]);
+      if (u?.photo_at) return reply.code(409).send({ error: "already_set", message: "Your photo is already saved." });
+      await putPhoto(req.uid!, body);
+      await db.query("UPDATE users SET photo_at=now() WHERE id=$1", [req.uid]);
+      return { ok: true };
     });
 
     api.get("/v1/events", async (req) => {

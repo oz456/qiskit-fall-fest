@@ -151,16 +151,29 @@ async function people(m) {
   m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), q, out);
   async function load() {
     const list = await api("GET", "/users?q=" + encodeURIComponent(q.value)); clear(out);
-    out.append(h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Enrolled in", "Status", ""].map((x) => h("th", {}, x))),
-      list.map((u) => h("tr", {}, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, u.college || "")), h("td", {}, u.email), h("td", {}, u.passCode), h("td", {}, (u.enrolled || []).length ? (u.enrolled).map((t) => h("div", { class: "small" }, t)) : h("span", { class: "muted small" }, "—")),
-        h("td", {}, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), h("div", { class: "muted small", style: "margin-top:4px" }, (u.hasApp ? "Signed in" : "Not signed in") + (u.checkins ? ` · ${u.checkins} check-in${u.checkins > 1 ? "s" : ""}` : ""))),
-        h("td", {}, h("div", { class: "row" },
-          h("button", { class: "btn ghost sm", onclick: guard(async () => { await api("PATCH", "/users/" + u.id, { status: u.status === "active" ? "blocked" : "active" }); load(); }) }, u.status === "active" ? "Block" : "Unblock"),
-          h("button", { class: "btn ghost sm", title: "Sign the user out of their phone so they can log in on a new one", onclick: () => confirmDo("Sign " + u.name + " out of their device?", async () => { await api("POST", `/users/${u.id}/reset-device`); toast("Device reset"); load(); }) }, "Reset device"),
-          h("button", { class: "btn danger sm", onclick: () => confirmDo("Delete " + u.name + " and all their data?", async () => { await api("DELETE", "/users/" + u.id); load(); }) }, "Delete")))))));
+    out.append(h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Status", ""].map((x) => h("th", {}, x))),
+      list.map((u) => h("tr", { class: "click", onclick: () => openUser(u) }, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, u.college || "")), h("td", {}, u.email), h("td", {}, u.passCode),
+        h("td", {}, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), h("div", { class: "muted small", style: "margin-top:4px" }, [u.hasApp ? "Signed in" : "Not signed in", u.hasPhoto ? "Selfie ✓" : "No selfie"].join(" · "))),
+        h("td", {}, "›")))));
     if (!list.length) out.append(h("p", { class: "muted" }, "No attendees found."));
   }
   await load();
+  function openUser(u) {
+    const act = (label, cls, fn) => h("button", { class: "btn sm " + cls, onclick: fn }, label);
+    const done = (msg) => { bg.remove(); toast(msg); load(); };
+    const body = h("div", {},
+      h("div", { class: "row", style: "gap:18px;align-items:flex-start;flex-wrap:nowrap" },
+        u.hasPhoto ? h("img", { class: "avatar", alt: "", src: `/admin/api/users/${u.id}/photo` }) : h("div", { class: "avatar none" }, u.name.split(/\s+/).slice(0, 2).map((x) => x[0]).join("").toUpperCase()),
+        h("div", { class: "grow" }, h("h2", { style: "margin:0 0 4px" }, u.name), h("div", { class: "muted" }, u.email), h("div", { class: "muted" }, [u.passCode, u.college].filter(Boolean).join(" · ")),
+          h("div", { style: "margin-top:10px" }, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), " ", h("span", { class: "pill" }, u.hasApp ? "SIGNED IN" : "NOT SIGNED IN"), " ", u.checkins ? h("span", { class: "pill" }, `${u.checkins} CHECK-IN${u.checkins > 1 ? "S" : ""}`) : null))),
+      h("div", { class: "card", style: "margin-top:20px;box-shadow:none" }, h("h3", {}, "Enrolled in"), (u.enrolled || []).length ? u.enrolled.map((t) => h("div", {}, t)) : h("div", { class: "muted" }, "Nothing yet. Enrol people from an event’s page.")),
+      h("div", { class: "row" },
+        act(u.status === "active" ? "Block" : "Unblock", "ghost", guard(async () => { await api("PATCH", "/users/" + u.id, { status: u.status === "active" ? "blocked" : "active" }); done("Updated"); })),
+        act("Reset device", "ghost", () => confirmDo("Sign " + u.name + " out of their phone so they can log in on a new one?", async () => { await api("POST", `/users/${u.id}/reset-device`); done("Device reset"); })),
+        u.hasPhoto && act("Reset selfie", "ghost", () => confirmDo("Delete " + u.name + "’s selfie? They will be asked for a new one next time they open the app.", async () => { await api("DELETE", `/users/${u.id}/photo`); done("Selfie removed"); })),
+        act("Delete", "danger right", () => confirmDo("Delete " + u.name + " and all their data?", async () => { await api("DELETE", "/users/" + u.id); done("Deleted"); }))));
+    const bg = modal("Attendee", body);
+  }
   function addUser() {
     const n = h("input", { required: true, maxlength: 100 }), e = h("input", { type: "email", required: true }), c = h("input", { maxlength: 150 });
     const bg = modal("Add attendee", h("form", { onsubmit: guard(async (ev) => { ev.preventDefault(); await api("POST", "/users", { email: e.value, name: n.value, college: c.value || null }); bg.remove(); toast("Added"); load(); }) },

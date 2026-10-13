@@ -6,6 +6,7 @@ import { config } from "../config.ts";
 import type { Db, Queryable } from "../db.ts";
 import { staffAuth } from "../lib/staff.ts";
 import { mailRemaining } from "../lib/mail.ts";
+import { deletePhoto, getPhoto } from "../lib/photos.ts";
 import { AnnouncementInput, EventInput, FaqInput, SettingsInput, TicketReply, TicketStatus, UserInput } from "../lib/schemas.ts";
 import { audit, eventDay, eventOut } from "../lib/util.ts";
 
@@ -116,11 +117,23 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const { q } = z.object({ q: z.string().max(100).optional() }).parse(req.query);
       const like = q ? `%${q.replace(/[%_\\]/g, "\\$&").toLowerCase()}%` : "%";
       const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,
-        EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL) AS has_app,
+        EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL) AS has_app, (u.photo_at IS NOT NULL) AS has_photo,
         (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins,
         (SELECT coalesce(json_agg(e.title ORDER BY e.starts_at), '[]'::json) FROM user_events r JOIN events e ON e.id=r.event_id WHERE r.user_id=u.id AND r.kind='registered') AS enrolled
         FROM users u WHERE lower(u.email) LIKE $1 OR lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1 ORDER BY u.created_at DESC LIMIT 500`, [like]);
-      return rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, hasApp: u.has_app, checkins: u.checkins, enrolled: u.enrolled }));
+      return rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins, enrolled: u.enrolled }));
+    });
+    api.get("/admin/api/users/:id/photo", async (req, reply) => {
+      const { id } = Id.parse(req.params);
+      const img = await getPhoto(id);
+      if (!img) return reply.code(404).send({ error: "not_found" });
+      return reply.header("Content-Type", "image/jpeg").header("Cache-Control", "no-store").send(img);
+    });
+    // Lets someone retake their selfie (wrong person, bad photo): the app asks for a new one at next sign-in.
+    api.delete("/admin/api/users/:id/photo", async (req) => {
+      const { id } = Id.parse(req.params);
+      await deletePhoto(id); await db.query("UPDATE users SET photo_at=NULL WHERE id=$1", [id]);
+      await audit(db, req, "user.photo_reset", "user", id); return { ok: true };
     });
     api.post("/admin/api/users", async (req, reply) => {
       const b = UserInput.parse(req.body);
@@ -158,7 +171,7 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     api.delete("/admin/api/users/:id", async (req) => {
       const { id } = Id.parse(req.params);
-      await db.query("DELETE FROM users WHERE id=$1", [id]); await audit(db, req, "user.delete", "user", id); return { ok: true };
+      await db.query("DELETE FROM users WHERE id=$1", [id]); await deletePhoto(id); await audit(db, req, "user.delete", "user", id); return { ok: true };
     });
 
     // ---- announcements ----
