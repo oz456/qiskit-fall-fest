@@ -64,7 +64,7 @@ struct HubView: View {
             }
             .padding(.bottom, 24)
         }
-        .background(P.bg.ignoresSafeArea())
+        .background(Backdrop())
         .refreshable { await app.refresh() }
     }
 

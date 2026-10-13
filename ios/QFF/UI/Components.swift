@@ -48,6 +48,19 @@ struct Card<Content: View>: View {
         content
             .background(P.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(P.line, lineWidth: 1))
+            .shadow(color: P.ink.opacity(0.05), radius: 14, y: 6)
+    }
+}
+
+/// Page background: the cool off-white with a faint violet glow at the top, so screens have depth without noise.
+struct Backdrop: View {
+    var body: some View {
+        ZStack(alignment: .top) {
+            P.bg
+            RadialGradient(colors: [P.qiskitPurple.opacity(0.11), .clear], center: .center, startRadius: 0, endRadius: 260)
+                .frame(width: 520, height: 520).offset(x: 120, y: -190)
+        }
+        .ignoresSafeArea()
     }
 }
 

@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -139,7 +140,7 @@ fun PulseDot(color: Color, size: Dp = 6.dp) {
 
 @Composable
 fun Card(modifier: Modifier = Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp), onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
-    val m = modifier.clip(shape).background(P.surface).border(1.dp, P.line, shape)
+    val m = modifier.shadow(6.dp, shape, ambientColor = P.ink.copy(alpha = .08f), spotColor = P.ink.copy(alpha = .10f)).clip(shape).background(P.surface).border(1.dp, P.line, shape)
     Column(if (onClick != null) m.pressable(shape, onClick = onClick) else m, content = content)
 }
 
