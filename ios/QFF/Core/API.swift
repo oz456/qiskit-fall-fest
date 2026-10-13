@@ -30,7 +30,7 @@ final class API {
     }
 
     @discardableResult
-    func data(_ method: String, _ path: String, body: [String: Any]? = nil, token: String? = nil) async throws -> Data {
+    func data(_ method: String, _ path: String, body: [String: Any]? = nil, token: String? = nil, jpeg: Data? = nil) async throws -> Data {
         var req = URLRequest(url: URL(string: path, relativeTo: base)!.absoluteURL)
         req.httpMethod = method
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
@@ -38,6 +38,7 @@ final class API {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
+        if let jpeg { req.setValue("image/jpeg", forHTTPHeaderField: "Content-Type"); req.httpBody = jpeg }
         let (data, resp) = try await session.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw APIError(http: 0, code: "network", message: "No response from the server.") }
         if let d = http.value(forHTTPHeaderField: "Date"), let date = Self.httpDate.date(from: d) {

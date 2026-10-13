@@ -108,7 +108,7 @@ struct HubView: View {
 
     private var filterBar: some View {
         HStack(spacing: 0) {
-            ForEach(HubFilter.allCases, id: \.self) { f in
+            ForEach([HubFilter.all, .saved], id: \.self) { f in
                 Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { filter = f }; Haptics.select() } label: {
                     HStack(spacing: 2) {
                         Text(f.rawValue).font(Fonts.body(13, 500, style: .footnote))
@@ -178,7 +178,6 @@ private struct Hero: View {
                         HStack(spacing: 8) {
                             CountUnit(value: s / 86400, label: "DAYS"); CountUnit(value: (s / 3600) % 24, label: "HRS"); CountUnit(value: (s / 60) % 60, label: "MIN")
                         }
-                        Text(app.settings["venue"] ?? "First up · \(target?.title ?? "")").font(T.body).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
                     } else if after {
                         Text("See you at\nFall Fest 2027").font(T.h1).lineSpacing(-4).foregroundStyle(.white)
                     } else {

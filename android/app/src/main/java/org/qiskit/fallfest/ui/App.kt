@@ -49,6 +49,7 @@ fun App(app: AppState) {
             transitionSpec = { (fadeIn(tween(500)) + scaleIn(initialScale = .96f, animationSpec = tween(500))) togetherWith fadeOut(tween(250)) },
         ) { signedIn ->
             if (!signedIn) SignInScreen(app)
+            else if (app.needsSelfie && !app.skippedSelfie) SelfieScreen(app)
             else Box(Modifier.fillMaxSize()) {
                 BackHandler(tab != Tab.Hub) { tab = Tab.Hub }
                 AnimatedContent(

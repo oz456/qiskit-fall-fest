@@ -8,7 +8,8 @@ struct RootView: View {
     var body: some View {
         ZStack {
             if app.signedIn {
-                MainView().environmentObject(router).transition(.opacity.combined(with: .scale(scale: 0.98)))
+                if app.needsSelfie && !app.skippedSelfie { SelfieView().transition(.opacity) }
+                else { MainView().environmentObject(router).transition(.opacity.combined(with: .scale(scale: 0.98))) }
             } else {
                 SignInView().transition(.opacity)
             }
@@ -34,6 +35,7 @@ struct RootView: View {
         try? await Task.sleep(nanoseconds: 600_000_000)
         let firstTicket = app.tickets.first?.id ?? ""
         let firstEvent = app.events.first(where: { app.status(of: $0) == .live })?.id ?? app.events.first?.id ?? ""
+        if s == "selfie" { app.needsSelfie = true; return }
         switch s {
         case "pass", "qr": router.tab = .pass
         case "support", "ticket", "thread", "faq": router.tab = .support

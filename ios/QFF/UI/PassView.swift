@@ -25,36 +25,22 @@ struct PassView: View {
                     .padding(.horizontal, 24)
 
                 Text(captured ? "The code is hidden while your screen is being recorded or shared."
-                              : "Your QR stays hidden until you tap. It refreshes every 30 seconds, so screenshots won’t scan.")
+                              : "QR appears when you tap. It refreshes every 30 seconds.")
                     .font(T.small).foregroundStyle(P.muted).multilineTextAlignment(.center).frame(maxWidth: .infinity)
-                    .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 16)
-
-                HStack(spacing: 10) {
-                    stat("Saved", app.events.filter(\.saved).count)
-                    stat("Enrolled", enrolled.count)
-                    stat("Check-ins", app.checkins.count)
-                }
-                .padding(.horizontal, 24)
+                    .padding(.horizontal, 24).padding(.top, 14)
 
                 if !enrolled.isEmpty {
-                    SectionLabel(text: "ENROLLED").padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 8)
+                    SectionLabel(text: "ENROLLED").padding(.horizontal, 24).padding(.top, 32).padding(.bottom, 8)
                     ForEach(enrolled) { e in EventRow(event: e, day: nil, trailing: false).padding(.horizontal, 24).padding(.vertical, 6) }
                 }
-                SectionLabel(text: "SAVED BY YOU").padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 8)
-                if savedOnly.isEmpty {
-                    Button { router.tab = .hub; Haptics.tap() } label: {
-                        Card {
-                            VStack(spacing: 12) {
-                                IconBubble(symbol: "bookmark", size: 56, tint: P.mintInk, bg: P.mint)
-                                Text("Nothing saved yet").font(T.title).foregroundStyle(P.ink)
-                                Text("Tap the bookmark on any event in the Hub to keep it here.").font(T.small).foregroundStyle(P.muted).multilineTextAlignment(.center)
-                            }
-                            .padding(24).frame(maxWidth: .infinity)
-                        }
-                    }
-                    .buttonStyle(PressStyle()).padding(.horizontal, 24)
+                if !savedOnly.isEmpty {
+                    SectionLabel(text: "SAVED").padding(.horizontal, 24).padding(.top, 32).padding(.bottom, 8)
+                    ForEach(savedOnly) { e in EventRow(event: e, day: nil, trailing: false).padding(.horizontal, 24).padding(.vertical, 6) }
                 }
-                ForEach(savedOnly) { e in EventRow(event: e, day: nil, trailing: false).padding(.horizontal, 24).padding(.vertical, 6) }
+                if enrolled.isEmpty && savedOnly.isEmpty {
+                    Text("Events you save from the Hub appear here.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity).padding(.horizontal, 40).padding(.vertical, 48)
+                }
             }
             .padding(.bottom, 24)
         }
@@ -63,16 +49,6 @@ struct PassView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in app.message = "Screenshots won't scan — the code changes every 30 seconds." }
         .fullScreenCover(isPresented: $fullQR) { FullQR(hidden: hidden) { fullQR = false }.environmentObject(app) }
         .onAppear { if ProcessInfo.processInfo.environment["QFF_SCREEN"] == "qr" { fullQR = true } }
-    }
-
-    private func stat(_ label: String, _ value: Int) -> some View {
-        Card(radius: 20) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("\(value)").font(T.h2).foregroundStyle(P.ink)
-                Text(label).font(T.small).foregroundStyle(P.muted)
-            }
-            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-        }
     }
 }
 

@@ -62,7 +62,7 @@ jobs:
           # warm-up launch: the first launch after install is slow and would otherwise be captured mid-launch-screen
           SIMCTL_CHILD_QFF_PREVIEW=1 SIMCTL_CHILD_QFF_SCREEN=hub xcrun simctl launch "$UDID" org.qiskit.fallfest.amaravati; sleep 8
           xcrun simctl terminate "$UDID" org.qiskit.fallfest.amaravati
-          for s in signin hub event pass qr support ticket thread faq notifications profile; do
+          for s in signin selfie hub event pass qr support ticket thread faq notifications profile; do
             SIMCTL_CHILD_QFF_PREVIEW=1 SIMCTL_CHILD_QFF_SCREEN=$s xcrun simctl launch --terminate-running-process "$UDID" org.qiskit.fallfest.amaravati
             sleep 5
             xcrun simctl io "$UDID" screenshot "shots/$s.png"

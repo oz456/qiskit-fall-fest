@@ -25,6 +25,7 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         APIBase: "$(QFF_API_BASE)"
+        NSCameraUsageDescription: "Fall Fest uses the camera once, to take your check-in selfie."
         UIUserInterfaceStyle: Light
         UILaunchScreen:
           UIColorName: LaunchBackground

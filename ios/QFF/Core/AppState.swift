@@ -16,6 +16,9 @@ final class AppState: ObservableObject {
     @Published var message: String?
     @Published var now = Date()
     @Published var seenAnnouncement: String?
+    /// First sign-in: no selfie on file yet. Door staff compare faces, so we ask once.
+    @Published var needsSelfie = UserDefaults.standard.bool(forKey: "needs_selfie")
+    @Published var skippedSelfie = false
 
     let api: API
     let isPreview: Bool
@@ -75,6 +78,10 @@ final class AppState: ObservableObject {
         keychain.set(r.refreshToken, for: "refresh")
         keychain.set(r.passSecret, for: "pass_secret")
         passSecret = Data(base64Encoded: r.passSecret)
+        // Learn whether a selfie exists BEFORE showing the app, so first sign-in goes straight to the selfie step.
+        let me: MeResponse? = try? await api.call("GET", "/v1/me", token: r.accessToken)
+        needsSelfie = me?.profile.hasPhoto == false; skippedSelfie = false
+        defaults.set(needsSelfie, forKey: "needs_selfie")
         defaults.set(try? JSONEncoder().encode(r.profile), forKey: "profile")
         profile = r.profile
         Haptics.success()
@@ -90,7 +97,8 @@ final class AppState: ObservableObject {
     private func wipe() {
         accessToken = nil; passSecret = nil
         keychain.wipe()
-        for k in ["profile", "cache_events", "cache_ann", "seen_ann"] { defaults.removeObject(forKey: k) }
+        for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie"] { defaults.removeObject(forKey: k) }
+        needsSelfie = false
         profile = nil; events = []; announcements = []; tickets = []; checkins = [:]; faqs = []; settings = [:]
     }
 
@@ -142,6 +150,7 @@ final class AppState: ObservableObject {
             try await loadTickets()
             let me: MeResponse = try await authed("GET", "/v1/me")
             checkins = Dictionary(me.checkins.map { ($0.scope, $0.at) }, uniquingKeysWith: { a, _ in a })
+            if let has = me.profile.hasPhoto, needsSelfie == has { needsSelfie = !has; defaults.set(needsSelfie, forKey: "needs_selfie") }
             offline = false
             defaults.set(evData, forKey: "cache_events"); defaults.set(annData, forKey: "cache_ann")
         } catch let e as APIError where e.http == 401 { /* signed out by refreshToken() */ }
@@ -174,6 +183,16 @@ final class AppState: ObservableObject {
             do { _ = try await authedData(on ? "PUT" : "DELETE", "/v1/events/\(e.id)/saved") }
             catch { patch(e.id) { $0.saved = !on }; message = "Couldn't update. Check your connection." }
         }
+    }
+
+    /// One-time selfie upload (JPEG). A 409 means the server already has one, which is fine.
+    func uploadSelfie(_ jpeg: Data) async throws {
+        if !isPreview {
+            do { _ = try await api.data("PUT", "/v1/me/photo", token: try await currentToken(), jpeg: jpeg) }
+            catch let e as APIError where e.http == 401 { _ = try await api.data("PUT", "/v1/me/photo", token: try await refreshToken(), jpeg: jpeg) }
+            catch let e as APIError where e.http == 409 { }
+        }
+        needsSelfie = false; defaults.set(false, forKey: "needs_selfie")
     }
 
     func createTicket(kind: String, topic: String, text: String) async throws -> String {

@@ -117,6 +117,7 @@ struct TicketMessage: Decodable, Equatable, Identifiable { var id: String { "\(a
 struct Ticket: Identifiable, Decodable, Equatable { let id: String; let code: String; let kind: String; let topic: String; let status: String; let createdAt: Date; let messages: [TicketMessage] }
 struct Profile: Codable, Equatable {
     let name: String; let email: String; let college: String?; let passCode: String
+    var hasPhoto: Bool?
     var initials: String {
         let s = name.split(separator: " ").prefix(2).compactMap { $0.first.map { String($0).uppercased() } }.joined()
         return s.isEmpty ? "?" : s

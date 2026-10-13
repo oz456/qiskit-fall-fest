@@ -11,6 +11,7 @@ class ApiException(val http: Int, val code: String, override val message: String
 
 /** Thin JSON-over-HTTPS client. Auth/refresh policy lives in AppState. */
 class Api(private val base: String, private val onSkew: (Long) -> Unit = {}) {
+    val baseUrl: String get() = base
     /** serverTime - localTime in ms, derived from response Date headers; used to keep the rotating QR in sync. */
     @Volatile var skewMs: Long = 0
 
@@ -36,6 +37,22 @@ class Api(private val base: String, private val onSkew: (Long) -> Unit = {}) {
             if (text.isBlank()) null else org.json.JSONTokener(text).nextValue()
         } finally { c.disconnect() }
     }
+}
+
+/** Raw-bytes PUT (selfie upload). Same error mapping as [Api.call]. */
+suspend fun Api.putJpeg(path: String, bytes: ByteArray, token: String?): Unit = withContext(Dispatchers.IO) {
+    val c = (URL(baseUrl + path).openConnection() as HttpURLConnection)
+    try {
+        c.requestMethod = "PUT"; c.connectTimeout = 10_000; c.readTimeout = 30_000; c.doOutput = true
+        c.setRequestProperty("Content-Type", "image/jpeg"); c.setRequestProperty("Accept", "application/json")
+        if (token != null) c.setRequestProperty("Authorization", "Bearer $token")
+        c.setFixedLengthStreamingMode(bytes.size); c.outputStream.use { it.write(bytes) }
+        val http = c.responseCode
+        if (http !in 200..299) {
+            val j = runCatching { JSONObject((c.errorStream?.bufferedReader()?.use { it.readText() }).orEmpty()) }.getOrNull()
+            throw ApiException(http, j?.optString("error") ?: "error", j?.optString("message")?.takeIf { it.isNotBlank() } ?: "Upload failed ($http)")
+        }
+    } finally { c.disconnect() }
 }
 
 fun JSONObject.str(k: String): String = optString(k, "")

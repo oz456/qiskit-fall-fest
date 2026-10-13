@@ -100,7 +100,7 @@ fun HubScreen(app: AppState, onOpen: (Event) -> Unit, onNotifications: () -> Uni
                 item {
                     if (days.size > 1) { DayTabs(days, day) { picked = it; hf.performHapticFeedback(HapticFeedbackType.SegmentTick) }; Spacer(Modifier.height(14.dp)) }
                     Row(Modifier.padding(horizontal = 24.dp).fillMaxWidth().clip(CircleShape).background(P.surfaceAlt).padding(4.dp)) {
-                        Filter.entries.forEach { f ->
+                        listOf(Filter.All, Filter.Saved).forEach { f ->
                             val sel = filter == f
                             val bg by animateColorAsState(if (sel) P.primary else Color.Transparent, label = "f")
                             Row(
@@ -150,8 +150,7 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             CountUnit(d.toDays(), "DAYS"); CountUnit(d.toHours() % 24, "HRS"); CountUnit(d.toMinutes() % 60, "MIN")
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Text(app.settings["venue"] ?: "First up · ${target.title}", style = T.small, color = Color.White.copy(alpha = .7f), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
                     after -> Text("See you at\nFall Fest 2027", style = T.h1, color = Color.White)
                     else -> Text(target.title, style = T.h1.copy(fontSize = 26.sp, lineHeight = 30.sp), color = Color.White, maxLines = 2, modifier = Modifier.padding(end = 40.dp))
                 }

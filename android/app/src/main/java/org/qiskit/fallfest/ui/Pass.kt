@@ -74,37 +74,22 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
         }
         item {
             TiltPass(app) { qrOpen = true }
-            Spacer(Modifier.height(12.dp))
-            Text("Your QR stays hidden until you tap. It refreshes every 30 seconds, so screenshots won’t scan.", style = T.small, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
-            Spacer(Modifier.height(16.dp))
-            Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Stat("Saved", app.events.count { it.saved }.toString(), Modifier.weight(1f))
-                Stat("Enrolled", enrolled.size.toString(), Modifier.weight(1f))
-                Stat("Check-ins", app.checkins.size.toString(), Modifier.weight(1f))
-            }
+            Spacer(Modifier.height(14.dp))
+            Text("QR appears when you tap. It refreshes every 30 seconds.", style = T.small, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
         }
         if (enrolled.isNotEmpty()) {
-            item { SectionLabel("ENROLLED", Modifier.padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 8.dp)) }
+            item { SectionLabel("ENROLLED", Modifier.padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 8.dp)) }
             items(enrolled, key = { "r" + it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen, trailing = false) }
         }
-        item { SectionLabel("SAVED BY YOU", Modifier.padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 8.dp)) }
-        if (saved.isEmpty()) item {
-            Card(Modifier.padding(horizontal = 24.dp).fillMaxWidth(), onClick = goHub) {
-                Column(Modifier.padding(24.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconBubble(Icons.Outlined.BookmarkAdd, 56.dp, P.mintInk, P.mint); Spacer(Modifier.height(12.dp))
-                    Text("Nothing saved yet", style = T.title, color = P.ink)
-                    Text("Tap the bookmark on any event in the Hub to keep it here.", style = T.small, color = P.muted, textAlign = TextAlign.Center)
-                }
-            }
+        if (saved.isNotEmpty()) {
+            item { SectionLabel("SAVED", Modifier.padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 8.dp)) }
+            items(saved, key = { "s" + it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen, trailing = false) }
         }
-        items(saved, key = { "s" + it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen, trailing = false) }
+        if (enrolled.isEmpty() && saved.isEmpty()) item {
+            Text("Events you save from the Hub appear here.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 48.dp))
+        }
     }
     if (qrOpen) FullQr(app, payload, progress) { qrOpen = false }
-}
-
-@Composable
-private fun Stat(label: String, value: String, modifier: Modifier) {
-    Card(modifier, RoundedCornerShape(20.dp)) { Column(Modifier.padding(14.dp)) { Text(value, style = T.h2, color = P.ink); Text(label, style = T.small, color = P.muted) } }
 }
 
 @Composable

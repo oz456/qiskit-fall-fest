@@ -32,6 +32,9 @@ class AppState(context: Context) {
     var checkins by mutableStateOf(emptyMap<String, Instant>()); private set
     var refreshing by mutableStateOf(false); private set
     var offline by mutableStateOf(false); private set
+    /** First sign-in: the attendee has no selfie on file yet. Door staff compare faces, so we ask once. */
+    var needsSelfie by mutableStateOf(prefs.getBoolean("needs_selfie", false)); private set
+    var skippedSelfie by mutableStateOf(false)
     var message by mutableStateOf<String?>(null)
     var nowMs by mutableLongStateOf(System.currentTimeMillis())
     private var seenAnnouncement by mutableStateOf(prefs.getString("seen_ann", null))
@@ -63,7 +66,10 @@ class AppState(context: Context) {
         accessToken = r.str("accessToken")
         secure.put("refresh", r.str("refreshToken")); secure.put("pass_secret", r.str("passSecret"))
         val p = r.getJSONObject("profile")
-        prefs.edit().putString("profile", p.toString()).apply()
+        // Learn whether a selfie exists BEFORE showing the app, so first sign-in goes straight to the selfie step.
+        val hasPhoto = runCatching { (api.call("GET", "/v1/me", null, accessToken) as JSONObject).getJSONObject("profile").optBoolean("hasPhoto", true) }.getOrDefault(true)
+        needsSelfie = !hasPhoto; skippedSelfie = false
+        prefs.edit().putString("profile", p.toString()).putBoolean("needs_selfie", needsSelfie).apply()
         profile = Profile(p.str("name"), p.str("email"), p.strOrNull("college"), p.str("passCode"))
         refresh()
     }
@@ -74,7 +80,7 @@ class AppState(context: Context) {
         wipe()
     }
     private fun wipe() {
-        accessToken = null; secure.clear(); prefs.edit().clear().apply()
+        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false
         profile = null; events = emptyList(); announcements = emptyList(); tickets = emptyList(); checkins = emptyMap()
     }
 
@@ -109,8 +115,10 @@ class AppState(context: Context) {
                 settings = ev.getJSONObject("settings").let { s -> s.keys().asSequence().associateWith { s.str(it) } }
                 announcements = (authed("GET", "/v1/announcements") as org.json.JSONArray).mapObjects { Announcement(it.str("id"), it.str("title"), it.str("body"), Instant.parse(it.str("createdAt"))) }
                 loadTickets()
-                (authed("GET", "/v1/me") as JSONObject).getJSONArray("checkins").let { a ->
-                    checkins = a.mapObjects { it.str("scope") to Instant.parse(it.str("at")) }.toMap()
+                (authed("GET", "/v1/me") as JSONObject).let { me ->
+                    checkins = me.getJSONArray("checkins").mapObjects { it.str("scope") to Instant.parse(it.str("at")) }.toMap()
+                    val missing = !me.getJSONObject("profile").optBoolean("hasPhoto", true)
+                    if (missing != needsSelfie) { needsSelfie = missing; prefs.edit().putBoolean("needs_selfie", missing).apply() }
                 }
                 offline = false
                 prefs.edit().putString("cache_events", ev.toString()).putString("cache_ann", announcementsJson()).apply()
@@ -142,6 +150,17 @@ class AppState(context: Context) {
     fun toggleSaved(e: Event) {
         val on = !e.saved; patch(e.id) { it.withUser(saved = on) }
         scope.launch { runCatching { authed(if (on) "PUT" else "DELETE", "/v1/events/${e.id}/saved") }.onFailure { patch(e.id) { it.withUser(saved = !on) }; message = "Couldn't update. Check your connection." } }
+    }
+
+    /** One-time selfie upload (JPEG). Throws ApiException with a readable message on failure. */
+    suspend fun uploadSelfie(jpeg: ByteArray) {
+        try { api.putJpeg("/v1/me/photo", jpeg, accessToken ?: refreshToken()) }
+        catch (e: ApiException) {
+            if (e.http == 409) { /* already saved on the server: nothing more to do */ }
+            else if (e.http == 401) api.putJpeg("/v1/me/photo", jpeg, refreshToken())
+            else throw e
+        }
+        needsSelfie = false; prefs.edit().putBoolean("needs_selfie", false).apply()
     }
 
     suspend fun createTicket(kind: String, topic: String, text: String): String {
