@@ -28,7 +28,7 @@ export async function buildApp(db: Db) {
       useDefaults: false,
       directives: {
         defaultSrc: ["'none'"], scriptSrc: ["'self'"], styleSrc: ["'self'"], imgSrc: ["'self'", "data:"],
-        connectSrc: ["'self'"], mediaSrc: ["'self'"], formAction: ["'self'"], frameAncestors: ["'none'"], baseUri: ["'none'"],
+        connectSrc: ["'self'"], fontSrc: ["'self'"], mediaSrc: ["'self'"], formAction: ["'self'"], frameAncestors: ["'none'"], baseUri: ["'none'"],
       },
     },
     strictTransportSecurity: { maxAge: 63072000, includeSubDomains: true, preload: false },

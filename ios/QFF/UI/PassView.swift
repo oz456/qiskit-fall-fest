@@ -17,7 +17,7 @@ struct PassView: View {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
                     SectionLabel(text: "MY PASS")
-                    Text("One pass.\nEvery moment.").font(Fonts.display(32, 700, style: .largeTitle)).lineSpacing(-6).foregroundStyle(P.ink)
+                    PosterTitle(first: "ONE PASS.", second: "EVERY MOMENT.")
                 }
                 .padding(.horizontal, 24).padding(.vertical, 18)
 
@@ -77,16 +77,17 @@ private struct TiltPass: View {
         let p = app.profile
         ZStack(alignment: .topTrailing) {
             LinearGradient(colors: [P.hero1, P.hero2], startPoint: .topLeading, endPoint: .bottomTrailing)
-            AtomOrb(color: .white, period: 16).frame(width: 260, height: 260).opacity(0.3).offset(x: 70, y: -50)
+            Sun().frame(width: 190, height: 190).offset(x: 60, y: -48)
+            AtomOrb(color: P.cream, electron: P.cream, period: 16).frame(width: 250, height: 250).opacity(0.5).offset(x: 80, y: -60)
             VStack(alignment: .leading, spacing: 22) {
                 HStack {
                     Label("Secure Pass", systemImage: "checkmark.shield").font(T.bodyM).foregroundStyle(.white.opacity(0.8))
                     Spacer()
-                    Pill(text: "ACTIVE", bg: P.accent, fg: P.hero2)
+                    Pill(text: "ACTIVE", bg: P.accent, fg: P.ink)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("ATTENDEE").font(T.label).tracking(1.3).foregroundStyle(.white.opacity(0.55))
-                    Text((p?.name ?? "").uppercased()).font(Fonts.display(26, 700, style: .title2)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.7)
+                    Text((p?.name ?? "").uppercased()).font(Fonts.poster(34, style: .title1)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.7)
                     Text("ID: \(p?.passCode ?? "")").font(T.body).foregroundStyle(.white.opacity(0.8)).padding(.top, 2)
                     if let c = p?.college { Text(c).font(T.small).foregroundStyle(.white.opacity(0.55)).lineLimit(1) }
                 }

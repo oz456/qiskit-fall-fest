@@ -69,7 +69,7 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
         item {
             Column(Modifier.statusBarsPadding().padding(horizontal = 24.dp, vertical = 18.dp)) {
                 Text("MY PASS", style = T.label, color = P.muted)
-                Text("One pass.\nEvery moment.", style = T.h1.copy(fontSize = 32.sp, lineHeight = 36.sp), color = P.ink)
+                PosterTitle("ONE PASS.", "EVERY MOMENT.")
             }
         }
         item {
@@ -125,16 +125,17 @@ private fun TiltPass(app: AppState, onQr: () -> Unit) {
             }
             .clip(shape).background(Brush.linearGradient(listOf(P.hero1, P.hero2))).pressable(shape, false, onQr).border(1.dp, Color.White.copy(alpha = .12f), shape),
     ) {
-        AtomOrb(Modifier.size(260.dp).align(Alignment.TopEnd).offset(70.dp, (-50).dp).alpha(.3f), Color.White, speed = 16000)
+        Sun(Modifier.size(190.dp).align(Alignment.TopEnd).offset(60.dp, (-48).dp))
+        AtomOrb(Modifier.size(250.dp).align(Alignment.TopEnd).offset(80.dp, (-60).dp).alpha(.5f), Color(0xFFF2E7D7), Color(0xFFF2E7D7), speed = 16000)
         Column(Modifier.padding(26.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.VerifiedUser, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
                 Text("Secure Pass", style = T.bodyM, color = Color.White.copy(alpha = .8f), modifier = Modifier.weight(1f))
-                Pill("ACTIVE", P.accent, P.hero2)
+                Pill("ACTIVE", P.accent, P.ink)
             }
             Column {
                 Text("ATTENDEE", style = T.label, color = Color.White.copy(alpha = .55f)); Spacer(Modifier.height(4.dp))
-                Text((p?.name ?: "").uppercase(), style = T.h1.copy(fontSize = 26.sp, lineHeight = 30.sp), color = Color.White, maxLines = 2)
+                Text((p?.name ?: "").uppercase(), style = T.poster.copy(fontSize = 34.sp, lineHeight = 36.sp), color = Color.White, maxLines = 2)
                 Spacer(Modifier.height(6.dp))
                 Text("ID: ${p?.passCode.orEmpty()}", style = T.body, color = Color.White.copy(alpha = .8f))
                 p?.college?.let { Text(it, style = T.small, color = Color.White.copy(alpha = .55f), maxLines = 1) }

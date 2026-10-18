@@ -193,6 +193,7 @@ final class AppState: ObservableObject {
             catch let e as APIError where e.http == 409 { }
         }
         needsSelfie = false; defaults.set(false, forKey: "needs_selfie")
+        if !isPreview { Task { [self] in await refresh() } } // the first load was refused until the selfie existed
     }
 
     func createTicket(kind: String, topic: String, text: String) async throws -> String {

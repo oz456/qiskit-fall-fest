@@ -9,7 +9,7 @@ struct SupportView: View {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
                     SectionLabel(text: "SUPPORT & GRIEVANCES")
-                    Text("We’ve got\nyour back.").font(Fonts.display(32, 700, style: .largeTitle)).lineSpacing(-6).foregroundStyle(P.ink)
+                    PosterTitle(first: "WE’VE GOT", second: "YOUR BACK.")
                 }
                 .padding(.horizontal, 24).padding(.vertical, 18)
 

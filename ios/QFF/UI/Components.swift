@@ -57,7 +57,7 @@ struct Backdrop: View {
     var body: some View {
         ZStack(alignment: .top) {
             P.bg
-            RadialGradient(colors: [P.qiskitPurple.opacity(0.11), .clear], center: .center, startRadius: 0, endRadius: 260)
+            RadialGradient(colors: [P.sun.opacity(0.14), .clear], center: .center, startRadius: 0, endRadius: 260)
                 .frame(width: 520, height: 520).offset(x: 120, y: -190)
         }
         .ignoresSafeArea()
@@ -162,8 +162,8 @@ struct AtomOrb: View {
 
 /// Official Qiskit mark, no tile: the glyph sits directly on the page.
 struct QiskitMark: View {
-    var size: CGFloat = 40
-    var tint: Color = P.qiskitPurple
+    var size: CGFloat = 38
+    var tint: Color = P.ink
     var body: some View {
         Image("QiskitMark").renderingMode(.template).resizable().scaledToFit()
             .foregroundStyle(tint).frame(width: size, height: size)
@@ -181,18 +181,55 @@ struct PartnerLine: View {
     }
 }
 
+/// Event lockup, as on the poster: logo mark + "IBM Quantum" over "Qiskit Fall Fest 2026".
 struct Logo: View {
     var color: Color = P.ink
     var body: some View {
         HStack(spacing: 10) {
-            QiskitMark()
-            VStack(alignment: .leading, spacing: 0) {
-                Text("QISKIT").font(T.title).tracking(0.3)
-                Text("FALL FEST ’26").font(T.title).tracking(0.3)
+            QiskitMark(size: 38, tint: color)
+            VStack(alignment: .leading, spacing: 1) {
+                (Text("IBM ").font(Fonts.display(17, 500, style: .headline)) + Text("Quantum").font(Fonts.display(17, 800, style: .headline)))
+                Text("Qiskit Fall Fest 2026").font(Fonts.display(12, 700, style: .caption1))
             }.foregroundStyle(color)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Qiskit Fall Fest 2026")
+        .accessibilityLabel("IBM Quantum, Qiskit Fall Fest 2026")
+    }
+}
+
+/// The orange sun from the poster.
+struct Sun: View {
+    var color: Color = P.sun
+    var body: some View { Circle().fill(color).accessibilityHidden(true) }
+}
+
+/// Four-point sparkle, the poster's little accent mark.
+struct Sparkle: View {
+    var size: CGFloat
+    var color: Color = P.primary
+    var body: some View {
+        Path { p in
+            let c = size / 2, k = size * 0.07
+            p.move(to: CGPoint(x: c, y: 0))
+            p.addQuadCurve(to: CGPoint(x: size, y: c), control: CGPoint(x: c + k, y: c - k))
+            p.addQuadCurve(to: CGPoint(x: c, y: size), control: CGPoint(x: c + k, y: c + k))
+            p.addQuadCurve(to: CGPoint(x: 0, y: c), control: CGPoint(x: c - k, y: c + k))
+            p.addQuadCurve(to: CGPoint(x: c, y: 0), control: CGPoint(x: c - k, y: c - k))
+        }
+        .fill(color).frame(width: size, height: size).accessibilityHidden(true)
+    }
+}
+
+/// Page title in poster type: two lines, the second in maroon.
+struct PosterTitle: View {
+    let first: String
+    let second: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: -2) {
+            Text(first).foregroundStyle(P.ink)
+            Text(second).foregroundStyle(P.primary)
+        }
+        .font(T.poster).tracking(0.4)
     }
 }
 

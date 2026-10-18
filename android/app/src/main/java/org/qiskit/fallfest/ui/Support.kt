@@ -45,7 +45,7 @@ fun SupportScreen(app: AppState, open: (SheetKind) -> Unit) {
         item {
             Column(Modifier.statusBarsPadding().padding(horizontal = 24.dp, vertical = 18.dp)) {
                 Text("SUPPORT & GRIEVANCES", style = T.label, color = P.muted)
-                Text("We’ve got\nyour back.", style = T.h1.copy(fontSize = 32.sp, lineHeight = 36.sp), color = P.ink)
+                PosterTitle("WE’VE GOT", "YOUR BACK.")
             }
         }
         item {

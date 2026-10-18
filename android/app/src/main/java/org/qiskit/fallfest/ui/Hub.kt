@@ -108,7 +108,7 @@ fun HubScreen(app: AppState, onOpen: (Event) -> Unit, onNotifications: () -> Uni
                                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(f.label, style = T.bodyM.copy(fontSize = 13.sp), color = if (sel) P.onPrimary else P.muted)
-                                if (f == Filter.Ongoing && live != null) { Spacer(Modifier.width(2.dp)); PulseDot(if (sel) P.accent else Color(0xFF22C55E), 5.dp) }
+                                if (f == Filter.Ongoing && live != null) { Spacer(Modifier.width(2.dp)); PulseDot(P.accent, 5.dp) }
                             }
                         }
                     }
@@ -135,7 +135,8 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
     val target = live ?: next ?: app.events.first()
     val shape = RoundedCornerShape(30.dp)
     Box(Modifier.padding(horizontal = 24.dp).fillMaxWidth().heightIn(min = 226.dp).clip(shape).background(Brush.linearGradient(listOf(P.hero1, P.hero2))).pressable(shape, true) { onOpen(target) }) {
-        AtomOrb(Modifier.size(250.dp).align(Alignment.CenterEnd).offset(x = 80.dp).alpha(.32f), color = Color.White, speed = 12000)
+        Sun(Modifier.size(132.dp).align(Alignment.TopEnd).offset(x = 34.dp, y = (-26).dp))
+        AtomOrb(Modifier.size(210.dp).align(Alignment.TopEnd).offset(x = 70.dp, y = (-64).dp).alpha(.5f), color = Color(0xFFF2E7D7), electron = Color(0xFFF2E7D7), speed = 12000)
         Column(Modifier.padding(horizontal = 26.dp, vertical = 24.dp).fillMaxWidth().heightIn(min = 178.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Column {
                 when {
@@ -151,8 +152,8 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
                             CountUnit(d.toDays(), "DAYS"); CountUnit(d.toHours() % 24, "HRS"); CountUnit(d.toMinutes() % 60, "MIN")
                         }
                     }
-                    after -> Text("See you at\nFall Fest 2027", style = T.h1, color = Color.White)
-                    else -> Text(target.title, style = T.h1.copy(fontSize = 26.sp, lineHeight = 30.sp), color = Color.White, maxLines = 2, modifier = Modifier.padding(end = 40.dp))
+                    after -> Text("SEE YOU AT\nFALL FEST 2027", style = T.poster.copy(fontSize = 32.sp), color = Color.White)
+                    else -> Text(target.title, style = T.poster.copy(fontSize = 30.sp, lineHeight = 32.sp), color = Color.White, maxLines = 2, modifier = Modifier.padding(end = 40.dp))
                 }
             }
             Spacer(Modifier.height(18.dp))
@@ -167,7 +168,7 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
 @Composable
 private fun CountUnit(value: Long, label: String) {
     Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .12f)).padding(horizontal = 14.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("%02d".format(value), style = T.h1.copy(fontSize = 28.sp, lineHeight = 30.sp), color = Color.White)
+        Text("%02d".format(value), style = T.poster.copy(fontSize = 34.sp, lineHeight = 36.sp), color = Color.White)
         Text(label, style = T.label.copy(fontSize = 9.sp), color = P.accent)
     }
 }

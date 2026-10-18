@@ -83,7 +83,7 @@ fun SignInScreen(app: AppState) {
     Box(Modifier.fillMaxSize().background(P.bg)) {
         Box(
             Modifier.size(420.dp).align(Alignment.TopEnd).offset(110.dp, (-40).dp)
-                .background(Brush.radialGradient(listOf(Color(0xFF6929C4).copy(alpha = .16f), Color.Transparent)), CircleShape)
+                .background(Brush.radialGradient(listOf(Color(0xFFEB732F).copy(alpha = .18f), Color.Transparent)), CircleShape)
         )
 
         Column(
@@ -97,9 +97,18 @@ fun SignInScreen(app: AppState) {
             Spacer(Modifier.height(80.dp))
             val a1 by animateFloatAsState(if (entered) 1f else 0f, stagger(1), label = "a1")
             Column(Modifier.alpha(a1).offset { IntOffset(0, ((1 - a1) * 40).dp.roundToPx()) }) {
-                Text("QISKIT\nFALL FEST ’26", style = T.hero.copy(lineHeight = 44.sp), color = P.ink)
+                Text(androidx.compose.ui.text.buildAnnotatedString {
+                    append("QISKIT\n"); pushStyle(androidx.compose.ui.text.SpanStyle(color = P.primary)); append("FALL FEST"); pop(); append(" ’26")
+                }, style = T.hero, color = P.ink)
             }
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().heightIn(min = 36.dp)) { if (maxHeight >= 230.dp) AtomOrb(Modifier.size(210.dp).align(Alignment.CenterEnd).offset(x = 36.dp).alpha(.7f), speed = 14000, stroke = 1.dp) }
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().heightIn(min = 36.dp)) {
+                if (maxHeight >= 230.dp) {
+                    Sun(Modifier.size(170.dp).align(Alignment.CenterEnd).offset(x = 6.dp))
+                    AtomOrb(Modifier.size(250.dp).align(Alignment.CenterEnd).offset(x = 46.dp), color = P.ink, electron = P.primary, speed = 14000, stroke = 1.3.dp)
+                    Sparkle(22.dp, P.primary, Modifier.align(Alignment.TopStart).offset(x = 6.dp, y = 14.dp))
+                    Sparkle(13.dp, P.accent, Modifier.align(Alignment.CenterStart).offset(x = 70.dp, y = 30.dp))
+                }
+            }
             val a2 by animateFloatAsState(if (entered) 1f else 0f, stagger(2), label = "a2")
             Column(Modifier.alpha(a2).offset { IntOffset(shake.value.dp.roundToPx(), ((1 - a2) * 40).dp.roundToPx()) }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 AnimatedContent(step, label = "step", transitionSpec = { (fadeIn(tween(300)) + slideInHorizontally { it / 8 }) togetherWith fadeOut(tween(150)) }) { s ->

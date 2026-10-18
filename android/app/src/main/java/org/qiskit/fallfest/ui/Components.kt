@@ -81,19 +81,26 @@ fun AtomOrb(
 
 /** Official Qiskit mark, no tile: the glyph sits directly on the page. */
 @Composable
-fun QiskitMark(size: Dp = 40.dp, tint: Color = Color(0xFF6929C4)) {
-    androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(org.qiskit.fallfest.R.drawable.ic_qiskit), "Qiskit", tint = tint, modifier = Modifier.size(size))
+fun QiskitMark(size: Dp = 38.dp, tint: Color = P.ink) {
+    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(org.qiskit.fallfest.R.drawable.qiskit_mark), "Qiskit", Modifier.size(size), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint))
 }
 
+/** Event lockup, as on the poster: logo mark + "IBM Quantum" over "Qiskit Fall Fest 2026". */
 @Composable
 fun Logo(modifier: Modifier = Modifier, color: Color = P.ink) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        QiskitMark()
+        QiskitMark(38.dp, color)
         Column {
-            Text("QISKIT", style = T.title.copy(letterSpacing = 0.3.sp), color = color)
-            Text("FALL FEST ’26", style = T.title.copy(letterSpacing = 0.3.sp), color = color)
+            Text(androidx.compose.ui.text.buildAnnotatedString { append("IBM "); pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold)); append("Quantum"); pop() }, style = T.title.copy(fontSize = 17.sp), color = color)
+            Text("Qiskit Fall Fest 2026", style = T.small.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, fontSize = 12.sp), color = color)
         }
     }
+}
+
+/** The orange sun from the poster, optionally with the atom orbits drawn over it. */
+@Composable
+fun Sun(modifier: Modifier = Modifier, color: Color = P.accent) {
+    Canvas(modifier) { drawCircle(color, radius = size.minDimension / 2) }
 }
 
 @Composable
@@ -153,7 +160,7 @@ fun IconBubble(icon: androidx.compose.ui.graphics.vector.ImageVector, size: Dp =
 
 /** Real, scannable QR drawn with soft rounded modules. */
 @Composable
-fun QrCode(content: String, modifier: Modifier = Modifier, fg: Color = Color(0xFF0E1030), bg: Color = Color.White) {
+fun QrCode(content: String, modifier: Modifier = Modifier, fg: Color = Color(0xFF161818), bg: Color = Color.White) {
     val matrix = remember(content) {
         QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.MARGIN to 0, EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M))
     }
@@ -169,3 +176,25 @@ fun QrCode(content: String, modifier: Modifier = Modifier, fg: Color = Color(0xF
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) =
     Text(text, style = T.label, color = P.muted, modifier = modifier)
+
+/** Four-point sparkle, the poster's little accent mark. */
+@Composable
+fun Sparkle(size: Dp, color: Color = P.primary, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(size)) {
+        val c = center; val r = this.size.minDimension / 2; val k = r * 0.14f
+        val p = androidx.compose.ui.graphics.Path().apply {
+            moveTo(c.x, c.y - r); quadraticBezierTo(c.x + k, c.y - k, c.x + r, c.y); quadraticBezierTo(c.x + k, c.y + k, c.x, c.y + r)
+            quadraticBezierTo(c.x - k, c.y + k, c.x - r, c.y); quadraticBezierTo(c.x - k, c.y - k, c.x, c.y - r); close()
+        }
+        drawPath(p, color)
+    }
+}
+
+/** Page title in poster type: two lines, the second in maroon. */
+@Composable
+fun PosterTitle(first: String, second: String, modifier: Modifier = Modifier) {
+    Text(androidx.compose.ui.text.buildAnnotatedString {
+        append(first); append("\n")
+        pushStyle(androidx.compose.ui.text.SpanStyle(color = P.primary)); append(second); pop()
+    }, style = T.poster, color = P.ink, modifier = modifier)
+}

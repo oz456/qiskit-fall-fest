@@ -112,7 +112,7 @@ struct HubView: View {
                 Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { filter = f }; Haptics.select() } label: {
                     HStack(spacing: 2) {
                         Text(f.rawValue).font(Fonts.body(13, 500, style: .footnote))
-                        if f == .ongoing && live != nil { PulseDot(color: filter == f ? P.accent : Color(hex: 0x22C55E), size: 5) }
+                        if f == .ongoing && live != nil { PulseDot(color: P.accent, size: 5) }
                     }
                     .foregroundStyle(filter == f ? P.onPrimary : P.muted)
                     .frame(maxWidth: .infinity, minHeight: 40)
@@ -163,7 +163,8 @@ private struct Hero: View {
         } label: {
             ZStack(alignment: .leading) {
                 LinearGradient(colors: [P.hero1, P.hero2], startPoint: .topLeading, endPoint: .bottomTrailing)
-                AtomOrb(color: .white, period: 12).frame(width: 250, height: 250).opacity(0.32).offset(x: 160, y: 20)
+                Sun().frame(width: 132, height: 132).offset(x: 34, y: -26).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                AtomOrb(color: P.cream, electron: P.cream, period: 12).frame(width: 210, height: 210).opacity(0.5).offset(x: 70, y: -64).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 VStack(alignment: .leading, spacing: 0) {
                     Group {
                         if let l = live { HStack(spacing: 6) { PulseDot(color: P.accent); Text("LIVE NOW · \(l.location.uppercased())").lineLimit(1) } }
@@ -179,9 +180,9 @@ private struct Hero: View {
                             CountUnit(value: s / 86400, label: "DAYS"); CountUnit(value: (s / 3600) % 24, label: "HRS"); CountUnit(value: (s / 60) % 60, label: "MIN")
                         }
                     } else if after {
-                        Text("See you at\nFall Fest 2027").font(T.h1).lineSpacing(-4).foregroundStyle(.white)
+                        Text("SEE YOU AT\nFALL FEST 2027").font(Fonts.poster(32)).foregroundStyle(.white)
                     } else {
-                        Text(target?.title ?? "").font(Fonts.display(26, 700, style: .title2)).foregroundStyle(.white).lineLimit(2).lineSpacing(-3).minimumScaleFactor(0.8).multilineTextAlignment(.leading).padding(.trailing, 40)
+                        Text(target?.title ?? "").font(Fonts.poster(30, style: .title1)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.leading).padding(.trailing, 40)
                     }
                     Spacer(minLength: 18)
                     HStack {
@@ -314,7 +315,7 @@ private struct CountUnit: View {
     let label: String
     var body: some View {
         VStack(spacing: 0) {
-            Text(String(format: "%02d", value)).font(Fonts.display(28, 700, style: .title1)).foregroundStyle(.white)
+            Text(String(format: "%02d", value)).font(Fonts.poster(34, style: .title1)).foregroundStyle(.white)
             Text(label).font(Fonts.body(9, 700, style: .caption2)).tracking(1.1).foregroundStyle(P.accent)
         }
         .padding(.horizontal, 14).padding(.vertical, 8)

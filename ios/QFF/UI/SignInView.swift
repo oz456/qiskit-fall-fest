@@ -21,7 +21,7 @@ struct SignInView: View {
             // decorative only: an overlay on a clear, parent-sized layer so its oversized frames never affect the layout width
             Color.clear.overlay(alignment: .topTrailing) {
                 ZStack {
-                    Circle().fill(RadialGradient(colors: [P.qiskitPurple.opacity(0.18), .clear], center: .center, startRadius: 0, endRadius: 210)).frame(width: 420, height: 420).offset(x: 110, y: -40)
+                    Circle().fill(RadialGradient(colors: [P.sun.opacity(0.2), .clear], center: .center, startRadius: 0, endRadius: 210)).frame(width: 420, height: 420).offset(x: 110, y: -40)
                 }
             }
             .clipped().allowsHitTesting(false).ignoresSafeArea()
@@ -38,12 +38,18 @@ struct SignInView: View {
 
                     Spacer(minLength: 64)
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("QISKIT\nFALL FEST ’26").font(T.hero).tracking(-1.8).foregroundStyle(P.ink).lineSpacing(-9)
+                        (Text("QISKIT\n").foregroundStyle(P.ink) + Text("FALL FEST").foregroundStyle(P.primary) + Text(" ’26").foregroundStyle(P.ink)).font(T.hero).tracking(0.5).lineSpacing(-4)
                     }
                     .opacity(entered ? 1 : 0).offset(y: entered ? 0 : 30)
 
                     Color.clear.frame(maxWidth: .infinity, minHeight: 36, maxHeight: .infinity)
-                        .overlay(alignment: .trailing) { AtomOrb(lineWidth: 1, period: 14).frame(width: 210, height: 210).offset(x: 36).opacity(0.7).allowsHitTesting(false) }
+                        .overlay(alignment: .trailing) {
+                            ZStack {
+                                Sun().frame(width: 170, height: 170).offset(x: 6)
+                                AtomOrb(color: P.ink, electron: P.primary, lineWidth: 1.3, period: 14).frame(width: 250, height: 250).offset(x: 46)
+                            }.allowsHitTesting(false)
+                        }
+                        .overlay(alignment: .topLeading) { Sparkle(size: 22).padding(.top, 14).padding(.leading, 6) }
                     form
                         .offset(x: shake)
                         .opacity(entered ? 1 : 0).offset(y: entered ? 0 : 30)

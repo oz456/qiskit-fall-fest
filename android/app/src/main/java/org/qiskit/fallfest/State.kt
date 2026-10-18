@@ -163,6 +163,7 @@ class AppState(context: Context) {
             else throw e
         }
         needsSelfie = false; prefs.edit().putBoolean("needs_selfie", false).apply()
+        refresh() // the first load was refused until the selfie existed
     }
 
     suspend fun createTicket(kind: String, topic: String, text: String): String {

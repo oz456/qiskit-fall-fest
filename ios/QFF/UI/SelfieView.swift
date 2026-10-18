@@ -54,7 +54,7 @@ struct SelfieView: View {
             if let photo {
                 Image(uiImage: photo).resizable().scaledToFill()
             } else if app.isPreview {
-                LinearGradient(colors: [Color(hex: 0x7B5FE0), P.hero2], startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [P.hero1, P.hero2], startPoint: .top, endPoint: .bottom)
                 Image(systemName: "person.fill").font(.system(size: 120)).foregroundStyle(.white.opacity(0.35))
                 guide
             } else if camera.status == .authorized && camera.hasCamera {

@@ -38,6 +38,7 @@ targets:
         UIAppFonts:
           - manrope.ttf
           - dmsans.ttf
+          - anton.ttf
         ITSAppUsesNonExemptEncryption: false
         UIRequiredDeviceCapabilities:
           - arm64
