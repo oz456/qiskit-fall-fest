@@ -139,6 +139,9 @@ describe("attendee flow", () => {
     const ev = (await app.inject({ url: "/v1/events", headers: h })).json().events; eventId = ev[0].id;
     assert.equal(ev[0].access, "prereg"); assert.equal(ev[0].registrationRequired, true);
     assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/saved`, headers: h })).statusCode, 200);
+    // regression: Android sends a body-less PUT as a web form; that used to be a 415 ("couldn't save")
+    assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/saved`, headers: { ...h, "content-type": "application/x-www-form-urlencoded" } })).statusCode, 200);
+    assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/saved`, headers: { ...h, "content-type": "application/octet-stream" }, payload: "hi" })).statusCode, 415);
     // attendees cannot enrol themselves any more
     assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/registration`, headers: h })).statusCode, 404);
     let e2 = (await app.inject({ url: "/v1/events", headers: h })).json().events[0];
@@ -154,6 +157,30 @@ describe("attendee flow", () => {
     await admin("POST", "/admin/api/users", { email: "sam@example.org", name: "Sam" });
   });
 
+  it("registration: checkboxes, CSV columns, and attendance counts as registered", async () => {
+    const h = { authorization: `Bearer ${tokens.accessToken}` };
+    // checkboxes: create with events, then replace the set
+    const created = (await admin("POST", "/admin/api/users", { email: "kim@example.org", name: "Kim", eventIds: [eventId] })).json();
+    const list = async () => (await admin("GET", "/admin/api/users?q=kim")).json()[0];
+    assert.deepEqual((await list()).enrolledIds, [eventId]);
+    assert.equal((await admin("PUT", `/admin/api/users/${created.id}/enrollments`, { eventIds: [] })).statusCode, 200);
+    assert.deepEqual((await list()).enrolledIds, []);
+    // CSV: one column per event (header = exact title); 1 adds, 0 never removes; existing emails still get enrolled
+    const title = (await admin("GET", "/admin/api/events")).json().find((e: any) => e.id === eventId).title;
+    const csv = `email,name,college,"${title}",Not An Event\nlee@example.org,Lee,SRM,1,1\nkim@example.org,Kim,SRM,yes,0\nbad-email,Bad,,1,`;
+    const imp = (await admin("POST", "/admin/api/users/import", { csv })).json();
+    assert.equal(imp.added, 1); assert.equal(imp.skipped, 1); assert.equal(imp.enrolled, 2); assert.deepEqual(imp.eventColumns, [title]); assert.deepEqual(imp.ignoredColumns, ["Not An Event"]); assert.equal(imp.invalid.length, 1);
+    assert.deepEqual((await list()).enrolledIds, [eventId]);
+    // attendance at an event makes it show as registered for that person, even without enrolment
+    const e3 = (await admin("POST", "/admin/api/events", { title: "Open Talk", track: "Talk", startsAt: "2026-10-20T10:00:00+05:30", endsAt: "2026-10-20T11:00:00+05:30", access: "open" })).json().id;
+    const reg = async () => (await app.inject({ url: "/v1/events", headers: h })).json().events.find((e: any) => e.id === e3).registered;
+    assert.equal(await reg(), false);
+    const [u] = await db.query("SELECT pass_code, pass_secret FROM users WHERE email='alex@example.org'");
+    const v = (await check("POST", "/check/api/scan", { payload: passPayload(Buffer.from(u!.pass_secret), u!.pass_code), scope: `event:${e3}` })).json();
+    assert.equal(v.result, "verify");
+    assert.equal((await check("POST", "/check/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
+    assert.equal(await reg(), true);
+  });
   it("tickets: user creates, admin replies, user sees reply", async () => {
     const h = { authorization: `Bearer ${tokens.accessToken}` };
     const t = await app.inject({ method: "POST", url: "/v1/tickets", headers: h, payload: { kind: "General", topic: "Wi-Fi & power", message: "Wi-Fi is down on floor 2" } });

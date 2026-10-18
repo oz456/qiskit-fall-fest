@@ -1,5 +1,10 @@
 import SwiftUI
 
+private enum HubEntry: Identifiable {
+    case header(Date), event(Event)
+    var id: String { switch self { case .header(let d): return "h\(d.timeIntervalSince1970)"; case .event(let e): return e.id } }
+}
+
 private enum HubFilter: String, CaseIterable { case all = "All", ongoing = "Ongoing", upcoming = "Upcoming", saved = "Saved" }
 
 struct HubView: View {
@@ -9,30 +14,33 @@ struct HubView: View {
     @State private var filter: HubFilter = .all
     @Namespace private var filterNS
 
+    /// The whole festival window (admin setting) plus every day an event touches, so no day is ever hidden.
     private var days: [Date] {
-        guard let first = app.events.map(\.startDay).min(), let last = app.events.map(\.endDay).max() else { return [] }
-        var out: [Date] = []; var d = first
-        while d <= last && out.count < 60 { out.append(d); d = istCalendar.date(byAdding: .day, value: 1, to: d)! }
-        return out
+        var set = Set<Date>()
+        func add(_ a: Date, _ b: Date) { var d = a; var n = 0; while d <= b && n < 45 { set.insert(d); d = istCalendar.date(byAdding: .day, value: 1, to: d)!; n += 1 } }
+        if let a = parseDay(app.settings["fest_start"]), let b = parseDay(app.settings["fest_end"]), b >= a { add(a, b) }
+        for e in app.events { add(e.startDay, e.endDay) }
+        return set.sorted()
     }
-    private var day: Date? {
-        picked ?? days.first(where: { $0 == istCalendar.startOfDay(for: app.now) }) ?? days.first
+    private var daysWithEvents: Set<Date> {
+        var set = Set<Date>()
+        for e in app.events { var d = e.startDay; var n = 0; while d <= e.endDay && n < 45 { set.insert(d); d = istCalendar.date(byAdding: .day, value: 1, to: d)!; n += 1 } }
+        return set
     }
+    private var day: Date? { picked } // nil = every day
     private var shown: [Event] {
-        app.events.filter { e in
-            (day.map(e.covers) ?? true) && { () -> Bool in
-                switch filter {
-                case .all: return true
-                case .ongoing: return app.status(of: e) == .live
-                case .upcoming: return app.status(of: e) == .upcoming
-                case .saved: return e.saved
-                }
-            }()
-        }.sorted { a, b in
+        app.events.filter { e in (day.map(e.covers) ?? true) && (filter != .saved || e.saved) }.sorted { a, b in
             let ra = (day.map { a.isMultiDay && a.startDay < $0 } ?? false) ? 0 : 1
             let rb = (day.map { b.isMultiDay && b.startDay < $0 } ?? false) ? 0 : 1
             return ra != rb ? ra < rb : a.startsAt < b.startsAt
         }
+    }
+    /// With "All days" the list is grouped under a small date header.
+    private var entries: [HubEntry] {
+        guard day == nil else { return shown.map { .event($0) } }
+        var out: [HubEntry] = []; var last: Date?
+        for e in shown { if e.startDay != last { out.append(.header(e.startDay)); last = e.startDay }; out.append(.event(e)) }
+        return out
     }
     private var live: Event? { app.events.filter { app.status(of: $0) == .live }.max { $0.startsAt < $1.startsAt } }
     private var next: Event? { app.events.filter { app.status(of: $0) == .upcoming }.min { $0.startsAt < $1.startsAt } }
@@ -47,18 +55,24 @@ struct HubView: View {
                     EmptyHub(title: app.refreshing ? "Loading schedule…" : "Schedule coming soon", sub: "Pull down to refresh.", symbol: "calendar.badge.clock")
                 } else {
                     Hero(live: live, next: next).padding(.horizontal, 24).padding(.bottom, 26)
-                    if days.count > 1 { DayChips(days: days, selected: day) { picked = $0; Haptics.select() }.padding(.bottom, 14) }
+                    if !days.isEmpty { DayStrip(days: days, withEvents: daysWithEvents, selected: day) { picked = $0; Haptics.select() }.padding(.bottom, 14) }
                     filterBar.padding(.horizontal, 24).padding(.bottom, 18)
                     if shown.isEmpty {
                         EmptyHub(title: filter == .saved ? "Nothing saved yet" : "No events here",
-                                 sub: filter == .saved ? "Tap the bookmark on any event to add it to your pass." : "Try a different day or filter.",
+                                 sub: filter == .saved ? "Tap the bookmark on any event to save it." : "Try a different day or filter.",
                                  symbol: filter == .saved ? "bookmark" : "calendar")
                     }
-                    ForEach(shown) { e in
-                        EventRow(event: e, day: day).padding(.horizontal, 24).padding(.vertical, 6)
-                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    ForEach(entries) { entry in
+                        switch entry {
+                        case .header(let d):
+                            Text(Fmt.dayHeader.string(from: d).uppercased()).font(T.label).tracking(1.3).foregroundStyle(P.muted)
+                                .padding(.horizontal, 28).padding(.top, 14).padding(.bottom, 2)
+                        case .event(let e):
+                            EventRow(event: e, day: day).padding(.horizontal, 24).padding(.vertical, 6)
+                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        }
                     }
-                    .animation(.spring(response: 0.4, dampingFraction: 0.85), value: shown.map(\.id))
+                    .animation(.spring(response: 0.4, dampingFraction: 0.85), value: entries.map(\.id))
                     PartnerLine()
                 }
             }
@@ -98,9 +112,8 @@ struct HubView: View {
     }
 
     private var greeting: some View {
-        let h = istCalendar.component(.hour, from: app.now)
-        return VStack(alignment: .leading, spacing: 2) {
-            Text("\(h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"), \(app.profile?.firstName ?? "")").font(T.h1).foregroundStyle(P.ink)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(app.greeting).font(Fonts.display(25, 700, style: .title1)).foregroundStyle(P.ink).fixedSize(horizontal: false, vertical: true)
             Text(Fmt.dateGreeting.string(from: app.now) + (app.settings["venue"].map { " · \($0)" } ?? "")).font(T.body).foregroundStyle(P.muted)
         }
         .padding(.horizontal, 24).padding(.top, 4).padding(.bottom, 18)
@@ -203,37 +216,66 @@ private struct Hero: View {
     }
 }
 
-// MARK: Day chips
+// MARK: Day strip
 
-private struct DayChips: View {
-    let days: [Date]; let selected: Date?; let onSelect: (Date) -> Void
+/// "All" + each festival day, four visible at a time, glass arrows on both sides to slide through the rest.
+private struct DayStrip: View {
+    let days: [Date]; let withEvents: Set<Date>; let selected: Date?; let onSelect: (Date?) -> Void
+    @State private var anchor = 0
+    private var items: [Date?] { [nil] + days.map { Optional($0) } }
+    private func key(_ d: Date?) -> Int { d.map { Int($0.timeIntervalSince1970) } ?? -1 }
+
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(Array(days.enumerated()), id: \.element) { i, d in
-                        let sel = d == selected
-                        let monthStart = i == 0 || istCalendar.component(.month, from: days[i - 1]) != istCalendar.component(.month, from: d)
-                        Button { onSelect(d) } label: {
-                            VStack(spacing: 2) {
-                                Text(monthStart ? Fmt.monthShort.string(from: d).uppercased() : dayShort(d)).font(Fonts.body(10, 700, style: .caption2)).tracking(1.3).opacity(0.65)
-                                Text("\(istCalendar.component(.day, from: d))").font(Fonts.display(20, 600, style: .title3))
-                                Text(monthStart ? dayShort(d) : " ").font(Fonts.body(9, 700, style: .caption2)).tracking(1).opacity(0.55)
-                            }
-                            .foregroundStyle(sel ? P.bg : P.ink)
-                            .frame(width: 66).padding(.vertical, 12)
-                            .background(sel ? P.ink : P.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(sel ? .clear : P.line))
+        GeometryReader { geo in
+            let chipW = (geo.size.width - 48 - 88 - 24) / 4
+            ScrollViewReader { proxy in
+                HStack(spacing: 0) {
+                    arrow(false, enabled: anchor > 0) { move(-3, proxy) }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(items.enumerated()), id: \.offset) { _, d in chip(d, width: chipW).id(key(d)) }
                         }
-                        .buttonStyle(PressStyle()).id(d)
-                        .accessibilityLabel(Fmt.dateLong.string(from: d)).accessibilityAddTraits(sel ? .isSelected : [])
+                        .padding(.horizontal, 4)
                     }
+                    arrow(true, enabled: anchor + 4 < items.count) { move(3, proxy) }
                 }
                 .padding(.horizontal, 24)
             }
-            .onAppear { if let s = selected { proxy.scrollTo(s, anchor: .center) } }
-            .onChange(of: selected) { s in if let s { withAnimation { proxy.scrollTo(s, anchor: .center) } } }
         }
+        .frame(height: 86)
+    }
+
+    private func move(_ delta: Int, _ proxy: ScrollViewProxy) {
+        anchor = max(0, min(items.count - 1, anchor + delta)); Haptics.select()
+        withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(key(items[anchor]), anchor: .leading) }
+    }
+
+    private func chip(_ d: Date?, width: CGFloat) -> some View {
+        let sel = d == selected
+        return Button { onSelect(d) } label: {
+            VStack(spacing: 1) {
+                Text(d.map(dayShort) ?? "ALL").font(Fonts.body(9, 700, style: .caption2)).tracking(1.1).opacity(0.6)
+                if let d { Text("\(istCalendar.component(.day, from: d))").font(Fonts.poster(26, style: .title2)) }
+                else { Image(systemName: "rectangle.grid.1x2").font(.system(size: 18)).padding(.vertical, 5) }
+                Text(d.map { Fmt.monthShort.string(from: $0).uppercased() } ?? "DAYS").font(Fonts.body(9, 700, style: .caption2)).tracking(1.1).opacity(0.6)
+                Circle().fill(d.map { withEvents.contains($0) } == true ? P.accent : .clear).frame(width: 5, height: 5).padding(.top, 3)
+            }
+            .foregroundStyle(sel ? P.bg : P.ink)
+            .frame(width: width, height: 84)
+            .background(sel ? P.ink : P.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(sel ? .clear : P.line))
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityLabel(d.map { Fmt.dateLong.string(from: $0) } ?? "All days").accessibilityAddTraits(sel ? .isSelected : [])
+    }
+
+    private func arrow(_ right: Bool, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: right ? "chevron.right" : "chevron.left").font(.system(size: 14, weight: .bold)).foregroundStyle(P.ink)
+                .frame(width: 36, height: 36).glass(Circle(), tint: .white.opacity(0.35))
+        }
+        .buttonStyle(PressStyle()).opacity(enabled ? 1 : 0.35).disabled(!enabled)
+        .accessibilityLabel(right ? "Later days" : "Earlier days")
     }
 }
 
@@ -258,18 +300,6 @@ struct EventRow: View {
     var day: Date?
     var trailing = true
 
-    private var locationLabel: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "mappin.and.ellipse").font(.system(size: 12))
-            Text(event.location).lineLimit(1)
-        }
-    }
-    @ViewBuilder private var extraPills: some View {
-        if event.isMultiDay { Pill(text: "\(event.durationDays) DAYS", bg: P.surfaceAlt, fg: P.muted) }
-        if event.registered { Pill(text: "ENROLLED", bg: P.mint, fg: P.mintInk) }
-        else if event.access == "prereg" { Pill(text: "PRE-REG", bg: P.surfaceAlt, fg: P.muted) }
-    }
-
     var body: some View {
         let status = app.status(of: event)
         Card {
@@ -278,16 +308,14 @@ struct EventRow: View {
                     HStack(spacing: 14) {
                         IconBubble(symbol: event.track.symbol, size: 50, tint: status == .live ? P.mintInk : P.ink, bg: status == .live ? P.mint : P.surfaceAlt)
                         VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 8) {
-                                Text(day.map { event.timeLabel(on: $0) } ?? Fmt.dmTime.string(from: event.startsAt)).font(T.small).foregroundStyle(P.muted)
-                                StatusBadge(status: status, checkedIn: app.isCheckedIn(event))
+                            HStack(spacing: 6) {
+                                Text(day.map { event.timeLabel(on: $0) } ?? Fmt.time.string(from: event.startsAt)).font(T.small).foregroundStyle(P.muted)
+                                if status == .live { PulseDot(color: P.accent, size: 5); Text("LIVE").font(Fonts.body(10, 700, style: .caption2)).tracking(0.8).foregroundStyle(P.accent) }
+                                else if status == .done { Text("ENDED").font(Fonts.body(10, 700, style: .caption2)).tracking(0.8).foregroundStyle(P.muted) }
+                                if event.registered { Image(systemName: "ticket").font(.system(size: 12, weight: .semibold)).foregroundStyle(P.primary).accessibilityLabel("Registered") }
                             }
                             Text(event.title).font(T.title).foregroundStyle(P.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                            ViewThatFits(in: .horizontal) {
-                                HStack(spacing: 6) { locationLabel; extraPills }
-                                locationLabel
-                            }
-                            .font(T.small).foregroundStyle(P.muted)
+                            Text(event.location + (event.isMultiDay ? " · \(event.durationDays) days" : "")).font(T.small).foregroundStyle(P.muted).lineLimit(1)
                         }
                         Spacer(minLength: 0)
                     }
@@ -316,9 +344,9 @@ private struct CountUnit: View {
     var body: some View {
         VStack(spacing: 0) {
             Text(String(format: "%02d", value)).font(Fonts.poster(34, style: .title1)).foregroundStyle(.white)
-            Text(label).font(Fonts.body(9, 700, style: .caption2)).tracking(1.1).foregroundStyle(P.accent)
+            Text(label).font(Fonts.body(9, 700, style: .caption2)).tracking(1.1).foregroundStyle(P.cream)
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .glass(RoundedRectangle(cornerRadius: 16, style: .continuous), tint: .white.opacity(0.10))
     }
 }

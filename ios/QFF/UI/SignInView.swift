@@ -38,11 +38,11 @@ struct SignInView: View {
 
                     Spacer(minLength: 64)
                     VStack(alignment: .leading, spacing: 16) {
-                        (Text("QISKIT\n").foregroundColor(P.ink) + Text("FALL FEST").foregroundColor(P.primary) + Text(" ’26").foregroundColor(P.ink)).font(T.hero).tracking(0.5).lineSpacing(-4)
+                        (Text("QISKIT\n").foregroundColor(P.ink) + Text("FALL FEST").foregroundColor(P.primary)).font(T.hero).tracking(0.5).lineSpacing(-4)
                     }
                     .opacity(entered ? 1 : 0).offset(y: entered ? 0 : 30)
 
-                    Color.clear.frame(maxWidth: .infinity, minHeight: 36, maxHeight: .infinity)
+                    Color.clear.frame(maxWidth: .infinity, minHeight: 210, maxHeight: .infinity)
                         .overlay(alignment: .trailing) {
                             ZStack {
                                 Sun().frame(width: 170, height: 170).offset(x: 6)

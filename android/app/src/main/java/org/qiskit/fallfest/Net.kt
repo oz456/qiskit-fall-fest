@@ -22,10 +22,12 @@ class Api(private val base: String, private val onSkew: (Long) -> Unit = {}) {
             c.connectTimeout = 10_000; c.readTimeout = 15_000
             c.setRequestProperty("Accept", "application/json")
             if (token != null) c.setRequestProperty("Authorization", "Bearer $token")
-            if (body != null) {
+            // Body-less POST/PUT/PATCH are sent with an explicit empty JSON body: some stacks refuse (or mangle) a write without one.
+            val payload = body ?: if (method == "POST" || method == "PUT" || method == "PATCH") JSONObject() else null
+            if (payload != null) {
                 c.doOutput = true
                 c.setRequestProperty("Content-Type", "application/json")
-                c.outputStream.use { it.write(body.toString().toByteArray()) }
+                c.outputStream.use { it.write(payload.toString().toByteArray()) }
             }
             val http = c.responseCode
             c.getHeaderFieldDate("Date", 0L).takeIf { it > 0 }?.let { skewMs = it - System.currentTimeMillis(); onSkew(skewMs) }

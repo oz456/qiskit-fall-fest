@@ -173,11 +173,23 @@ struct QiskitMark: View {
 
 struct PartnerLine: View {
     var body: some View {
-        HStack(spacing: 8) {
-            QiskitMark(size: 18)
-            Text("In partnership with IBM").font(T.small).foregroundStyle(P.muted)
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                QiskitMark(size: 18)
+                Text("In partnership with IBM").font(T.small).foregroundStyle(P.muted)
+            }
+            Text("SRM UNIVERSITY AP · AMARAVATI").font(Fonts.body(10, 700, style: .caption2)).tracking(1.6).foregroundStyle(P.muted)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 28)
+    }
+}
+
+/// Frosted glass: blurs whatever is behind it, with a bright hairline edge.
+extension View {
+    func glass(_ shape: some Shape, tint: Color = .white.opacity(0.10)) -> some View {
+        self.background(.ultraThinMaterial, in: shape)
+            .background(tint, in: shape)
+            .overlay(shape.stroke(.white.opacity(0.45), lineWidth: 1))
     }
 }
 

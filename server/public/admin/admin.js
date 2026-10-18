@@ -84,6 +84,11 @@ function modal(title, body) {
   document.body.append(bg); return bg;
 }
 const field = (label, input) => h("div", { class: "field" }, h("label", {}, label), input);
+const eventPicker = (events, selected) => {
+  const boxes = events.map((e) => h("input", { type: "checkbox", value: e.id, checked: selected.has(e.id) }));
+  const view = h("div", { class: "picks" }, events.length ? events.map((e, i) => h("label", { class: "check pick" }, boxes[i], h("span", {}, h("b", {}, e.title), h("span", { class: "muted small" }, " · " + fmtRange(e.startsAt, e.endsAt))))) : h("div", { class: "muted" }, "No events yet."));
+  return { view, value: () => boxes.filter((b) => b.checked).map((b) => b.value) };
+};
 const confirmDo = (msg, fn) => { if (confirm(msg)) guard(fn)(); };
 
 // ---- pages ----
@@ -154,13 +159,15 @@ async function people(m) {
   async function load() {
     const list = await api("GET", "/users?q=" + encodeURIComponent(q.value)); clear(out);
     out.append(h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Status", ""].map((x) => h("th", {}, x))),
-      list.map((u) => h("tr", { class: "click", onclick: () => openUser(u) }, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, u.college || "")), h("td", {}, u.email), h("td", {}, u.passCode),
+      list.map((u) => h("tr", { class: "click", onclick: guard(() => openUser(u)) }, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, u.college || "")), h("td", {}, u.email), h("td", {}, u.passCode),
         h("td", {}, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), h("div", { class: "muted small", style: "margin-top:4px" }, [u.hasApp ? "Signed in" : "Not signed in", u.hasPhoto ? "Selfie ✓" : "No selfie"].join(" · "))),
         h("td", {}, "›")))));
     if (!list.length) out.append(h("p", { class: "muted" }, "No attendees found."));
   }
   await load();
-  function openUser(u) {
+  async function openUser(u) {
+    const events = await api("GET", "/events");
+    const picker = eventPicker(events, new Set(u.enrolledIds || []));
     const act = (label, cls, fn) => h("button", { class: "btn sm " + cls, onclick: fn }, label);
     const done = (msg) => { bg.remove(); toast(msg); load(); };
     const body = h("div", {},
@@ -168,7 +175,8 @@ async function people(m) {
         u.hasPhoto ? h("img", { class: "avatar", alt: "", src: `/admin/api/users/${u.id}/photo` }) : h("div", { class: "avatar none" }, u.name.split(/\s+/).slice(0, 2).map((x) => x[0]).join("").toUpperCase()),
         h("div", { class: "grow" }, h("h2", { style: "margin:0 0 4px" }, u.name), h("div", { class: "muted" }, u.email), h("div", { class: "muted" }, [u.passCode, u.college].filter(Boolean).join(" · ")),
           h("div", { style: "margin-top:10px" }, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), " ", h("span", { class: "pill" }, u.hasApp ? "SIGNED IN" : "NOT SIGNED IN"), " ", u.checkins ? h("span", { class: "pill" }, `${u.checkins} CHECK-IN${u.checkins > 1 ? "S" : ""}`) : null))),
-      h("div", { class: "card", style: "margin-top:20px;box-shadow:none" }, h("h3", {}, "Enrolled in"), (u.enrolled || []).length ? u.enrolled.map((t) => h("div", {}, t)) : h("div", { class: "muted" }, "Nothing yet. Enrol people from an event’s page.")),
+      h("div", { class: "card", style: "margin-top:20px;box-shadow:none" }, h("h3", {}, "Registered events"), h("p", { class: "muted small" }, "Tick the events this person has paid for or been approved for. They appear under My Pass in the app."), picker.view,
+        h("div", { class: "row", style: "margin-top:12px" }, h("button", { class: "btn sm", onclick: guard(async () => { await api("PUT", `/users/${u.id}/enrollments`, { eventIds: picker.value() }); done("Registrations saved"); }) }, "Save registrations"))),
       h("div", { class: "row" },
         act(u.status === "active" ? "Block" : "Unblock", "ghost", guard(async () => { await api("PATCH", "/users/" + u.id, { status: u.status === "active" ? "blocked" : "active" }); done("Updated"); })),
         act("Reset device", "ghost", () => confirmDo("Sign " + u.name + " out of their phone so they can log in on a new one?", async () => { await api("POST", `/users/${u.id}/reset-device`); done("Device reset"); })),
@@ -176,16 +184,34 @@ async function people(m) {
         act("Delete", "danger right", () => confirmDo("Delete " + u.name + " and all their data?", async () => { await api("DELETE", "/users/" + u.id); done("Deleted"); }))));
     const bg = modal("Attendee", body);
   }
-  function addUser() {
+  async function addUser() {
+    const events = await api("GET", "/events"); const picker = eventPicker(events, new Set());
     const n = h("input", { required: true, maxlength: 100 }), e = h("input", { type: "email", required: true }), c = h("input", { maxlength: 150 });
-    const bg = modal("Add attendee", h("form", { onsubmit: guard(async (ev) => { ev.preventDefault(); await api("POST", "/users", { email: e.value, name: n.value, college: c.value || null }); bg.remove(); toast("Added"); load(); }) },
-      field("Name", n), field("Email", e), field("College / organisation", c), h("div", { class: "row" }, h("button", { class: "btn" }, "Add"))));
+    const bg = modal("Add attendee", h("form", { onsubmit: guard(async (ev) => { ev.preventDefault(); await api("POST", "/users", { email: e.value, name: n.value, college: c.value || null, eventIds: picker.value() }); bg.remove(); toast("Added"); load(); }) },
+      field("Name", n), field("Email", e), field("College / organisation", c), field("Registered for", picker.view), h("div", { class: "row" }, h("button", { class: "btn" }, "Add"))));
   }
-  function importCsv() {
-    const ta = h("textarea", { placeholder: "email,name,college\nalex@example.org,Alex Morgan,SRM AP", rows: 8 });
+  async function importCsv() {
+    const events = await api("GET", "/events");
+    const q = (t) => '"' + String(t).replace(/"/g, '""') + '"';
+    const ta = h("textarea", { placeholder: "email,name,college\nalex@example.org,Alex Morgan,SRM University AP", rows: 7 });
     const file = h("input", { type: "file", accept: ".csv,text/csv", onchange: async () => { if (file.files[0]) ta.value = await file.files[0].text(); } });
-    const bg = modal("Import attendees", h("div", {}, h("p", { class: "muted" }, "CSV with columns email, name, college (header optional). Existing emails are skipped."), file, ta,
-      h("div", { class: "row" }, h("button", { class: "btn", onclick: guard(async () => { const r = await api("POST", "/users/import", { csv: ta.value }); bg.remove(); toast(`Added ${r.added}, skipped ${r.skipped}${r.invalid.length ? ", invalid " + r.invalid.length : ""}`); load(); }) }, "Import"))));
+    const template = () => {
+      const head = ["email", "name", "college", ...events.map((e) => q(e.title))].join(",");
+      const row = ["jane@example.org", "Jane Doe", "SRM University AP", ...events.map((_, i) => (i === 0 ? 1 : 0))].join(",");
+      const a = h("a", { href: URL.createObjectURL(new Blob([head + "\n" + row + "\n"], { type: "text/csv" })), download: "attendees-template.csv" }); a.click();
+    };
+    const guide = h("div", { class: "guide" },
+      h("b", {}, "How to format the CSV"),
+      h("p", {}, "The first row is a header. Columns, in this order: ", h("code", {}, "email"), ", ", h("code", {}, "name"), ", ", h("code", {}, "college"), events.length ? ", then one column per event:" : "."),
+      events.length ? h("ol", {}, events.map((e) => h("li", {}, h("code", {}, e.title), " ", h("span", { class: "muted small" }, fmtRange(e.startsAt, e.endsAt))))) : h("p", { class: "muted" }, "No events yet. Create events first if you want to mark registrations."),
+      events.length && h("p", {}, "Under each event put ", h("code", {}, "1"), " if the person is registered for it, ", h("code", {}, "0"), " (or leave it empty) if not. Each event column's header must be the event's exact title, so use the template button to get them right."),
+      h("p", { class: "muted small" }, "Existing emails are not duplicated, but a 1 still registers them. A 0 never removes a registration; untick it in the attendee’s panel instead."),
+      h("button", { type: "button", class: "btn ghost sm", onclick: template }, "Download template CSV"));
+    const bg = modal("Import attendees", h("div", {}, guide, field("CSV file", file), field("…or paste it here", ta),
+      h("div", { class: "row" }, h("button", { class: "btn", onclick: guard(async () => {
+        const r = await api("POST", "/users/import", { csv: ta.value }); bg.remove();
+        toast(`Added ${r.added}, skipped ${r.skipped}, registrations ${r.enrolled}` + (r.invalid.length ? `, invalid ${r.invalid.length}` : "") + (r.ignoredColumns.length ? `. Ignored columns: ${r.ignoredColumns.join(", ")}` : "")); load();
+      }) }, "Import"))));
   }
 }
 

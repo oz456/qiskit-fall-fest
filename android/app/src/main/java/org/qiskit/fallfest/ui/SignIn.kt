@@ -98,11 +98,11 @@ fun SignInScreen(app: AppState) {
             val a1 by animateFloatAsState(if (entered) 1f else 0f, stagger(1), label = "a1")
             Column(Modifier.alpha(a1).offset { IntOffset(0, ((1 - a1) * 40).dp.roundToPx()) }) {
                 Text(androidx.compose.ui.text.buildAnnotatedString {
-                    append("QISKIT\n"); pushStyle(androidx.compose.ui.text.SpanStyle(color = P.primary)); append("FALL FEST"); pop(); append(" ’26")
+                    append("QISKIT\n"); pushStyle(androidx.compose.ui.text.SpanStyle(color = P.primary)); append("FALL FEST"); pop()
                 }, style = T.hero, color = P.ink)
             }
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().heightIn(min = 36.dp)) {
-                if (maxHeight >= 230.dp) {
+            Box(Modifier.weight(1f).fillMaxWidth().heightIn(min = 210.dp)) { // always tall enough for the sun and orbits, even on short screens
+                run {
                     Sun(Modifier.size(170.dp).align(Alignment.CenterEnd).offset(x = 6.dp))
                     AtomOrb(Modifier.size(250.dp).align(Alignment.CenterEnd).offset(x = 46.dp), color = P.ink, electron = P.primary, speed = 14000, stroke = 1.3.dp)
                     Sparkle(22.dp, P.primary, Modifier.align(Alignment.TopStart).offset(x = 6.dp, y = 14.dp))

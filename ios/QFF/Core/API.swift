@@ -34,7 +34,8 @@ final class API {
         var req = URLRequest(url: URL(string: path, relativeTo: base)!.absoluteURL)
         req.httpMethod = method
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        if let body {
+        // Body-less POST/PUT/PATCH go out with an explicit empty JSON body (Android once had its empty PUT refused as a web form).
+        if let body = body ?? (["POST", "PUT", "PATCH"].contains(method) ? [:] : nil) {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
         }

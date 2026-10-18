@@ -29,6 +29,8 @@ final class AppState: ObservableObject {
     private var clock: Task<Void, Never>?
 
     var signedIn: Bool { profile != nil }
+    private let greetingSeed = Int.random(in: 0..<10_000)
+    var greeting: String { Greetings[greetingSeed % Greetings.count].replacingOccurrences(of: "{n}", with: profile?.firstName ?? "") }
     var unread: Bool { announcements.first.map { $0.id != seenAnnouncement } ?? false }
 
     init(preview: Bool = false) {
@@ -181,7 +183,8 @@ final class AppState: ObservableObject {
         guard !isPreview else { return }
         Task { [self] in
             do { _ = try await authedData(on ? "PUT" : "DELETE", "/v1/events/\(e.id)/saved") }
-            catch { patch(e.id) { $0.saved = !on }; message = "Couldn't update. Check your connection." }
+            catch let x as APIError { patch(e.id) { $0.saved = !on }; message = x.message } // the server answered: say what it said
+            catch { patch(e.id) { $0.saved = !on }; message = "Couldn't save. Check your connection." }
         }
     }
 

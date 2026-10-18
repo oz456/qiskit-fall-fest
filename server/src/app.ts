@@ -20,6 +20,12 @@ export async function buildApp(db: Db) {
     bodyLimit: 100_000,
   });
 
+  // Android labels a body-less PUT/POST as a web form. An EMPTY body in any other content type is harmless, so accept it (this was the
+  // root cause of "couldn't save"); a non-empty unknown type is still refused.
+  app.addContentTypeParser("*", { parseAs: "string" }, (_req, body, done) => {
+    if (!body) return done(null, {});
+    const err: Error & { statusCode?: number } = new Error("Unsupported media type"); err.statusCode = 415; done(err);
+  });
   // Selfie upload: raw JPEG bytes (validated in the route).
   app.addContentTypeParser("image/jpeg", { parseAs: "buffer", bodyLimit: 400_000 }, (_req, body, done) => done(null, body));
 

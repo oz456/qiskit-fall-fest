@@ -74,6 +74,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("dev.chrisbanes.haze:haze:1.6.10") // backdrop blur for the glass surfaces
     val camerax = "1.4.2"
     implementation("androidx.camera:camera-core:$camerax")
     implementation("androidx.camera:camera-camera2:$camerax")

@@ -69,3 +69,22 @@ data class Profile(val name: String, val email: String, val college: String?, va
 }
 
 fun dayShort(d: LocalDate) = d.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, Locale.ENGLISH).uppercase()
+
+/** Greeting lines for the Hub. One is picked per app launch; {n} is the attendee's first name. */
+val Greetings = listOf(
+    "Howdy, {n}!",
+    "Ah, {n}. Right on time.",
+    "{n}! Superposition suits you.",
+    "Well, well, {n}.",
+    "Look who collapsed into our app, {n}.",
+    "Hey {n}, the qubits asked about you.",
+    "Welcome back, {n}. Entangled yet?",
+    "{n}, you made it. Probably.",
+    "Greetings, {n}. Zero, one, or both?",
+    "Hello {n}. Observing you now. Sorry.",
+    "Oh good, {n} is here. We can begin.",
+    "{n}! Quantum tunnelling worked.",
+    "Psst, {n}. The schedule's below.",
+    "Hi {n}. No cats were harmed, promise.",
+    "Back again, {n}? We're flattered.",
+)

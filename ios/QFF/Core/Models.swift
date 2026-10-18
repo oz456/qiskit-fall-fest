@@ -17,6 +17,7 @@ enum Fmt {
     static let dmTime = make("d MMM, h:mm a")
     static let dateLong = make("EEEE, d MMMM yyyy")
     static let dateGreeting = make("EEEE, d MMMM")
+    static let dayHeader = make("EEE d MMM")
     static let weekdayTime = make("EEE h:mm a")
     static let weekdayShort = make("EEE")
     static let monthShort = make("MMM")
@@ -135,3 +136,18 @@ struct MessageResponse: Decodable { let message: String? }
 struct TicketCreated: Decodable { let id: String; let code: String }
 
 func dayShort(_ d: Date) -> String { Fmt.weekdayShort.string(from: d).uppercased() }
+
+/// Greeting lines for the Hub. One is picked per app launch; {n} is the attendee's first name.
+let Greetings = [
+    "Howdy, {n}!", "Ah, {n}. Right on time.", "{n}! Superposition suits you.", "Well, well, {n}.",
+    "Look who collapsed into our app, {n}.", "Hey {n}, the qubits asked about you.", "Welcome back, {n}. Entangled yet?",
+    "{n}, you made it. Probably.", "Greetings, {n}. Zero, one, or both?", "Hello {n}. Observing you now. Sorry.",
+    "Oh good, {n} is here. We can begin.", "{n}! Quantum tunnelling worked.", "Psst, {n}. The schedule's below.",
+    "Hi {n}. No cats were harmed, promise.", "Back again, {n}? We're flattered.",
+]
+
+/// "2026-10-26" (an admin setting) as the start of that day in the event timezone.
+func parseDay(_ s: String?) -> Date? {
+    guard let s, s.count == 10, let d = istCalendar.date(from: DateComponents(timeZone: IST, year: Int(s.prefix(4)), month: Int(s.dropFirst(5).prefix(2)), day: Int(s.suffix(2)))) else { return nil }
+    return d
+}

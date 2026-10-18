@@ -39,6 +39,8 @@ class AppState(context: Context) {
     private var seenAnnouncement by mutableStateOf(prefs.getString("seen_ann", null))
 
     val signedIn: Boolean get() = profile != null
+    private val greetingSeed = kotlin.random.Random.nextInt(0, 10_000)
+    val greeting: String get() = Greetings[greetingSeed % Greetings.size].replace("{n}", profile?.firstName.orEmpty())
     val unread: Boolean get() = announcements.firstOrNull()?.let { it.id != seenAnnouncement } == true
     val savedIds: Set<String> get() = events.filter { it.saved }.map { it.id }.toSet()
     fun now(): ZonedDateTime = Instant.ofEpochMilli(nowMs).atZone(IST)
@@ -151,7 +153,11 @@ class AppState(context: Context) {
 
     fun toggleSaved(e: Event) {
         val on = !e.saved; patch(e.id) { it.withUser(saved = on) }
-        scope.launch { runCatching { authed(if (on) "PUT" else "DELETE", "/v1/events/${e.id}/saved") }.onFailure { patch(e.id) { it.withUser(saved = !on) }; message = "Couldn't update. Check your connection." } }
+        scope.launch {
+            try { authed(if (on) "PUT" else "DELETE", "/v1/events/${e.id}/saved") }
+            catch (x: ApiException) { patch(e.id) { it.withUser(saved = !on) }; message = x.message } // the server answered: say what it said
+            catch (x: Exception) { patch(e.id) { it.withUser(saved = !on) }; android.util.Log.w("QFF", "save failed", x); message = "Couldn't save. Check your connection." }
+        }
     }
 
     /** One-time selfie upload (JPEG). Throws ApiException with a readable message on failure. */

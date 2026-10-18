@@ -38,6 +38,17 @@ async function createUser(q: Queryable, email: string, name: string, college: st
   throw new Error("could not allocate pass code");
 }
 
+/** Enrolment = the 'registered' rows of user_events. `replace` makes the set exactly `eventIds`; `add` only adds. Unknown ids are ignored. */
+async function setEnrollments(q: Queryable, userId: string, eventIds: string[], mode: "replace" | "add"): Promise<number> {
+  const valid = (await q.query("SELECT id FROM events WHERE id = ANY($1::uuid[])", [eventIds])).map((e) => e.id as string);
+  if (mode === "replace") await q.query("DELETE FROM user_events WHERE user_id=$1 AND kind='registered' AND NOT (event_id = ANY($2::uuid[]))", [userId, valid]);
+  let added = 0;
+  for (const id of valid) added += (await q.query("INSERT INTO user_events (user_id,event_id,kind) VALUES ($1,$2,'registered') ON CONFLICT DO NOTHING RETURNING 1", [userId, id])).length;
+  return added;
+}
+const EventIds = z.array(z.string().uuid()).max(200);
+const TRUTHY = new Set(["1", "y", "yes", "true", "x", "✓", "registered"]);
+
 export function adminRoutes(app: FastifyInstance, db: Db) {
   const { guard, common } = staffAuth(app, db, { name: "admin", user: config.adminUser, password: config.adminPassword, hash: config.adminPasswordHash, ttlSec: 8 * 3600 });
 
@@ -119,9 +130,10 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,
         EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL) AS has_app, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id) AS has_photo,
         (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins,
-        (SELECT coalesce(json_agg(e.title ORDER BY e.starts_at), '[]'::json) FROM user_events r JOIN events e ON e.id=r.event_id WHERE r.user_id=u.id AND r.kind='registered') AS enrolled
+        (SELECT coalesce(json_agg(e.title ORDER BY e.starts_at), '[]'::json) FROM user_events r JOIN events e ON e.id=r.event_id WHERE r.user_id=u.id AND r.kind='registered') AS enrolled,
+        (SELECT coalesce(json_agg(r.event_id), '[]'::json) FROM user_events r WHERE r.user_id=u.id AND r.kind='registered') AS enrolled_ids
         FROM users u WHERE lower(u.email) LIKE $1 OR lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1 ORDER BY u.created_at DESC LIMIT 500`, [like]);
-      return rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins, enrolled: u.enrolled }));
+      return rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins, enrolled: u.enrolled, enrolledIds: u.enrolled_ids }));
     });
     api.get("/admin/api/users/:id/photo", async (req, reply) => {
       const { id } = Id.parse(req.params);
@@ -136,23 +148,47 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       await audit(db, req, "user.photo_reset", "user", id); return { ok: true };
     });
     api.post("/admin/api/users", async (req, reply) => {
-      const b = UserInput.parse(req.body);
+      const b = UserInput.extend({ eventIds: EventIds.default([]) }).parse(req.body);
       const id = await createUser(db, b.email, b.name, b.college);
       if (!id) return reply.code(409).send({ error: "exists", message: "That email is already registered." });
+      if (b.eventIds.length) await setEnrollments(db, id, b.eventIds, "add");
       await audit(db, req, "user.create", "user", id); return reply.code(201).send({ id });
     });
+    // Replace which events this attendee is registered for (the checkboxes in the attendee panel).
+    api.put("/admin/api/users/:id/enrollments", async (req, reply) => {
+      const { id } = Id.parse(req.params); const b = z.object({ eventIds: EventIds }).parse(req.body);
+      const [u] = await db.query("SELECT 1 FROM users WHERE id=$1", [id]);
+      if (!u) return reply.code(404).send({ error: "not_found" });
+      await setEnrollments(db, id, b.eventIds, "replace");
+      await audit(db, req, "user.enrollments", "user", id, { count: b.eventIds.length }); return { ok: true };
+    });
+    // CSV columns: email, name, college, then optionally ONE COLUMN PER EVENT (header = the event's exact title, cell 1/yes = registered).
     api.post("/admin/api/users/import", { bodyLimit: 1_000_000 }, async (req) => {
       const { csv } = z.object({ csv: z.string().max(900_000) }).parse(req.body);
-      const rows = parseCsv(csv); const out = { added: 0, skipped: 0, invalid: [] as string[] };
+      const rows = parseCsv(csv); const out = { added: 0, skipped: 0, enrolled: 0, invalid: [] as string[], eventColumns: [] as string[], ignoredColumns: [] as string[] };
       const head = rows[0]?.map((h) => h.trim().toLowerCase()) ?? [];
       const hasHead = head.includes("email");
       const col = (n: string, d: number) => (hasHead ? head.indexOf(n) : d);
+      // header cell -> event id (exact title, case-insensitive)
+      const evCols: { i: number; id: string }[] = [];
+      if (hasHead) {
+        const events = await db.query("SELECT id,title FROM events");
+        const byTitle = new Map(events.map((e) => [String(e.title).trim().toLowerCase(), e.id as string]));
+        head.forEach((h, i) => {
+          if (["email", "name", "college", ""].includes(h)) return;
+          const id = byTitle.get(h);
+          if (id) { evCols.push({ i, id }); out.eventColumns.push(rows[0]![i]!.trim()); } else out.ignoredColumns.push(rows[0]![i]!.trim());
+        });
+      }
       for (const r of rows.slice(hasHead ? 1 : 0).slice(0, 5000)) {
         const parsed = UserInput.safeParse({ email: r[col("email", 0)] ?? "", name: r[col("name", 1)] ?? "", college: (r[col("college", 2)] ?? "").trim() || null });
         if (!parsed.success) { out.invalid.push(String(r[col("email", 0)] ?? "(blank)").slice(0, 80)); continue; }
-        (await createUser(db, parsed.data.email, parsed.data.name, parsed.data.college)) ? out.added++ : out.skipped++;
+        let uid = await createUser(db, parsed.data.email, parsed.data.name, parsed.data.college);
+        if (uid) out.added++; else { out.skipped++; uid = (await db.query("SELECT id FROM users WHERE lower(email)=$1", [parsed.data.email]))[0]?.id ?? null; }
+        const want = evCols.filter((c) => TRUTHY.has((r[c.i] ?? "").trim().toLowerCase())).map((c) => c.id);
+        if (uid && want.length) out.enrolled += await setEnrollments(db, uid, want, "add"); // 1 adds a registration; 0/blank never removes one
       }
-      await audit(db, req, "user.import", "user", undefined, { added: out.added, skipped: out.skipped });
+      await audit(db, req, "user.import", "user", undefined, { added: out.added, skipped: out.skipped, enrolled: out.enrolled });
       return out;
     });
     api.patch("/admin/api/users/:id", async (req) => {

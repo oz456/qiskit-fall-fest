@@ -20,6 +20,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -38,6 +43,7 @@ private enum class Tab(val label: String, val off: ImageVector, val on: ImageVec
 @Composable
 fun App(app: AppState) {
     var tab by remember { mutableStateOf(Tab.Hub) }
+    val glass = remember { HazeState() }
     var eventId by remember { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf<SheetKind>(SheetKind.None) }
     var notifs by remember { mutableStateOf(false) }
@@ -53,7 +59,7 @@ fun App(app: AppState) {
             else Box(Modifier.fillMaxSize()) {
                 BackHandler(tab != Tab.Hub) { tab = Tab.Hub }
                 AnimatedContent(
-                    tab, label = "tabs",
+                    tab, label = "tabs", modifier = Modifier.hazeSource(glass),
                     transitionSpec = {
                         val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
                         (slideInHorizontally(tween(380, easing = FastOutSlowInEasing)) { it / 6 * dir } + fadeIn(tween(300))) togetherWith
@@ -66,7 +72,7 @@ fun App(app: AppState) {
                         Tab.Support -> SupportScreen(app) { sheet = it }
                     }
                 }
-                BottomBar(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
+                BottomBar(tab, glass, Modifier.align(Alignment.BottomCenter)) { tab = it }
             }
         }
     }
@@ -79,13 +85,13 @@ fun App(app: AppState) {
 }
 
 @Composable
-private fun BottomBar(selected: Tab, modifier: Modifier, onSelect: (Tab) -> Unit) {
+private fun BottomBar(selected: Tab, glass: HazeState, modifier: Modifier, onSelect: (Tab) -> Unit) {
     val hf = LocalHapticFeedback.current
     val shape = RoundedCornerShape(32.dp)
     Row(
         modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 14.dp).fillMaxWidth()
             .shadow(18.dp, shape, ambientColor = Color(0x33000000), spotColor = Color(0x33000000))
-            .clip(shape).background(P.surface).border(1.dp, P.line, shape).padding(8.dp),
+            .clip(shape).hazeEffect(glass, HazeStyle(backgroundColor = P.bg, tint = HazeTint(P.surface.copy(alpha = .62f)), blurRadius = 24.dp)).border(1.dp, Color.White.copy(alpha = .7f), shape).padding(8.dp),
     ) {
         Tab.entries.forEach { t ->
             val sel = t == selected

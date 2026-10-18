@@ -126,7 +126,7 @@ export function appRoutes(app: FastifyInstance, db: Db) {
         SELECT e.*,
           (SELECT count(*)::int FROM user_events r WHERE r.event_id=e.id AND r.kind='registered') AS registered_count,
           EXISTS (SELECT 1 FROM user_events x WHERE x.event_id=e.id AND x.user_id=$1 AND x.kind='saved') AS saved,
-          EXISTS (SELECT 1 FROM user_events x WHERE x.event_id=e.id AND x.user_id=$1 AND x.kind='registered') AS registered
+          (EXISTS (SELECT 1 FROM user_events x WHERE x.event_id=e.id AND x.user_id=$1 AND x.kind='registered') OR EXISTS (SELECT 1 FROM checkins c WHERE c.user_id=$1 AND c.scope = 'event:' || e.id::text)) AS registered
         FROM events e WHERE e.published ORDER BY e.starts_at, e.title`, [req.uid]);
       const faqs = await db.query("SELECT question, answer FROM faqs ORDER BY position, question");
       const settings = Object.fromEntries((await db.query("SELECT key, value FROM settings")).map((r) => [r.key, r.value]));

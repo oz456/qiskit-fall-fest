@@ -29,7 +29,7 @@ struct EventSheet: View {
                     if !e.description.isEmpty { Text(e.description).font(T.body).foregroundStyle(P.muted) }
                     accessCard(e)
                     HStack(spacing: 10) {
-                        PrimaryButton(title: e.saved ? "SAVED TO PASS" : "ADD TO MY PASS", systemImage: e.saved ? "checkmark" : "plus") { app.toggleSaved(e) }
+                        PrimaryButton(title: e.saved ? "SAVED" : "SAVE IT", systemImage: e.saved ? "checkmark" : "plus") { app.toggleSaved(e) }
                         if let ics {
                             ShareLink(item: ics, subject: Text(e.title), message: Text("Add to your calendar")) {
                                 Image(systemName: "calendar.badge.plus").font(.system(size: 20)).foregroundStyle(P.ink)
