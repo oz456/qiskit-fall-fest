@@ -1,6 +1,9 @@
 import { buildApp } from "./app.ts";
-import { config } from "./config.ts";
+import { config, isProd } from "./config.ts";
 import { migrate, openDb } from "./db.ts";
+
+// Only the web server needs the photo bucket (the backup job shares this config and must not).
+if (isProd && !config.photoBucket) { console.error("Missing required production env var: PHOTO_BUCKET"); process.exit(1); }
 
 const db = await openDb();
 await migrate(db);

@@ -56,6 +56,11 @@ jobs:
           if gcloud run jobs describe qff-backup --project "$PROJECT" --region "$REGION" >/dev/null 2>&1; then
             gcloud run jobs update qff-backup --project "$PROJECT" --region "$REGION" --image "$IMAGE:$GITHUB_SHA" --quiet
           fi
+      - name: Verify the backup job still runs on this image
+        run: |
+          if gcloud run jobs describe qff-backup --project "$PROJECT" --region "$REGION" >/dev/null 2>&1; then
+            gcloud run jobs execute qff-backup --project "$PROJECT" --region "$REGION" --wait
+          fi
       - name: Smoke test
         run: |
           URL=$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format='value(status.url)')
