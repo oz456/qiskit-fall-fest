@@ -72,7 +72,9 @@ fun AtomOrb(
             rotate(rot, c) {
                 drawOval(color.copy(alpha = 0.55f), Offset(c.x - rx, c.y - ry), Size(rx * 2, ry * 2), style = Stroke(sw))
                 val ang = Math.toRadians((a * (if (i == 1) -1.0 else 1.0) + i * 120.0))
-                drawCircle(electron, sw * 3.2f, Offset(c.x + rx * Math.cos(ang).toFloat(), c.y + ry * Math.sin(ang).toFloat()))
+                val ep = Offset(c.x + rx * Math.cos(ang).toFloat(), c.y + ry * Math.sin(ang).toFloat())
+                drawCircle(electron.copy(alpha = 0.28f), sw * 7f, ep) // soft glow so the moving ions read at a glance
+                drawCircle(electron, sw * 3.6f, ep)
             }
         }
         drawCircle(color, sw * 4.4f, c)
@@ -95,12 +97,6 @@ fun Logo(modifier: Modifier = Modifier, color: Color = P.ink) {
             Text("Qiskit Fall Fest 2026", style = T.small.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, fontSize = 12.sp), color = color)
         }
     }
-}
-
-/** The orange sun from the poster, optionally with the atom orbits drawn over it. */
-@Composable
-fun Sun(modifier: Modifier = Modifier, color: Color = P.accent) {
-    Canvas(modifier) { drawCircle(color, radius = size.minDimension / 2) }
 }
 
 @Composable

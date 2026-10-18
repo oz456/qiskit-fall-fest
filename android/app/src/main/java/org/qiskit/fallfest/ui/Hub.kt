@@ -145,8 +145,8 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
     val glass = remember { HazeState() }
     Box(Modifier.padding(horizontal = 24.dp).fillMaxWidth().heightIn(min = 226.dp).clip(shape).pressable(shape, true) { onOpen(target) }) {
       Box(Modifier.matchParentSize().hazeSource(glass).background(Brush.linearGradient(listOf(P.hero1, P.hero2)))) {
-        Sun(Modifier.size(100.dp).align(Alignment.TopEnd).offset(x = 36.dp, y = (-34).dp))
-        AtomOrb(Modifier.size(170.dp).align(Alignment.TopEnd).offset(x = 66.dp, y = (-58).dp).alpha(.5f), color = Color(0xFFF2E7D7), electron = Color(0xFFF2E7D7), speed = 12000)
+        // the atom runs off the card edge: partly visible, ions orbiting
+        AtomOrb(Modifier.size(300.dp).align(Alignment.CenterEnd).offset(x = 128.dp).alpha(.75f), color = Color(0xFFF2E7D7), electron = P.accent, speed = 9000)
       }
         Column(Modifier.padding(horizontal = 26.dp, vertical = 24.dp).fillMaxWidth().heightIn(min = 178.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Column {

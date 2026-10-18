@@ -103,8 +103,7 @@ fun SignInScreen(app: AppState) {
             }
             Box(Modifier.weight(1f).fillMaxWidth().heightIn(min = 210.dp)) { // always tall enough for the sun and orbits, even on short screens
                 run {
-                    Sun(Modifier.size(170.dp).align(Alignment.CenterEnd).offset(x = 6.dp))
-                    AtomOrb(Modifier.size(250.dp).align(Alignment.CenterEnd).offset(x = 46.dp), color = P.ink, electron = P.primary, speed = 14000, stroke = 1.3.dp)
+                    AtomOrb(Modifier.size(380.dp).align(Alignment.CenterEnd).offset(x = 150.dp), color = P.ink, electron = P.accent, speed = 8000, stroke = 1.4.dp) // runs off the screen edge; ions visibly orbiting
                     Sparkle(22.dp, P.primary, Modifier.align(Alignment.TopStart).offset(x = 6.dp, y = 14.dp))
                     Sparkle(13.dp, P.accent, Modifier.align(Alignment.CenterStart).offset(x = 70.dp, y = 30.dp))
                 }

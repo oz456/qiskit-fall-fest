@@ -176,8 +176,8 @@ private struct Hero: View {
         } label: {
             ZStack(alignment: .leading) {
                 LinearGradient(colors: [P.hero1, P.hero2], startPoint: .topLeading, endPoint: .bottomTrailing)
-                Sun().frame(width: 100, height: 100).offset(x: 36, y: -34).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                AtomOrb(color: P.cream, electron: P.cream, period: 12).frame(width: 170, height: 170).opacity(0.5).offset(x: 66, y: -58).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                // the atom runs off the card edge: partly visible, ions orbiting
+                AtomOrb(color: P.cream, electron: P.accent, period: 9).frame(width: 300, height: 300).opacity(0.75).offset(x: 128).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                 VStack(alignment: .leading, spacing: 0) {
                     Group {
                         if let l = live { HStack(spacing: 6) { PulseDot(color: P.accent); Text("LIVE NOW · \(l.location.uppercased())").lineLimit(1) } }

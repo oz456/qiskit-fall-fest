@@ -72,8 +72,7 @@ private struct TiltPass: View {
         let p = app.profile
         ZStack(alignment: .topTrailing) {
             LinearGradient(colors: [P.hero1, P.hero2], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Sun().frame(width: 150, height: 150).offset(x: 62, y: -52)
-            AtomOrb(color: P.cream, electron: P.cream, period: 16).frame(width: 210, height: 210).opacity(0.5).offset(x: 82, y: -66)
+            AtomOrb(color: P.cream, electron: P.accent, period: 12).frame(width: 300, height: 300).opacity(0.75).offset(x: 128).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             VStack(alignment: .leading, spacing: 22) {
                 HStack {
                     Label("Secure Pass", systemImage: "checkmark.shield").font(T.bodyM).foregroundStyle(.white.opacity(0.8))

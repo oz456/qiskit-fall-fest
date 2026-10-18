@@ -150,7 +150,9 @@ struct AtomOrb: View {
             let angle: Double = turn * direction + Double(i) * 2.0944
             let ex: CGFloat = rx * CGFloat(cos(angle))
             let ey: CGFloat = ry * CGFloat(sin(angle))
-            let r: CGFloat = lineWidth * 3.2
+            let halo: CGFloat = lineWidth * 7
+            g.fill(Path(ellipseIn: CGRect(x: ex - halo, y: ey - halo, width: halo * 2, height: halo * 2)), with: GraphicsContext.Shading.color(electron.opacity(0.28))) // soft glow so the moving ions read at a glance
+            let r: CGFloat = lineWidth * 3.6
             let dot = Path(ellipseIn: CGRect(x: ex - r, y: ey - r, width: r * 2, height: r * 2))
             g.fill(dot, with: GraphicsContext.Shading.color(electron))
         }
@@ -207,12 +209,6 @@ struct Logo: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("IBM Quantum, Qiskit Fall Fest 2026")
     }
-}
-
-/// The orange sun from the poster.
-struct Sun: View {
-    var color: Color = P.sun
-    var body: some View { Circle().fill(color).accessibilityHidden(true) }
 }
 
 /// Four-point sparkle, the poster's little accent mark.

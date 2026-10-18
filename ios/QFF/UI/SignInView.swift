@@ -44,10 +44,8 @@ struct SignInView: View {
 
                     Color.clear.frame(maxWidth: .infinity, minHeight: 210, maxHeight: .infinity)
                         .overlay(alignment: .trailing) {
-                            ZStack {
-                                Sun().frame(width: 170, height: 170).offset(x: 6)
-                                AtomOrb(color: P.ink, electron: P.primary, lineWidth: 1.3, period: 14).frame(width: 250, height: 250).offset(x: 46)
-                            }.allowsHitTesting(false)
+                            // runs off the screen edge; ions visibly orbiting
+                            AtomOrb(color: P.ink, electron: P.accent, lineWidth: 1.4, period: 8).frame(width: 380, height: 380).offset(x: 150).allowsHitTesting(false)
                         }
                         .overlay(alignment: .topLeading) { Sparkle(size: 22).padding(.top, 14).padding(.leading, 6) }
                     form
