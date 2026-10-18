@@ -63,7 +63,7 @@ struct MainView: View {
         TabView(selection: $router.tab) {
             HubView().tabItem { Label("Hub", systemImage: "house") }.tag(AppTab.hub)
             PassView().tabItem { Label("My Pass", systemImage: "ticket") }.tag(AppTab.pass)
-            SupportView().tabItem { Label("Support", systemImage: "headphones") }.tag(AppTab.support)
+            SupportView().tabItem { Label("Support", systemImage: "headphones") }.badge(app.newReplyCount).tag(AppTab.support)
         }
         .onChange(of: router.tab) { _ in Haptics.select() }
         .sheet(item: $router.sheet) { s in

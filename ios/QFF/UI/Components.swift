@@ -237,9 +237,9 @@ struct PosterTitle: View {
     let first: String
     let second: String
     var body: some View {
-        VStack(alignment: .leading, spacing: -2) {
-            Text(first).foregroundStyle(P.ink)
-            Text(second).foregroundStyle(P.primary)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(first).foregroundStyle(P.ink).frame(height: 46, alignment: .leading)
+            Text(second).foregroundStyle(P.primary).frame(height: 46, alignment: .leading)
         }
         .font(T.poster).tracking(0.4)
     }

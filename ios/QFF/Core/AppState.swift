@@ -16,6 +16,8 @@ final class AppState: ObservableObject {
     @Published var message: String?
     @Published var now = Date()
     @Published var seenAnnouncement: String?
+    /// Support replies: when the attendee last looked at each ticket (timestamp of its last message). Drives the badge on the Support tab.
+    @Published var seenTickets: [String: Double] = (UserDefaults.standard.dictionary(forKey: "seen_tickets") as? [String: Double]) ?? [:]
     /// First sign-in: no selfie on file yet. Door staff compare faces, so we ask once.
     @Published var needsSelfie = UserDefaults.standard.bool(forKey: "needs_selfie")
 
@@ -29,6 +31,12 @@ final class AppState: ObservableObject {
     private var clock: Task<Void, Never>?
 
     var signedIn: Bool { profile != nil }
+    func hasNewReply(_ t: Ticket) -> Bool { t.messages.last.map { $0.fromAdmin && $0.at.timeIntervalSince1970 > (seenTickets[t.id] ?? 0) } ?? false }
+    var newReplyCount: Int { tickets.filter(hasNewReply).count }
+    func markTicketSeen(_ id: String) {
+        guard let last = tickets.first(where: { $0.id == id })?.messages.last?.at.timeIntervalSince1970, seenTickets[id] != last else { return }
+        seenTickets[id] = last; defaults.set(seenTickets, forKey: "seen_tickets")
+    }
     private let greetingSeed = Int.random(in: 0..<10_000)
     var greeting: String { Greetings[greetingSeed % Greetings.count].replacingOccurrences(of: "{n}", with: profile?.firstName ?? "") }
     var unread: Bool { announcements.first.map { $0.id != seenAnnouncement } ?? false }
@@ -98,7 +106,8 @@ final class AppState: ObservableObject {
     private func wipe() {
         accessToken = nil; passSecret = nil
         keychain.wipe()
-        for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie"] { defaults.removeObject(forKey: k) }
+        for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "seen_tickets"] { defaults.removeObject(forKey: k) }
+        seenTickets = [:]
         needsSelfie = false
         profile = nil; events = []; announcements = []; tickets = []; checkins = [:]; faqs = []; settings = [:]
     }

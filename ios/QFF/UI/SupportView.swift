@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SupportView: View {
     @EnvironmentObject var app: AppState
@@ -50,7 +51,7 @@ struct SupportView: View {
                 if !app.tickets.isEmpty {
                     SectionLabel(text: "YOUR TICKETS").padding(.horizontal, 24).padding(.top, 30).padding(.bottom, 8)
                     ForEach(app.tickets) { t in
-                        let replied = t.messages.last?.fromAdmin == true
+                        let replied = app.hasNewReply(t)
                         Button { router.sheet = .thread(t.id); Haptics.tap() } label: {
                             Card(radius: 20) {
                                 VStack(alignment: .leading, spacing: 6) {
@@ -76,6 +77,8 @@ struct SupportView: View {
         }
         .background(Backdrop())
         .refreshable { await app.refresh() }
+        // Fresh replies without restarting the app: refresh on entry and every 30 s while this tab is open (no always-on socket needed).
+        .task { while !Task.isCancelled { await app.refresh(); try? await Task.sleep(nanoseconds: 30_000_000_000) } }
     }
 
     private func option(_ symbol: String, _ title: String, _ sub: String, _ action: @escaping () -> Void) -> some View {
@@ -212,17 +215,22 @@ struct ThreadSheet: View {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(t.code).font(T.h1).foregroundStyle(P.ink)
                     Text("\(t.kind) · \(t.topic) · \(t.status.replacingOccurrences(of: "_", with: " "))").font(T.small).foregroundStyle(P.muted)
-                    VStack(spacing: 8) {
+                    // WhatsApp-style: you on the right (maroon), the team on the left (paper); each row spans the full width.
+                    VStack(spacing: 6) {
                         ForEach(t.messages) { m in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(m.body).font(T.body).foregroundStyle(m.fromAdmin ? P.mintInk : P.ink)
-                                Text((m.fromAdmin ? "Fall Fest team · " : "") + Fmt.stamp.string(from: m.at)).font(Fonts.body(11, 400, style: .caption2)).foregroundStyle(P.muted)
+                            let mine = !m.fromAdmin
+                            HStack(spacing: 0) {
+                                if mine { Spacer(minLength: 48) }
+                                VStack(alignment: .leading, spacing: 3) {
+                                    if !mine { Text("FALL FEST TEAM").font(Fonts.body(10, 700, style: .caption2)).tracking(0.8).foregroundStyle(P.primary) }
+                                    Text(m.body).font(T.body).foregroundStyle(mine ? P.onPrimary : P.ink).fixedSize(horizontal: false, vertical: true)
+                                    Text(Fmt.stamp.string(from: m.at)).font(Fonts.body(11, 400, style: .caption2)).foregroundStyle(mine ? P.onPrimary.opacity(0.7) : P.muted).frame(maxWidth: .infinity, alignment: .trailing)
+                                }
+                                .padding(.horizontal, 14).padding(.vertical, 10)
+                                .background(mine ? P.primary : P.surface, in: BubbleShape(mine: mine))
+                                .overlay { if !mine { BubbleShape(mine: false).stroke(P.line) } }
+                                if !mine { Spacer(minLength: 48) }
                             }
-                            .padding(14)
-                            .background(m.fromAdmin ? P.mint : P.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(P.line))
-                            .frame(maxWidth: 300, alignment: m.fromAdmin ? .leading : .trailing)
-                            .frame(maxWidth: .infinity, alignment: m.fromAdmin ? .leading : .trailing)
                         }
                     }
                     TextEditor(text: $text).font(T.body).foregroundStyle(P.ink).scrollContentBackground(.hidden).frame(minHeight: 90)
@@ -232,6 +240,8 @@ struct ThreadSheet: View {
                 .padding(24)
             }
             .scrollDismissesKeyboard(.interactively).background(P.bg.ignoresSafeArea())
+            .onAppear { app.markTicketSeen(id) }                      // opening (or receiving into) the thread clears the badge
+            .onChange(of: t.messages.count) { _ in app.markTicketSeen(id) }
         }
     }
 }
@@ -261,5 +271,14 @@ struct FaqSheet: View {
             .padding(24)
         }
         .background(P.bg.ignoresSafeArea())
+    }
+}
+
+/// Chat bubble: three rounded corners and one tight corner on the sender's side (iOS 16-safe; no UnevenRoundedRectangle).
+struct BubbleShape: Shape {
+    let mine: Bool
+    func path(in rect: CGRect) -> Path {
+        let corners: UIRectCorner = mine ? [.topLeft, .topRight, .bottomLeft] : [.topLeft, .topRight, .bottomRight]
+        return Path(UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: 18, height: 18)).cgPath)
     }
 }

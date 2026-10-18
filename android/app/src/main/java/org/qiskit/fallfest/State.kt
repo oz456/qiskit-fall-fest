@@ -37,6 +37,16 @@ class AppState(context: Context) {
     var message by mutableStateOf<String?>(null)
     var nowMs by mutableLongStateOf(System.currentTimeMillis())
     private var seenAnnouncement by mutableStateOf(prefs.getString("seen_ann", null))
+    // Support replies: when the attendee last looked at each ticket (epoch millis of its last message). Drives the red dot on the Support tab.
+    private var seenTickets by mutableStateOf(runCatching { JSONObject(prefs.getString("seen_tickets", "{}")!!).let { o -> o.keys().asSequence().associateWith { o.getLong(it) } } }.getOrDefault(emptyMap()))
+    fun hasNewReply(t: Ticket): Boolean = t.messages.lastOrNull()?.let { it.fromAdmin && it.at.toEpochMilli() > (seenTickets[t.id] ?: 0L) } == true
+    val newReplies: Boolean get() = tickets.any { hasNewReply(it) }
+    fun markTicketSeen(id: String) {
+        val last = tickets.firstOrNull { it.id == id }?.messages?.lastOrNull()?.at?.toEpochMilli() ?: return
+        if (seenTickets[id] == last) return
+        seenTickets = seenTickets + (id to last)
+        prefs.edit().putString("seen_tickets", JSONObject(seenTickets as Map<*, *>).toString()).apply()
+    }
 
     val signedIn: Boolean get() = profile != null
     private val greetingSeed = kotlin.random.Random.nextInt(0, 10_000)
@@ -81,7 +91,7 @@ class AppState(context: Context) {
         wipe()
     }
     private fun wipe() {
-        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false
+        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; seenTickets = emptyMap()
         profile = null; events = emptyList(); announcements = emptyList(); tickets = emptyList(); checkins = emptyMap()
     }
 

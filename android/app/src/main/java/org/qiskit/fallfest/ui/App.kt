@@ -44,6 +44,11 @@ private enum class Tab(val label: String, val off: ImageVector, val on: ImageVec
 fun App(app: AppState) {
     var tab by remember { mutableStateOf(Tab.Hub) }
     val glass = remember { HazeState() }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) { // coming back to the app = a fresh schedule and any new support replies
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, ev -> if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) app.refresh() }
+        lifecycle.addObserver(obs); onDispose { lifecycle.removeObserver(obs) }
+    }
     var eventId by remember { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf<SheetKind>(SheetKind.None) }
     var notifs by remember { mutableStateOf(false) }
@@ -72,7 +77,7 @@ fun App(app: AppState) {
                         Tab.Support -> SupportScreen(app) { sheet = it }
                     }
                 }
-                BottomBar(tab, glass, Modifier.align(Alignment.BottomCenter)) { tab = it }
+                BottomBar(tab, glass, app.newReplies, Modifier.align(Alignment.BottomCenter)) { tab = it }
             }
         }
     }
@@ -85,7 +90,7 @@ fun App(app: AppState) {
 }
 
 @Composable
-private fun BottomBar(selected: Tab, glass: HazeState, modifier: Modifier, onSelect: (Tab) -> Unit) {
+private fun BottomBar(selected: Tab, glass: HazeState, supportDot: Boolean, modifier: Modifier, onSelect: (Tab) -> Unit) {
     val hf = LocalHapticFeedback.current
     val shape = RoundedCornerShape(32.dp)
     Row(
@@ -102,7 +107,10 @@ private fun BottomBar(selected: Tab, glass: HazeState, modifier: Modifier, onSel
                     .clickable { if (!sel) { hf.performHapticFeedback(HapticFeedbackType.SegmentTick); onSelect(t) } }.background(bg),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(if (sel) t.on else t.off, t.label, tint = fg, modifier = Modifier.size(24.dp))
+                Box {
+                    Icon(if (sel) t.on else t.off, t.label, tint = fg, modifier = Modifier.size(24.dp))
+                    if (t == Tab.Support && supportDot) Box(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-2).dp).size(10.dp).clip(CircleShape).background(P.danger).border(1.5.dp, if (sel) P.primary else P.surface, CircleShape))
+                }
                 AnimatedVisibility(sel, enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
                     Text(t.label, style = T.bodyM.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = fg, modifier = Modifier.padding(start = 8.dp), maxLines = 1)
                 }

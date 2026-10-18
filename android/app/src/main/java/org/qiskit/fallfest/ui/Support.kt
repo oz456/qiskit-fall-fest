@@ -39,8 +39,12 @@ sealed interface SheetKind {
 }
 private val STAMP = DateTimeFormatter.ofPattern("d MMM, h:mm a").withZone(IST)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SupportScreen(app: AppState, open: (SheetKind) -> Unit) {
+    // Fresh replies without restarting the app: refresh on entry and every 30 s while this tab is open (no always-on socket needed).
+    LaunchedEffect(Unit) { while (true) { app.refresh(); kotlinx.coroutines.delay(30_000) } }
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(app.refreshing, { app.refresh() }, Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 130.dp)) {
         item {
             Column(Modifier.statusBarsPadding().padding(horizontal = 24.dp, vertical = 18.dp)) {
@@ -77,7 +81,7 @@ fun SupportScreen(app: AppState, open: (SheetKind) -> Unit) {
         if (app.tickets.isNotEmpty()) {
             item { SectionLabel("YOUR TICKETS", Modifier.padding(start = 24.dp, top = 30.dp, bottom = 8.dp)) }
             items(app.tickets, key = { it.id }) { t ->
-                val replied = t.messages.lastOrNull()?.fromAdmin == true
+                val replied = app.hasNewReply(t)
                 Card(Modifier.animateItem().padding(horizontal = 24.dp, vertical = 5.dp).fillMaxWidth(), RoundedCornerShape(20.dp), onClick = { open(SheetKind.Thread(t.id)) }) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -91,6 +95,7 @@ fun SupportScreen(app: AppState, open: (SheetKind) -> Unit) {
                 }
             }
         }
+    }
     }
 }
 
@@ -129,11 +134,20 @@ private fun ThreadView(id: String, app: AppState) {
     var text by remember { mutableStateOf("") }
     Text(t.code, style = T.h1, color = P.ink)
     Text("${t.kind} · ${t.topic} · ${t.status.replace('_', ' ')}", style = T.small, color = P.muted, modifier = Modifier.padding(bottom = 14.dp))
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LaunchedEffect(t.messages.size) { app.markTicketSeen(id) } // opening (or receiving into) the thread clears the red dot
+    // WhatsApp-style: you on the right (maroon), the team on the left (paper), each row spans the full width so alignment is exact.
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         t.messages.forEach { m ->
-            Column(Modifier.align(if (m.fromAdmin) Alignment.Start else Alignment.End).widthIn(max = 300.dp).clip(RoundedCornerShape(18.dp)).background(if (m.fromAdmin) P.mint else P.surface).border(1.dp, P.line, RoundedCornerShape(18.dp)).padding(14.dp)) {
-                Text(m.body, style = T.body, color = if (m.fromAdmin) P.mintInk else P.ink)
-                Text((if (m.fromAdmin) "Fall Fest team · " else "") + STAMP.format(m.at), style = T.small.copy(fontSize = 11.sp), color = P.muted)
+            val mine = !m.fromAdmin
+            val shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = if (mine) 18.dp else 4.dp, bottomEnd = if (mine) 4.dp else 18.dp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
+                Column(
+                    Modifier.widthIn(max = 290.dp).clip(shape).background(if (mine) P.primary else P.surface).then(if (mine) Modifier else Modifier.border(1.dp, P.line, shape)).padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    if (!mine) Text("Fall Fest team", style = T.label.copy(fontSize = 10.sp), color = P.primary)
+                    Text(m.body, style = T.body, color = if (mine) P.onPrimary else P.ink)
+                    Text(STAMP.format(m.at), style = T.small.copy(fontSize = 11.sp), color = if (mine) P.onPrimary.copy(alpha = .7f) else P.muted, modifier = Modifier.align(Alignment.End).padding(top = 2.dp))
+                }
             }
         }
     }
