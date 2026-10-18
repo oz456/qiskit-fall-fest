@@ -25,3 +25,23 @@
 - [ ] Cloud Run `min-instances=1` for event days.
 - [ ] Release keystore backed up (`~/.qff/`).
 - [x] Gmail SMTP app password(s) configured; test a real code to Gmail + college mail.
+
+## Pre-launch audit, 19 Oct 2026
+
+An independent code review (plus live black-box checks) found these; all but the noted ones are fixed and covered by tests.
+
+| # | Finding | Status |
+|---|---------|--------|
+| 1 | Rate limits bypassable by spoofing `X-Forwarded-For` (Fastify trusted the leftmost entry) | Fixed: exactly one trusted hop (the entry Cloud Run appends). Verified live: 7 forged-IP password guesses are throttled from the 5th. |
+| 2 | Login-code attempt limit was a read-then-increment race | Fixed: one atomic UPDATE spends attempts; per-code cap of 5; per-attendee cap of 10 wrong tries / 10 min (not tied to IP); a used code can't be consumed twice. |
+| 3 | Mail-quota exhaustion / targeted lockout via repeated `request-code` | Mitigated: per-attendee 12 codes/day and 500 codes/hour system-wide; any live code of the attendee is accepted (a newer request no longer kills the older one). Residual: someone can still make an attendee wait ~10 min by guessing wrong 10 times. Accepted trade-off. |
+| 4 | "Mandatory selfie" accepted any bytes starting with JPEG magic | Fixed: the file's segments are parsed (frame header ≥ 240×240, EOI present), EXIF/XMP/ICC/comment segments are stripped before storage; the scanner shows a loud "PHOTO UNREADABLE" if an image can't load. |
+| 5 | Staff sessions were stateless (logout only cleared the cookie) | Fixed: `staff_sessions` table; logout revokes immediately. To kill every session at once, rotate `SESSION_SECRET`. |
+| 6 | Photo ticket in the query string reached request logs | Fixed: the logger never records query strings. |
+| 7 | `/ping` hit the DB every call | Fixed: cached 5 s. |
+| 8 | CSV formula injection in the attendance export | Fixed: cells starting with `= + - @` are prefixed with `'`. |
+| 9 | Android: selfie/profile in the recents thumbnail | Selfie screen is now `FLAG_SECURE`. Profile still in plain prefs (low; secrets are Keystore-encrypted). |
+| 10 | Supply chain | WIF provider restricted to `oz456/qiskit-fall-fest` on `refs/heads/main`. APK SHA-256 is published on the download page. Not done: pinning GitHub Actions by commit SHA and the Docker base image by digest. |
+| 11 | Plain-text staff passwords allowed in prod | Fixed: prod refuses to boot without `*_PASSWORD_HASH`. Invalid event UUID in a scan scope no longer 500s. |
+
+Accepted by design: the app tells unlisted emails "not on the attendee list"; a QR forwarded within ~60 s can work once (rotating code + one device per account + face check at the door are the defence); no certificate pinning.
