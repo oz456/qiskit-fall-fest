@@ -20,8 +20,8 @@ export function staffAuth(app: FastifyInstance, db: Db, cfg: StaffCfg) {
   const base = `/${cfg.name}`;
   const claims = (req: FastifyRequest) => {
     const t = req.cookies[cookie];
-    const c = t ? verifyJwt<{ aud: string; csrf: string }>(t, config.sessionSecret) : null;
-    return c && c.aud === cfg.name ? c : null;
+    const c = t ? verifyJwt<{ aud: string; csrf: string; jti: string }>(t, config.sessionSecret) : null;
+    return c && c.aud === cfg.name && typeof c.jti === "string" ? c : null;
   };
   const credsOk = (user: string, pass: string) => {
     const userOk = safeEqual(user, cfg.user);
@@ -36,8 +36,10 @@ export function staffAuth(app: FastifyInstance, db: Db, cfg: StaffCfg) {
       await new Promise((r) => setTimeout(r, 400));
       return reply.code(401).send({ error: "invalid_credentials", message: "Incorrect username or password." });
     }
-    const csrf = randomToken(24);
-    reply.setCookie(cookie, signJwt({ aud: cfg.name, csrf }, config.sessionSecret, cfg.ttlSec), {
+    const csrf = randomToken(24); const jti = randomToken(18);
+    await db.query("INSERT INTO staff_sessions (id, site, expires_at) VALUES ($1,$2,$3)", [jti, cfg.name, new Date(Date.now() + cfg.ttlSec * 1000)]);
+    db.query("DELETE FROM staff_sessions WHERE expires_at < now()").catch(() => {});
+    reply.setCookie(cookie, signJwt({ aud: cfg.name, csrf, jti }, config.sessionSecret, cfg.ttlSec), {
       httpOnly: true, secure: isProd, sameSite: "strict", path: base, maxAge: cfg.ttlSec,
     });
     await audit(db, req, `${cfg.name}.login`);
@@ -49,6 +51,9 @@ export function staffAuth(app: FastifyInstance, db: Db, cfg: StaffCfg) {
     if (req.url.startsWith(`${base}/api/login`)) return;
     const c = claims(req);
     if (!c) return reply.code(401).send({ error: "unauthorized" });
+    // the cookie alone is not enough: the session must still exist server-side (logout / revocation take effect immediately)
+    const [live] = await db.query("SELECT 1 FROM staff_sessions WHERE id=$1 AND site=$2 AND expires_at > now()", [c.jti, cfg.name]);
+    if (!live) return reply.code(401).send({ error: "unauthorized" });
     if (req.method !== "GET" && req.method !== "HEAD") {
       const h = req.headers["x-csrf-token"];
       if (typeof h !== "string" || !safeEqual(h, c.csrf)) return reply.code(403).send({ error: "csrf" });
@@ -60,7 +65,7 @@ export function staffAuth(app: FastifyInstance, db: Db, cfg: StaffCfg) {
 
   const common = (api: FastifyInstance) => {
     api.get(`${base}/api/me`, async (req) => ({ user: cfg.user, csrf: (req as any).csrf, tz: config.tz }));
-    api.post(`${base}/api/logout`, async (req, reply) => { reply.clearCookie(cookie, { path: base }); await audit(db, req, `${cfg.name}.logout`); return { ok: true }; });
+    api.post(`${base}/api/logout`, async (req, reply) => { const c = claims(req); if (c) await db.query("DELETE FROM staff_sessions WHERE id=$1", [c.jti]); reply.clearCookie(cookie, { path: base }); await audit(db, req, `${cfg.name}.logout`); return { ok: true }; });
   };
   return { guard, common };
 }

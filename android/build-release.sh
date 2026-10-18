@@ -10,5 +10,6 @@ mkdir -p ../android-artifacts
 OUT="../android-artifacts/qiskit-fallfest-2026.apk"
 cp app/build/outputs/apk/release/app-release.apk "$OUT"
 cp "$OUT" ../server/public/download/qiskit-fallfest-2026.apk   # served by /download
+sha256sum "$OUT" | cut -d" " -f1 > ../server/public/download/qiskit-fallfest-2026.apk.sha256   # shown on the download page so people can verify what they installed
 "${ANDROID_HOME:-$HOME/Android/Sdk}"/build-tools/35.0.0/apksigner verify --print-certs "$OUT" | head -2
 echo "APK: $(cd .. && pwd)/android-artifacts/qiskit-fallfest-2026.apk"

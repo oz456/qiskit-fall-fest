@@ -43,3 +43,4 @@ label{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;color:va
 .actions .btn{padding:18px 20px;font-size:17px}.actions .reject{flex:1;background:var(--surface);color:var(--bad);border:2px solid #f0c9c5}.actions .confirm{flex:2;background:var(--go)}.actions .dismiss{background:var(--ink)}
 .toast{position:fixed;top:max(14px,env(safe-area-inset-top));left:50%;transform:translate(-50%,-220%);opacity:0;transition:transform .2s,opacity .2s;background:var(--ink);color:#fff;padding:12px 22px;border-radius:999px;font-weight:600;z-index:20;box-shadow:0 8px 24px rgba(40,24,16,.3)}
 .toast.show{transform:translate(-50%,0);opacity:1}.toast.ok{background:var(--go)}.toast.bad{background:var(--bad)}.toast.warn{background:var(--warn)}
+.photo.none.bad{color:var(--bad);font-size:22px;text-align:center;line-height:1.3;border:2px solid #f0c9c5}

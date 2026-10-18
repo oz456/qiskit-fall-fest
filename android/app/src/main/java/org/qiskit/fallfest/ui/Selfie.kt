@@ -52,6 +52,7 @@ import java.io.ByteArrayOutputStream
 @Composable
 fun SelfieScreen(app: AppState) {
     val ctx = LocalContext.current
+    SecureWindow((ctx as? android.app.Activity)?.window) // the selfie is personal: keep it out of screenshots and the recent-apps thumbnail
     val scope = rememberCoroutineScope()
     val hf = LocalHapticFeedback.current
     var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }

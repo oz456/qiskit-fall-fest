@@ -19,6 +19,14 @@ const lastOtp = async (email: string) => { // brute-force the 6-digit code from 
   throw new Error("no code");
 };
 
+const seg = (m: number, body: Buffer) => Buffer.concat([Buffer.from([0xff, m, (body.length + 2) >> 8, (body.length + 2) & 255]), body]);
+/** A structurally valid JPEG (frame header + scan + EOI) with an EXIF segment that must be stripped. */
+const fakeJpeg = (w = 480, h = 480, eoi = true, exif = true) => Buffer.concat([
+  Buffer.from([0xff, 0xd8]), ...(exif ? [seg(0xe1, Buffer.from("Exif\0\0GPSLEAK"))] : []), seg(0xdb, Buffer.alloc(65, 1)),
+  seg(0xc0, Buffer.from([8, h >> 8, h & 255, w >> 8, w & 255, 1, 1, 0x11, 0])), seg(0xda, Buffer.from([1, 1, 0, 0, 63, 0])),
+  Buffer.alloc(9000, 0x42), ...(eoi ? [Buffer.from([0xff, 0xd9])] : []),
+]);
+
 before(async () => {
   db = await openDb(); await migrate(db); app = await buildApp(db);
   const r = await app.inject({ method: "POST", url: "/admin/api/login", payload: { username: "admin", password: "admin-dev-password" } });
@@ -64,6 +72,43 @@ describe("events: multi-day and validation", () => {
     assert.equal(ok.statusCode, 201);
     const bad = await admin("POST", "/admin/api/events", { title: "Bad", track: "Talk", startsAt: "2026-10-16T11:00:00+05:30", endsAt: "2026-10-16T10:00:00+05:30" });
     assert.equal(bad.statusCode, 400);
+  });
+});
+
+describe("hardening", () => {
+  it("rate limits cannot be dodged by spoofing X-Forwarded-For", async () => {
+    // Cloud Run appends the real client address LAST; only that entry is trusted, so rotating the forged ones changes nothing.
+    const codes: number[] = [];
+    for (let i = 0; i < 7; i++) codes.push((await app.inject({ method: "POST", url: "/admin/api/login", headers: { "x-forwarded-for": `forged-${i}, 203.0.113.50` }, payload: { username: "admin", password: "wrong-" + i } })).statusCode);
+    assert.equal(codes[0], 401); assert.equal(codes.at(-1), 429, "the 6th+ attempt from the same real address is throttled");
+  });
+  it("a staff session ends server-side on logout (a stolen cookie stops working)", async () => {
+    const r = await app.inject({ method: "POST", url: "/admin/api/login", payload: { username: "admin", password: "admin-dev-password" } });
+    const ck = (r.headers["set-cookie"] as string).split(";")[0]!; const cs = r.json().csrf;
+    assert.equal((await app.inject({ url: "/admin/api/events", headers: { cookie: ck } })).statusCode, 200);
+    assert.equal((await app.inject({ method: "POST", url: "/admin/api/logout", headers: { cookie: ck, "x-csrf-token": cs } })).statusCode, 200);
+    assert.equal((await app.inject({ url: "/admin/api/events", headers: { cookie: ck } })).statusCode, 401, "replaying the old cookie after logout fails");
+  });
+  it("login codes: any live code works, attempts are capped, and a lockout is per attendee", async () => {
+    const hash = (em: string, c: string) => hmac(config.otpPepper, `${em}|${c}`).toString("hex");
+    const ins = (em: string, c: string) => db.query("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3)", [em, hash(em, c), new Date(Date.now() + 600_000)]);
+    let n = 0; // each call comes from its own address so only the PER-ATTENDEE limits are under test, not the per-IP one
+    const verify = (em: string, code: string) => app.inject({ method: "POST", url: "/v1/auth/verify", remoteAddress: `10.9.0.${++n}`, payload: { email: em, code, deviceId: "device-hardening" } });
+    // two live codes (the person asked twice): the OLDER one must still sign them in
+    await admin("POST", "/admin/api/users", { email: "otp1@example.org", name: "Otp One" });
+    await ins("otp1@example.org", "111111"); await ins("otp1@example.org", "222222");
+    for (let i = 0; i < 3; i++) assert.equal((await verify("otp1@example.org", "000000")).statusCode, 401);
+    assert.equal((await verify("otp1@example.org", "111111")).statusCode, 200, "older live code still works");
+    // one code: five wrong guesses lock THAT code, even for the right value afterwards
+    await admin("POST", "/admin/api/users", { email: "otp2@example.org", name: "Otp Two" });
+    await ins("otp2@example.org", "333333");
+    for (let i = 0; i < 5; i++) assert.equal((await verify("otp2@example.org", "000000")).statusCode, 401);
+    assert.equal((await verify("otp2@example.org", "333333")).statusCode, 401, "code is burned after 5 wrong tries");
+    // many wrong tries across codes -> the attendee is cooled off (429), regardless of the caller's address
+    await admin("POST", "/admin/api/users", { email: "otp3@example.org", name: "Otp Three" });
+    await ins("otp3@example.org", "444444"); await ins("otp3@example.org", "555555");
+    let last = 0; for (let i = 0; i < 6; i++) last = (await verify("otp3@example.org", "000000")).statusCode;
+    assert.equal(last, 429);
   });
 });
 
@@ -115,9 +160,12 @@ describe("attendee flow", () => {
     const me = () => app.inject({ url: "/v1/me", headers: { authorization: `Bearer ${tokens.accessToken}` } });
     assert.equal((await me()).json().profile.hasPhoto, false);
     assert.equal((await app.inject({ url: "/v1/events", headers: { authorization: `Bearer ${tokens.accessToken}` } })).json().error, "photo_required", "no photo, no app");
-    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(8000, 1)]);
+    const jpeg = fakeJpeg();
     const put = (body: Buffer) => app.inject({ method: "PUT", url: "/v1/me/photo", headers: { authorization: `Bearer ${tokens.accessToken}`, "content-type": "image/jpeg" }, payload: body });
     assert.equal((await put(Buffer.alloc(8000, 1))).statusCode, 400, "not a jpeg");
+    assert.equal((await put(Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(9000, 7)]))).statusCode, 400, "magic bytes + junk is not a photo");
+    assert.equal((await put(fakeJpeg(64, 64))).statusCode, 400, "too small to identify anyone");
+    assert.equal((await put(fakeJpeg(480, 480, false))).statusCode, 400, "truncated file");
     const both = await Promise.all([put(jpeg), put(jpeg)]); // two phones / a double tap at the same instant
     assert.deepEqual(both.map((r) => r.statusCode).sort(), [200, 409], "exactly one upload wins");
     assert.equal((await put(jpeg)).statusCode, 409, "only once");
@@ -126,7 +174,7 @@ describe("attendee flow", () => {
     const v = (await check("POST", "/check/api/scan", { payload: passPayload(Buffer.from(u!.pass_secret), u!.pass_code), scope: "day:2026-10-19" })).json();
     assert.equal(v.who.hasPhoto, true);
     const img = await app.inject({ url: `/check/api/photo?ticket=${encodeURIComponent(v.ticket)}`, headers: { cookie: ccookie } });
-    assert.equal(img.statusCode, 200); assert.equal(img.rawPayload.length, jpeg.length);
+    assert.equal(img.statusCode, 200); assert.equal(img.rawPayload[0], 0xff); assert.ok(!img.rawPayload.includes("GPSLEAK"), "EXIF/location data is stripped before storage");
     assert.equal((await app.inject({ url: `/check/api/photo?ticket=${encodeURIComponent(v.ticket)}` })).statusCode, 401, "needs the scanner login");
     assert.equal((await admin("GET", `/admin/api/users/${u!.id}/photo`)).statusCode, 200);
     await admin("DELETE", `/admin/api/users/${u!.id}/photo`);

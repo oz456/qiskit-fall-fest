@@ -5,7 +5,7 @@ import { config } from "../config.ts";
 import type { Db } from "../db.ts";
 import { hmac, otpCode, passPayload, randomToken, sha256, signJwt, verifyJwt } from "../lib/crypto.ts";
 import { otpMail, sendMail } from "../lib/mail.ts";
-import { looksLikeJpeg, savePhoto } from "../lib/photos.ts";
+import { sanitizeJpeg, savePhoto } from "../lib/photos.ts";
 import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
 import { randomBytes } from "node:crypto";
@@ -31,6 +31,10 @@ export function appRoutes(app: FastifyInstance, db: Db) {
     if (user.status !== "active") return reply.code(403).send({ error: "account_inactive", message: "This account isn't active. Please contact the organisers." });
     const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '10 minutes'", [email]);
     if (n >= 3) return reply.code(429).send({ error: "too_many_codes", message: "You've requested several codes already. Use the latest one in your inbox (check spam), or try again in 10 minutes." });
+    // Budgets that don't depend on the caller's IP: per attendee per day, and for the whole system per hour (keeps the mail quota for real use).
+    const [{ d }] = await db.query<{ d: number }>("SELECT count(*)::int AS d FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '24 hours'", [email]);
+    const [{ h }] = await db.query<{ h: number }>("SELECT count(*)::int AS h FROM otp_codes WHERE created_at > now() - interval '1 hour'");
+    if (d >= 12 || h >= 500) return reply.code(429).send({ error: "too_many_codes", message: "Too many sign-in requests right now. Please try again in a little while." });
     const code = otpCode();
     const [row] = await db.query<{ id: string }>("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3) RETURNING id", [email, otpHash(email, code), new Date(Date.now() + OTP_TTL_MS)]);
     try { await sendMail(otpMail(email, code)); }
@@ -47,24 +51,30 @@ export function appRoutes(app: FastifyInstance, db: Db) {
   app.post("/v1/auth/verify", { config: { rateLimit: { max: 15, timeWindow: "10 minutes" } } }, async (req, reply) => {
     const b = z.object({ email: Email, code: z.string().regex(/^\d{6}$/), deviceId: z.string().min(8).max(100), deviceName: z.string().max(100).optional() }).parse(req.body);
     const bad = () => reply.code(401).send({ error: "invalid_code", message: "That code is incorrect or has expired." });
-    const [otp] = await db.query(
-      "SELECT * FROM otp_codes WHERE lower(email)=$1 AND consumed_at IS NULL AND expires_at > now() ORDER BY created_at DESC LIMIT 1", [b.email]);
-    if (!otp || otp.attempts >= OTP_MAX_ATTEMPTS) return bad();
-    await db.query("UPDATE otp_codes SET attempts = attempts + 1 WHERE id=$1", [otp.id]);
-    if (otp.code_hash !== otpHash(b.email, b.code)) return bad();
+    // Per-attendee failure budget, independent of the caller's IP: after 10 wrong tries in 10 minutes nothing is accepted until it cools off.
+    const [{ fails }] = await db.query<{ fails: number }>("SELECT coalesce(sum(attempts),0)::int AS fails FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '10 minutes'", [b.email]);
+    if (fails >= 10) return reply.code(429).send({ error: "too_many_attempts", message: "Too many wrong codes. Wait about 10 minutes, then request a new code." });
+    // ONE atomic statement spends an attempt on every live code and returns them: parallel guesses cannot overshoot the per-code limit
+    // (the old read-check-then-increment let a burst of requests all pass the check). Any live code of this attendee may match, not just the newest.
+    const live = await db.query("UPDATE otp_codes SET attempts = attempts + 1 WHERE lower(email)=$1 AND consumed_at IS NULL AND expires_at > now() AND attempts < $2 RETURNING id, code_hash", [b.email, OTP_MAX_ATTEMPTS]);
+    const guess = otpHash(b.email, b.code);
+    const otp = live.find((r) => r.code_hash === guess);
+    if (!otp) return bad();
     const [user] = await db.query("SELECT * FROM users WHERE lower(email)=$1 AND status='active'", [b.email]);
     if (!user) return bad();
 
     const refresh = randomToken(32);
     const secret = randomBytes(32); // rotating the pass secret invalidates the previous device's QR
     const sid = await db.tx(async (q) => {
-      await q.query("UPDATE otp_codes SET consumed_at = now() WHERE id=$1", [otp.id]);
+      const used = await q.query("UPDATE otp_codes SET consumed_at = now() WHERE id=$1 AND consumed_at IS NULL RETURNING id", [otp.id]);
+      if (!used[0]) return null; // lost a race with another request using the same code
       await q.query("UPDATE sessions SET revoked_at = now() WHERE user_id=$1 AND revoked_at IS NULL", [user.id]); // one device per account
       await q.query("UPDATE users SET pass_secret=$2 WHERE id=$1", [user.id, secret]);
       const [s] = await q.query("INSERT INTO sessions (user_id, refresh_hash, device_id, device_name, expires_at) VALUES ($1,$2,$3,$4,$5) RETURNING id",
         [user.id, sha256(refresh), b.deviceId, b.deviceName ?? null, new Date(Date.now() + REFRESH_TTL_MS)]);
       return s!.id as string;
     });
+    if (!sid) return bad();
     return {
       accessToken: signJwt({ sub: user.id, sid }, config.jwtSecret, ACCESS_TTL), expiresIn: ACCESS_TTL, refreshToken: refresh,
       profile: { name: user.name, email: user.email, college: user.college, passCode: user.pass_code },
@@ -116,8 +126,9 @@ export function appRoutes(app: FastifyInstance, db: Db) {
     // One selfie per attendee, taken on first sign-in so door staff can match the face to the pass. Only an admin can reset it.
     api.put("/v1/me/photo", { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } }, async (req, reply) => {
       const body = req.body as Buffer;
-      if (!Buffer.isBuffer(body) || !looksLikeJpeg(body)) return reply.code(400).send({ error: "bad_image", message: "That photo couldn't be used. Please try again." });
-      if (await savePhoto(db, req.uid!, body) === "exists") return reply.code(409).send({ error: "already_set", message: "Your photo is already saved. It can't be changed." });
+      const clean = Buffer.isBuffer(body) ? sanitizeJpeg(body) : null;
+      if (!clean) return reply.code(400).send({ error: "bad_image", message: "That photo couldn't be used. Please try again." });
+      if (await savePhoto(db, req.uid!, clean) === "exists") return reply.code(409).send({ error: "already_set", message: "Your photo is already saved. It can't be changed." });
       return { ok: true };
     });
 

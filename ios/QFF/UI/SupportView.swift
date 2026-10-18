@@ -163,7 +163,7 @@ struct TicketFormSheet: View {
                         .frame(width: 84, height: 84).background(P.mint, in: Circle())
                     Text("Ticket raised").font(T.h1).foregroundStyle(P.ink)
                     Text(code).font(T.title).foregroundStyle(P.mintInk)
-                    Text("A volunteer will reply here and by email. Track it under Your tickets.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
+                    Text("A volunteer will reply here in the app. Pull down on Support to check for replies.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
                     PrimaryButton(title: "DONE") { dismiss() }.padding(.top, 10)
                 }
                 .padding(24).padding(.top, 20)

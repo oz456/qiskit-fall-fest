@@ -8,7 +8,7 @@ import { getPhoto } from "../lib/photos.ts";
 import { staffAuth } from "../lib/staff.ts";
 import { audit, eventDay } from "../lib/util.ts";
 
-const Scope = z.string().regex(/^(day:\d{4}-\d{2}-\d{2}|event:[0-9a-f-]{36})$/);
+const Scope = z.string().regex(/^(day:\d{4}-\d{2}-\d{2}|event:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/);
 
 export function checkRoutes(app: FastifyInstance, db: Db) {
   const { guard, common } = staffAuth(app, db, { name: "check", user: config.checkUser, password: config.checkPassword, hash: config.checkPasswordHash, ttlSec: 12 * 3600 });

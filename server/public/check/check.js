@@ -74,7 +74,7 @@ async function boot() {
     const bad = !r.who || ["invalid", "expired", "blocked"].includes(r.result);
     const tone = bad ? "bad" : r.result === "duplicate" ? "warn" : "go";
     const photo = !bad && r.who.hasPhoto
-      ? h("img", { class: "photo", alt: "", src: "/check/api/photo?ticket=" + encodeURIComponent(r.ticket), onerror: (e) => e.target.replaceWith(h("div", { class: "photo none" }, initials(r.who.name))) })
+      ? h("img", { class: "photo", alt: "", src: "/check/api/photo?ticket=" + encodeURIComponent(r.ticket), onerror: (e) => { e.target.replaceWith(h("div", { class: "photo none bad" }, "PHOTO", h("br"), "UNREADABLE")); flash("Selfie could not be loaded. Check the person’s ID.", "warn"); } })
       : h("div", { class: "photo none" }, bad ? "!" : initials(r.who.name));
     const title = r.result === "verify" ? "" : { duplicate: "Already checked in", expired: "Stale QR", blocked: "Pass blocked", invalid: "Invalid pass" }[r.result] || "Error";
     const body = [photo];

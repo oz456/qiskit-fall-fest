@@ -183,7 +183,7 @@ private fun TicketForm(initial: String, app: AppState, onDone: () -> Unit) {
                 val s by animateFloatAsState(if (go) 1f else 0f, spring(0.45f, 250f), label = "ok")
                 Box(Modifier.size(84.dp).graphicsLayer { scaleX = s; scaleY = s }.clip(CircleShape).background(P.mint), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Check, null, tint = P.mintInk, modifier = Modifier.size(44.dp)) }
                 Text("Ticket raised", style = T.h1, color = P.ink); Text(code, style = T.title, color = P.mintInk)
-                Text("A volunteer will reply here and by email. Track it under Your tickets.", style = T.body, color = P.muted, textAlign = TextAlign.Center)
+                Text("A volunteer will reply here in the app. Pull down on Support to check for replies.", style = T.body, color = P.muted, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(10.dp)); PrimaryButton("DONE", onClick = onDone)
             }
         } else Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -195,7 +195,7 @@ private fun TicketForm(initial: String, app: AppState, onDone: () -> Unit) {
             SectionLabel("DETAILS")
             Box(Modifier.fillMaxWidth().heightIn(min = 120.dp).clip(RoundedCornerShape(20.dp)).background(P.surface).border(1.dp, P.line, RoundedCornerShape(20.dp)).padding(18.dp)) {
                 if (msg.isEmpty()) Text("Describe what’s going on, and where to find you.", style = T.body, color = P.muted.copy(alpha = .8f))
-                BasicTextField(msg, { msg = it.take(2000) }, textStyle = T.body.copy(color = P.ink), cursorBrush = SolidColor(P.primary), modifier = Modifier.fillMaxWidth())
+                BasicTextField(msg, { msg = it.take(2000) }, textStyle = T.body.copy(color = P.ink), cursorBrush = SolidColor(P.primary), modifier = Modifier.fillMaxWidth().heightIn(min = 110.dp))
             }
             err?.let { Text(it, style = T.small, color = P.danger) }
             PrimaryButton("SUBMIT", loading = busy, enabled = msg.trim().length >= 5) {

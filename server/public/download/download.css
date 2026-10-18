@@ -9,3 +9,4 @@ h1{font-size:30px;letter-spacing:-1px;line-height:1.1;margin:26px 0 8px}h2{margi
 ol{padding-left:20px;margin:16px 0 8px}li{margin:6px 0}.qr{text-align:center}.qr img{border-radius:16px;border:1px solid var(--line)}
 @font-face{font-family:Anton;src:url(anton.ttf) format("truetype");font-display:swap}
 h1{font-family:Anton,Impact,"Arial Narrow",sans-serif;font-weight:400;letter-spacing:.4px;line-height:1.05;font-size:44px}h1 em{font-style:normal;color:var(--pri)}.brand span{font-size:13px;font-weight:600}.brand b strong{font-weight:800}
+code{font-size:11px;word-break:break-all;background:#e9dcc6;padding:1px 6px;border-radius:6px}

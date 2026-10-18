@@ -15,8 +15,14 @@ import { appRoutes } from "./routes/app.ts";
 
 export async function buildApp(db: Db) {
   const app = Fastify({
-    logger: config.env === "test" ? false : { level: "info", redact: ["req.headers.authorization", "req.headers.cookie", "res.headers['set-cookie']"] },
-    trustProxy: true, // Cloud Run terminates TLS and forwards the client IP
+    logger: config.env === "test" ? false : {
+      level: "info", redact: ["req.headers.authorization", "req.headers.cookie", "res.headers['set-cookie']"],
+      // never log query strings: the scanner's short-lived photo ticket travels in one
+      serializers: { req: (r) => ({ method: r.method, url: String(r.url).split("?")[0], host: r.host, remoteAddress: r.ip }) },
+    },
+    // Cloud Run appends the REAL client address to X-Forwarded-For; anything to its left is attacker-controlled. Trust exactly one hop
+    // (that appended entry). `true` trusted the leftmost value, which let anyone dodge every rate limit by spoofing the header.
+    trustProxy: (_addr: string, hop: number) => hop === 0, // exactly one trusted hop
     bodyLimit: 100_000,
   });
 
@@ -58,8 +64,9 @@ export async function buildApp(db: Db) {
   });
   app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: "not_found" }));
 
+  let pingOkUntil = 0; // the uptime probe must not be able to hammer the DB pool: re-check at most every 5 s
   app.get("/ping", { config: { rateLimit: false } }, async () => {
-    await db.query("SELECT 1");
+    if (Date.now() > pingOkUntil) { await db.query("SELECT 1"); pingOkUntil = Date.now() + 5000; }
     return { ok: true };
   });
 

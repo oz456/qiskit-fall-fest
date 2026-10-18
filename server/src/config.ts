@@ -38,8 +38,8 @@ if (isProd) {
   const missing = ["DATABASE_URL", "JWT_SECRET", "SESSION_SECRET", "OTP_PEPPER", "ADMIN_USERNAME", "CHECK_USERNAME", "SMTP_ACCOUNTS"].filter(
     (k) => !(e as Record<string, unknown>)[k],
   );
-  if (!e.ADMIN_PASSWORD && !e.ADMIN_PASSWORD_HASH) missing.push("ADMIN_PASSWORD_HASH");
-  if (!e.CHECK_PASSWORD && !e.CHECK_PASSWORD_HASH) missing.push("CHECK_PASSWORD_HASH");
+  if (!e.ADMIN_PASSWORD_HASH) missing.push("ADMIN_PASSWORD_HASH (plain ADMIN_PASSWORD is dev-only)");
+  if (!e.CHECK_PASSWORD_HASH) missing.push("CHECK_PASSWORD_HASH (plain CHECK_PASSWORD is dev-only)");
   if (e.ADMIN_USERNAME && e.ADMIN_USERNAME === e.CHECK_USERNAME) missing.push("CHECK_USERNAME (must differ from ADMIN_USERNAME)");
   if (missing.length) {
     console.error("Missing required production env vars:", missing.join(", "));

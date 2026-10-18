@@ -264,7 +264,8 @@ async function attendance(m) {
   async function load() {
     clear(out); if (!scope) return;
     const r = await api("GET", "/attendance?scope=" + encodeURIComponent(scope));
-    const csv = () => { const lines = ["name,email,college,pass,checked_in_at", ...r.rows.map((x) => [x.name, x.email, x.college || "", x.passCode, x.at].map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(","))]; const a = h("a", { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })), download: "attendance.csv" }); a.click(); };
+    const safe = (c) => (/^[=+\-@\t\r]/.test(String(c)) ? "'" + c : String(c)); /* a name like =HYPERLINK(...) must not run as a formula in Excel */
+    const csv = () => { const lines = ["name,email,college,pass,checked_in_at", ...r.rows.map((x) => [x.name, x.email, x.college || "", x.passCode, x.at].map((c) => '"' + safe(c).replace(/"/g, '""') + '"').join(","))]; const a = h("a", { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })), download: "attendance.csv" }); a.click(); };
     out.append(h("div", { class: "row", style: "margin-bottom:12px" }, h("b", {}, r.rows.length + " checked in"), h("button", { class: "btn ghost sm right", onclick: csv }, "Download CSV")),
       h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Time"].map((x) => h("th", {}, x))), r.rows.map((x) => h("tr", {}, h("td", {}, x.name, h("div", { class: "muted small" }, x.college || "")), h("td", {}, x.email), h("td", {}, x.passCode), h("td", {}, fmt(x.at, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))))));
   }

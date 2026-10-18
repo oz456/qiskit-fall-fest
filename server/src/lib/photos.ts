@@ -57,5 +57,35 @@ export async function removePhoto(q: Queryable, userId: string): Promise<void> {
   if (r) await deleteObject(r.object_key);
 }
 
-/** JPEG magic bytes + sane size: the only thing we accept from the app. */
-export const looksLikeJpeg = (b: Buffer) => b.length > 5_000 && b.length <= 400_000 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+/**
+ * The only image we accept from the app. Walks the JPEG's segments and returns a CLEANED copy, or null if it isn't a plausible photo:
+ * must start with SOI and end with EOI, carry a frame header of at least 240x240 (at most 4096), and fit the size limits.
+ * EXIF / XMP / ICC / comment segments are dropped (that is where GPS and device data live).
+ */
+export function sanitizeJpeg(b: Buffer): Buffer | null {
+  if (b.length < 8_000 || b.length > 400_000 || b[0] !== 0xff || b[1] !== 0xd8) return null;
+  const out: Buffer[] = [b.subarray(0, 2)];
+  let i = 2; let dims: [number, number] | null = null;
+  while (i + 4 <= b.length) {
+    if (b[i] !== 0xff) return null;
+    const m = b[i + 1]!;
+    if (m === 0xff) { i++; continue; } // fill byte
+    if (m === 0xd9 || (m >= 0xd0 && m <= 0xd8) || m === 0x01) return null; // EOI / RSTn / SOI / TEM before the scan: not a normal baseline photo
+    const len = b.readUInt16BE(i + 2);
+    if (len < 2 || i + 2 + len > b.length) return null;
+    if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) { // a frame header: precision, height, width
+      if (len < 8) return null;
+      dims = [b.readUInt16BE(i + 7), b.readUInt16BE(i + 5)];
+    }
+    if (m === 0xda) { // start of scan: compressed data follows until EOI
+      if (!dims || dims[0] < 240 || dims[1] < 240 || dims[0] > 4096 || dims[1] > 4096) return null;
+      if (b[b.length - 2] !== 0xff || b[b.length - 1] !== 0xd9) return null;
+      out.push(b.subarray(i));
+      return Buffer.concat(out);
+    }
+    const strip = (m >= 0xe1 && m <= 0xef) || m === 0xfe;
+    if (!strip) out.push(b.subarray(i, i + 2 + len));
+    i += 2 + len;
+  }
+  return null;
+}

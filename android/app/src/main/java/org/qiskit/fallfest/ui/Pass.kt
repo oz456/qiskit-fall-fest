@@ -41,7 +41,7 @@ import org.qiskit.fallfest.*
 
 /** Blocks screenshots / screen recording / recents thumbnails while the live pass is visible. */
 @Composable
-private fun SecureWindow(window: android.view.Window?) {
+fun SecureWindow(window: android.view.Window?) {
     DisposableEffect(window) {
         window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
