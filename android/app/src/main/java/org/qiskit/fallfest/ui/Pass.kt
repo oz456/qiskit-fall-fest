@@ -125,13 +125,13 @@ private fun TiltPass(app: AppState, onQr: () -> Unit) {
             }
             .clip(shape).background(Brush.linearGradient(listOf(P.hero1, P.hero2))).pressable(shape, false, onQr).border(1.dp, Color.White.copy(alpha = .12f), shape),
     ) {
-        Sun(Modifier.size(190.dp).align(Alignment.TopEnd).offset(60.dp, (-48).dp))
-        AtomOrb(Modifier.size(250.dp).align(Alignment.TopEnd).offset(80.dp, (-60).dp).alpha(.5f), Color(0xFFF2E7D7), Color(0xFFF2E7D7), speed = 16000)
+        Sun(Modifier.size(150.dp).align(Alignment.TopEnd).offset(62.dp, (-52).dp))
+        AtomOrb(Modifier.size(210.dp).align(Alignment.TopEnd).offset(82.dp, (-66).dp).alpha(.5f), Color(0xFFF2E7D7), Color(0xFFF2E7D7), speed = 16000)
         Column(Modifier.padding(26.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.VerifiedUser, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
                 Text("Secure Pass", style = T.bodyM, color = Color.White.copy(alpha = .8f), modifier = Modifier.weight(1f))
-                Pill("ACTIVE", P.accent, P.ink)
+                Pill("ACTIVE", Color(0xFFF2E7D7), P.primary)
             }
             Column {
                 Text("ATTENDEE", style = T.label, color = Color.White.copy(alpha = .55f)); Spacer(Modifier.height(4.dp))

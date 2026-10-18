@@ -163,8 +163,8 @@ private struct Hero: View {
         } label: {
             ZStack(alignment: .leading) {
                 LinearGradient(colors: [P.hero1, P.hero2], startPoint: .topLeading, endPoint: .bottomTrailing)
-                Sun().frame(width: 132, height: 132).offset(x: 34, y: -26).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                AtomOrb(color: P.cream, electron: P.cream, period: 12).frame(width: 210, height: 210).opacity(0.5).offset(x: 70, y: -64).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                Sun().frame(width: 100, height: 100).offset(x: 36, y: -34).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                AtomOrb(color: P.cream, electron: P.cream, period: 12).frame(width: 170, height: 170).opacity(0.5).offset(x: 66, y: -58).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 VStack(alignment: .leading, spacing: 0) {
                     Group {
                         if let l = live { HStack(spacing: 6) { PulseDot(color: P.accent); Text("LIVE NOW · \(l.location.uppercased())").lineLimit(1) } }
@@ -172,7 +172,7 @@ private struct Hero: View {
                         else if after { Text("THANKS FOR JOINING") }
                         else { Text("UP NEXT · \(next.map { Fmt.weekdayTime.string(from: $0.startsAt).uppercased() } ?? "")") }
                     }
-                    .font(T.label).tracking(1.3).foregroundStyle(P.accent)
+                    .font(T.label).tracking(1.3).foregroundStyle(P.accent).padding(.trailing, 56)
                     Spacer(minLength: 14)
                     if before {
                         let s = Int(firstStart.timeIntervalSince(now))

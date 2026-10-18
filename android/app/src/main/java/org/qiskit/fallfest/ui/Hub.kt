@@ -135,12 +135,12 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
     val target = live ?: next ?: app.events.first()
     val shape = RoundedCornerShape(30.dp)
     Box(Modifier.padding(horizontal = 24.dp).fillMaxWidth().heightIn(min = 226.dp).clip(shape).background(Brush.linearGradient(listOf(P.hero1, P.hero2))).pressable(shape, true) { onOpen(target) }) {
-        Sun(Modifier.size(132.dp).align(Alignment.TopEnd).offset(x = 34.dp, y = (-26).dp))
-        AtomOrb(Modifier.size(210.dp).align(Alignment.TopEnd).offset(x = 70.dp, y = (-64).dp).alpha(.5f), color = Color(0xFFF2E7D7), electron = Color(0xFFF2E7D7), speed = 12000)
+        Sun(Modifier.size(100.dp).align(Alignment.TopEnd).offset(x = 36.dp, y = (-34).dp))
+        AtomOrb(Modifier.size(170.dp).align(Alignment.TopEnd).offset(x = 66.dp, y = (-58).dp).alpha(.5f), color = Color(0xFFF2E7D7), electron = Color(0xFFF2E7D7), speed = 12000)
         Column(Modifier.padding(horizontal = 26.dp, vertical = 24.dp).fillMaxWidth().heightIn(min = 178.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Column {
                 when {
-                    live != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { PulseDot(P.accent); Text("LIVE NOW · ${live.location.uppercase()}", style = T.label, color = P.accent, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    live != null -> Row(Modifier.padding(end = 56.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { PulseDot(P.accent); Text("LIVE NOW · ${live.location.uppercase()}", style = T.label, color = P.accent, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     before -> Text("FEST STARTS IN", style = T.label, color = P.accent)
                     after -> Text("THANKS FOR JOINING", style = T.label, color = P.accent)
                     else -> Text("UP NEXT · ${next?.start?.format(DateTimeFormatter.ofPattern("EEE h:mm a")).orEmpty().uppercase()}", style = T.label, color = P.accent)
