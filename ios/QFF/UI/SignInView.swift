@@ -45,7 +45,7 @@ struct SignInView: View {
                     Color.clear.frame(maxWidth: .infinity, minHeight: 210, maxHeight: .infinity)
                         .overlay(alignment: .trailing) {
                             // runs off the screen edge; ions visibly orbiting
-                            AtomOrb(color: P.ink, electron: P.accent, lineWidth: 1.4, period: 8).frame(width: 380, height: 380).offset(x: 150).allowsHitTesting(false)
+                            AtomOrb(color: P.ink, electron: P.accent, lineWidth: 1.4, period: 8).frame(width: 290, height: 290).offset(x: 112).allowsHitTesting(false)
                         }
                         .overlay(alignment: .topLeading) { Sparkle(size: 22).padding(.top, 14).padding(.leading, 6) }
                     form
