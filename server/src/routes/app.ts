@@ -14,7 +14,7 @@ const ACCESS_TTL = 15 * 60;
 const REFRESH_TTL_MS = 60 * 24 * 3600 * 1000;
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
-const GENERIC_SENT = { ok: true, message: "If this email is registered, a 6-digit code is on its way." };
+const CODE_SENT = { ok: true, message: "A 6-digit code is on its way to your email." };
 
 declare module "fastify" { interface FastifyRequest { uid?: string; sid?: string } }
 
@@ -25,16 +25,23 @@ export function appRoutes(app: FastifyInstance, db: Db) {
   app.post("/v1/auth/request-code", { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } }, async (req, reply) => {
     const { email } = z.object({ email: Email }).parse(req.body);
     const [user] = await db.query("SELECT id, status FROM users WHERE lower(email)=$1", [email]);
-    // Same response whether or not the email is registered (no account enumeration).
-    if (!user || user.status !== "active") return GENERIC_SENT;
+    // The attendee list is closed and pre-registered, so say plainly when an email isn't on it (otherwise people just wait for a mail that never comes).
+    // The route is rate-limited per IP, which bounds how fast the list could be probed.
+    if (!user) return reply.code(404).send({ error: "not_registered", message: "This email isn't on the attendee list. Use the exact email you registered with." });
+    if (user.status !== "active") return reply.code(403).send({ error: "account_inactive", message: "This account isn't active. Please contact the organisers." });
     const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '10 minutes'", [email]);
-    if (n >= 3) return GENERIC_SENT; // identical reply: a 429 here would reveal which emails are registered
+    if (n >= 3) return reply.code(429).send({ error: "too_many_codes", message: "You've requested several codes already. Use the latest one in your inbox (check spam), or try again in 10 minutes." });
     const code = otpCode();
-    await db.query("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3)", [email, otpHash(email, code), new Date(Date.now() + OTP_TTL_MS)]);
-    await sendMail(otpMail(email, code)).catch((e) => req.log.error({ err: e.message }, "otp mail failed"));
+    const [row] = await db.query<{ id: string }>("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3) RETURNING id", [email, otpHash(email, code), new Date(Date.now() + OTP_TTL_MS)]);
+    try { await sendMail(otpMail(email, code)); }
+    catch (e: any) {
+      req.log.error({ err: e.message }, "otp mail failed");
+      await db.query("DELETE FROM otp_codes WHERE id=$1", [row.id]).catch(() => {}); // a failed send must not burn one of the 3 attempts
+      return reply.code(503).send({ error: "mail_failed", message: "We couldn't send the email right now. Please try again in a minute." });
+    }
     // Opportunistic cleanup of stale rows.
     db.query("DELETE FROM otp_codes WHERE expires_at < now() - interval '1 day'").catch(() => {});
-    return GENERIC_SENT;
+    return CODE_SENT;
   });
 
   app.post("/v1/auth/verify", { config: { rateLimit: { max: 15, timeWindow: "10 minutes" } } }, async (req, reply) => {

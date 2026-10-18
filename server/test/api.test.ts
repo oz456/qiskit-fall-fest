@@ -69,11 +69,12 @@ describe("events: multi-day and validation", () => {
 
 describe("attendee flow", () => {
   const email = "alex@example.org"; let tokens: any; let eventId: string;
-  it("only registered emails get codes, with identical responses", async () => {
+  it("only registered emails get codes; unknown emails are told so", async () => {
     await admin("POST", "/admin/api/users", { email, name: "Alex Morgan", college: "SRM AP" });
     const a = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email } });
     const b = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "stranger@example.org" } });
-    assert.deepEqual(a.json(), b.json());
+    assert.equal(a.statusCode, 200);
+    assert.equal(b.statusCode, 404); assert.equal(b.json().error, "not_registered"); assert.match(b.json().message, /attendee list/);
     const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int n FROM otp_codes WHERE email='stranger@example.org'");
     assert.equal(n, 0);
   });
