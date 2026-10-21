@@ -9,18 +9,19 @@
 | Secrets | GCP Secret Manager: `qff-database-url`, `qff-jwt-secret`, `qff-session-secret`, `qff-otp-pepper`, `qff-smtp-accounts`, `qff-admin-username`, `qff-admin-password-hash`, `qff-check-username`, `qff-check-password-hash` |
 | Code | GitHub `oz456/qiskit-fall-fest` (private) |
 | Logins | `~/.qff/CREDENTIALS.txt` on the machine that set this up (admin + check-in, random) |
+| Selfie bucket | `gs://qiskit-511416-qff-photos` (private, uniform access; the Cloud Run service account is `objectAdmin`). Env `PHOTO_BUCKET`. Photos are only streamed by `/check` and `/admin` behind their logins. Consider deleting them after the event. |
 | Android signing key | `~/.qff/event.keystore` + `keystore.properties` — **back these up** |
 
 ## Continuous deployment
 Every push to `main` that touches `server/**` runs `.github/workflows/deploy.yml`:
-typecheck → tests → build Docker image → push to Artifact Registry → new Cloud Run revision → `/ping` smoke test.
-GitHub authenticates to GCP **keylessly** (Workload Identity Federation, restricted to this repo); no keys are stored in GitHub.
+typecheck → tests (API + a headless-Chrome smoke test of the admin and scanner pages) → build Docker image → push to Artifact Registry → new Cloud Run revision → run the backup job once to prove it still works → `/ping` smoke test.
+GitHub authenticates to GCP **keylessly** (Workload Identity Federation, restricted to this repo's `main` branch); no keys are stored in GitHub.
 Env vars and secret wiring are kept by Cloud Run between deploys; change them with `server/deploy.sh` (or `gcloud run services update`).
 Roll back: Cloud Run → `qff-api` → Revisions → send 100% traffic to an older revision.
 
 ## Email (Gmail / Workspace SMTP)
-Login codes, announcements and ticket replies are sent through Gmail SMTP using **app passwords** (no SendGrid). Currently one account (`vaishnav_s@srmap.edu.in`, same one used in brainoftoru), stored in the secret `qff-smtp-accounts`.
-- **Limits:** ~2,000 emails/day on Google Workspace, ~500/day on a free @gmail.com. The app enforces a per-account daily cap (`SMTP_DAILY_LIMIT`, default 1900) and shows “Emails left today” on the admin Overview. Bulk announcement emails are refused if they'd eat into a 100-email reserve kept for login codes.
+**Only login codes** are sent through Gmail SMTP using **app passwords** (no SendGrid). Currently one account (`vaishnav_s@srmap.edu.in`, same one used in brainoftoru), stored in the secret `qff-smtp-accounts`.
+- **Limits:** ~2,000 emails/day on Google Workspace, ~500/day on a free @gmail.com. The app enforces a per-account daily cap (`SMTP_DAILY_LIMIT`, default 1900) and the admin stats endpoint reports the remaining quota. Announcements and ticket replies are deliberately **not** emailed, so the whole quota is for login codes. The server also caps codes per attendee (12/day) and system-wide (500/hour).
 - **Add more accounts (round-robin, automatic failover):** put them all in the secret as a JSON array and roll a revision:
 ```bash
 cat > /tmp/smtp.json <<'J'
@@ -46,17 +47,17 @@ cd server && DB_DRIVER= DATABASE_URL='<neon url>' node scripts/restore.ts ../<fi
 - Neon also keeps its own short point-in-time history; treat the bucket as the real backup.
 
 ## Monitoring & alerts
-Emails go to **pree.makes@gmail.com** (the Google Cloud owner). Change/add recipients in Cloud Console → Monitoring → Alerting → Notification channels.
+Emails go to **pree.makes@gmail.com** only (add more recipients: Cloud Console → Monitoring → Alerting → Notification channels). 
 | Alert | Fires when |
 |---|---|
 | Fall Fest is DOWN | the uptime check on `/ping` (every minute, checks the body) fails for ~2 min |
 | server errors (5xx) | more than 5 server errors in 5 min |
-| emails failing | 3+ failed login-code/ticket-reply emails in 10 min (e.g. Gmail throttling or a revoked app password) |
-| backup job failed | a scheduled backup execution fails |
+| emails failing | 3+ failed login-code emails in 10 min (e.g. Gmail throttling or a revoked app password) |
+| backup job failed | a scheduled backup execution fails (alerts go to one address only: add yours) |
 Logs: Cloud Run → `qff-api` → Logs. Failed emails appear as “otp mail failed”.
 
 ## First-run checklist
-- `/admin` → Attendees → **Import CSV** (`email,name,college`). Only these emails can sign in.
+- `/admin` → Attendees → **Import CSV** (the window shows the format and a template, including one column per event for registrations). Only these emails can sign in.
 - `/admin` → Events: the app covers the **offline phase (26–30 Oct, SRM University AP)**. Loaded so far: Project Q Grand Finale (28–29 Oct) and the Winner Announcement (30 Oct). Add every other on-campus session there; for multi-day events set the end on a later day.
 - `/admin` → Content → **Festival first/last day** (26–30 Oct) drives the app's countdown and guarantees those days are in the `/check` scanner even before sessions are entered.
 - `/admin` → Content: FAQs and venue text.
@@ -75,10 +76,14 @@ gcloud run services update qff-api --region us-east5 --update-labels rev=$(date 
 ```
 (Use `qff-admin-password-hash` for the admin; usernames are the `qff-*-username` secrets.)
 
-## Building the APK
+## Building the apps
 ```bash
-cd android && ./build-release.sh https://qff-api-666549809539.us-east5.run.app   # → qff/qiskit-fallfest-2026.apk
+cd android && ./build-release.sh https://qff-api-666549809539.us-east5.run.app
+# → android-artifacts/qiskit-fallfest-2026.apk, also copied to server/public/download/ (+ .sha256) so /download serves it; commit and push to publish
 ```
+The iPhone app builds on GitHub Actions (see [IOS.md](IOS.md)). `android-artifacts/` and `ios-artifacts/` are local, git-ignored output folders. Each APK commit adds ~2.5 MB to the repo history; that's fine for this project.
+
+**gcloud tip:** pass `--project qiskit-511416` explicitly; your default project may be different.
 
 ## Local development
 `cd server && npm install && npm run dev` (embedded Postgres, mail printed to console, logins `admin / admin-dev-password` and `check / check-dev-password`), `npm test`.

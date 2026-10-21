@@ -53,7 +53,7 @@ function showLogin() {
   const err = h("div", { class: "err" }); const u = h("input", { autocomplete: "username", required: true }); const p = h("input", { type: "password", autocomplete: "current-password", required: true });
   const form = h("form", { onsubmit: async (e) => {
     e.preventDefault(); err.textContent = "";
-    try { await api("POST", "/login", { username: u.value, password: p.value }); csrf = r.csrf; await boot(); } catch (x) { err.textContent = x.message; }
+    try { const r = await api("POST", "/login", { username: u.value, password: p.value }); csrf = r.csrf; await boot(); } catch (x) { err.textContent = x.message; }
   } }, h("label", {}, "Username"), u, h("label", {}, "Password"), p, err, h("div", { class: "row" }, h("button", { class: "btn grow" }, "Sign in")));
   $app.append(h("div", { class: "login" }, h("div", { class: "brand" }, h("img", { src: "qiskit.svg", alt: "" }), "Fall Fest Admin"), h("div", { class: "card" }, form)));
 }
@@ -222,7 +222,7 @@ async function announce(m) {
     h("p", { class: "muted small", style: "margin-top:12px" }, "Appears in every attendee’s notifications inside the app. It is not emailed."),
     h("div", { class: "row" }, h("button", { class: "btn", onclick: guard(async (ev) => {
       const btn = ev.currentTarget; btn.disabled = true;
-      try { const r = await api("POST", "/announcements", { title: t.value, body: b.value }); toast("Published"); route(); } finally { btn.disabled = false; }
+      try { await api("POST", "/announcements", { title: t.value, body: b.value }); toast("Published"); route(); } finally { btn.disabled = false; }
     }) }, "Publish"))),
     h("div", { class: "card" }, h("h2", {}, "Previous"), list.length ? list.map((a) => h("div", { class: "row item" }, h("div", { class: "grow" }, h("b", {}, a.title), " ", h("span", { class: "muted small" }, fmt(a.createdAt, { dateStyle: "medium", timeStyle: "short" })), h("div", { class: "muted" }, a.body)),
       h("button", { class: "btn danger sm", onclick: () => confirmDo("Delete this announcement?", async () => { await api("DELETE", "/announcements/" + a.id); route(); }) }, "Delete"))) : h("p", { class: "muted" }, "Nothing yet.")));
