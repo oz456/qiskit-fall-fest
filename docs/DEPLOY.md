@@ -34,6 +34,13 @@ gcloud run services update qff-api --region us-east5 --update-labels rev=$(date 
 - **Where to create an app password:** Google Account → Security → 2-Step Verification (must be on) → App passwords → create one named “Fall Fest”. Workspace admins can disable app passwords; if sending fails with “Application-specific password required/disabled”, ask the domain admin to allow them.
 - Emails come “from” the SMTP account itself (Gmail rewrites the From address), with display name “Qiskit Fall Fest”. Codes can land in spam on first use — ask testers to mark “Not spam”.
 
+## Push notifications
+Only two kinds: a new announcement (everyone) and a support-ticket reply (that attendee). Sent the moment you publish/reply.
+- **Android (live):** Firebase Cloud Messaging on the same GCP project (`qiskit-511416`, Firebase enabled via API; Android app id `1:666549809539:android:c303bd86d4175a15cf46b6`). The app's `android/app/google-services.json` is committed (it holds public client config only). The Cloud Run service account `qff-run` has `roles/firebasecloudmessaging.admin`; the server authenticates with its metadata token, no key to manage. Tokens live in the `push_tokens` table; dead ones are deleted when FCM says so, on sign-out, when an attendee is blocked, and on "Reset device".
+- **iPhone (needs the Apple account):** the server sends directly to APNs. Create an APNs key (Apple Developer → Keys → Apple Push Notifications service), then set Cloud Run env/secrets `APNS_KEY_P8` (the .p8 text), `APNS_KEY_ID`, `APNS_TEAM_ID` (and `APNS_TOPIC` if the bundle id changes). Until then iPhone registration works but nothing is sent. The Xcode project already declares the `aps-environment` entitlement; a signed/TestFlight build switches it to production.
+- **Check:** `/admin` → Announcements shows how many phones currently have notifications on. Logs show `push sent` with delivered/removed counts.
+- **Local testing of real pushes:** run the server with `FCM_PROJECT=qiskit-511416 FCM_TEST_TOKEN=$(gcloud auth print-access-token)` (dev only; ignored in production).
+
 ## Backups
 - **Automatic:** Cloud Run Job `qff-backup` runs every 6 hours (Cloud Scheduler `qff-backup-6h`, us-east4) and writes `qff-backup-<time>.json.gz` to `gs://qiskit-511416-qff-backups/` (private bucket, files auto-deleted after 30 days). It covers attendees (incl. pass secrets), events, saved/registered, announcements, tickets, FAQs, settings, check-ins, audit log. Sign-in sessions and one-time codes are intentionally not backed up — after a restore people just sign in again.
 - **Run one now:** `gcloud run jobs execute qff-backup --region us-east5 --wait` (do this right before the event and right after).

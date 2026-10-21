@@ -117,6 +117,18 @@ export function appRoutes(app: FastifyInstance, db: Db) {
 
     api.post("/v1/auth/logout", async (req) => { await db.query("UPDATE sessions SET revoked_at = now() WHERE id=$1", [req.sid]); return { ok: true }; });
 
+    // Notifications: the app registers its device token after the attendee opts in. A token belongs to one person at a time.
+    api.put("/v1/me/push-token", async (req) => {
+      const b = z.object({ token: z.string().min(20).max(4096), platform: z.enum(["android", "ios"]), apnsEnv: z.enum(["production", "sandbox"]).optional() }).parse(req.body);
+      await db.query("INSERT INTO push_tokens (token,user_id,platform,apns_env) VALUES ($1,$2,$3,$4) ON CONFLICT (token) DO UPDATE SET user_id=$2, platform=$3, apns_env=$4, updated_at=now()", [b.token, req.uid, b.platform, b.apnsEnv ?? null]);
+      return { ok: true };
+    });
+    api.delete("/v1/me/push-token", async (req) => {
+      const { token } = z.object({ token: z.string().min(20).max(4096) }).parse(req.query);
+      await db.query("DELETE FROM push_tokens WHERE token=$1 AND user_id=$2", [token, req.uid]);
+      return { ok: true };
+    });
+
     api.get("/v1/me", async (req) => {
       const [u] = await db.query("SELECT name,email,college,pass_code, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
       const checkins = await db.query("SELECT scope, scanned_at FROM checkins WHERE user_id=$1", [req.uid]);

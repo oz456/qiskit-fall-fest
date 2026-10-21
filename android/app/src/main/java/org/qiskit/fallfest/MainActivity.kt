@@ -17,6 +17,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val state = AppState(applicationContext)
+        this.state = state
+        handle(intent)
         setContent { QffTheme { App(state) } }
     }
+
+    private var state: AppState? = null
+    override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); handle(intent) }
+    /** Tapping a notification carries type = "ticket" | "announcement"; the app then opens Support or the announcements list. */
+    private fun handle(i: android.content.Intent?) { i?.getStringExtra("type")?.takeIf { it == "ticket" || it == "announcement" }?.let { state?.pendingOpen = it; i.removeExtra("type") } }
 }

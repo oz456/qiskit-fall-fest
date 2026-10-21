@@ -6,6 +6,7 @@ import { buildApp } from "../src/app.ts";
 import { hmac, passPayload } from "../src/lib/crypto.ts";
 import { config } from "../src/config.ts";
 import { exportTables, importTables } from "../src/lib/backup.ts";
+import { outbox } from "../src/lib/push.ts";
 
 let app: Awaited<ReturnType<typeof buildApp>>; let db: Db;
 let cookie = ""; let csrf = ""; let ccookie = ""; let ccsrf = "";
@@ -236,6 +237,39 @@ describe("attendee flow", () => {
     await admin("POST", `/admin/api/tickets/${t.json().id}/reply`, { body: "On it!" });
     const list = (await app.inject({ url: "/v1/tickets", headers: h })).json();
     assert.equal(list[0].messages.at(-1).body, "On it!"); assert.equal(list[0].status, "in_progress");
+  });
+  it("notifications: only announcements and support replies, delivered to the right devices", async () => {
+    const h = { authorization: `Bearer ${tokens.accessToken}` };
+    const tok = "fcm-token-alex-" + "x".repeat(40), tok2 = "fcm-token-kim-" + "y".repeat(40);
+    // registering a token needs a signed-in attendee; a second attendee (Kim) registers too
+    assert.equal((await app.inject({ method: "PUT", url: "/v1/me/push-token", headers: h, payload: { token: tok, platform: "android" } })).statusCode, 200);
+    assert.equal((await app.inject({ method: "PUT", url: "/v1/me/push-token", payload: { token: tok, platform: "android" } })).statusCode, 401);
+    const kim = (await db.query("SELECT id FROM users WHERE email='kim@example.org'"))[0]!.id;
+    await db.query("INSERT INTO push_tokens (token,user_id,platform) VALUES ($1,$2,'android')", [tok2, kim]);
+    const summary = (await admin("GET", "/admin/api/push")).json(); assert.equal(summary.devices, 2);
+    // announcement -> every device, instantly
+    outbox.length = 0;
+    const a = await admin("POST", "/admin/api/announcements", { title: "Doors open at 9", body: "Main block desk." });
+    assert.equal(a.json().notified, 2);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.deepEqual(outbox.map((o) => o.token).sort(), [tok, tok2].sort());
+    assert.ok(outbox.every((o) => o.push.type === "announcement" && o.push.title === "Doors open at 9"));
+    // support reply -> only that attendee's device
+    outbox.length = 0;
+    const list = (await app.inject({ url: "/v1/tickets", headers: h })).json(); const tid = list[0].id;
+    await admin("POST", `/admin/api/tickets/${tid}/reply`, { body: "We are on it." });
+    await new Promise((r) => setTimeout(r, 50));
+    assert.deepEqual(outbox.map((o) => o.token), [tok]); assert.equal(outbox[0]!.push.type, "ticket"); assert.equal(outbox[0]!.push.id, tid);
+    // nothing else triggers a notification: saving an event, creating a ticket, scanning
+    outbox.length = 0;
+    await app.inject({ method: "PUT", url: `/v1/events/${eventId}/saved`, headers: h });
+    await admin("POST", "/admin/api/events", { title: "Silent", track: "Talk", startsAt: "2026-10-27T10:00:00+05:30", endsAt: "2026-10-27T11:00:00+05:30", access: "open" });
+    assert.equal(outbox.length, 0, "no other action sends a notification");
+    // a blocked attendee stops receiving; logging out removes the token
+    await admin("PATCH", `/admin/api/users/${kim}`, { status: "blocked" });
+    assert.equal((await db.query("SELECT 1 FROM push_tokens WHERE token=$1", [tok2])).length, 0);
+    assert.equal((await app.inject({ method: "DELETE", url: `/v1/me/push-token?token=${tok}`, headers: h })).statusCode, 200);
+    assert.equal((await admin("GET", "/admin/api/push")).json().devices, 0);
   });
 });
 

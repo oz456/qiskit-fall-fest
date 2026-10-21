@@ -7,6 +7,7 @@ import type { Db, Queryable } from "../db.ts";
 import { staffAuth } from "../lib/staff.ts";
 import { mailRemaining } from "../lib/mail.ts";
 import { getPhoto, removePhoto } from "../lib/photos.ts";
+import { devicesForAll, devicesForUser, pushInBackground } from "../lib/push.ts";
 import { AnnouncementInput, EventInput, FaqInput, SettingsInput, TicketReply, TicketStatus, UserInput } from "../lib/schemas.ts";
 import { audit, eventDay, eventOut } from "../lib/util.ts";
 
@@ -196,13 +197,14 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const b = z.object({ status: z.enum(["active", "blocked"]) }).parse(req.body);
       await db.tx(async (q) => {
         await q.query("UPDATE users SET status=$2 WHERE id=$1", [id, b.status]);
-        if (b.status === "blocked") await q.query("UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", [id]);
+        if (b.status === "blocked") { await q.query("UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", [id]); await q.query("DELETE FROM push_tokens WHERE user_id=$1", [id]); }
       });
       await audit(db, req, "user." + b.status, "user", id); return { ok: true };
     });
     api.post("/admin/api/users/:id/reset-device", async (req) => { // frees the pass for a new phone (e.g. lost device)
       const { id } = Id.parse(req.params);
       await db.query("UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", [id]);
+      await db.query("DELETE FROM push_tokens WHERE user_id=$1", [id]); // the old phone stops getting notifications
       await audit(db, req, "user.reset_device", "user", id); return { ok: true };
     });
     api.delete("/admin/api/users/:id", async (req) => {
@@ -217,8 +219,12 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       // Announcements are in-app only: the daily mail quota is reserved for login codes.
       const [a] = await db.query("INSERT INTO announcements (title,body) VALUES ($1,$2) RETURNING id", [b.title, b.body]);
       await audit(db, req, "announcement.create", "announcement", a!.id);
-      return reply.code(201).send({ id: a!.id });
+      // Instant notification to every device that has them on. Responds right away; delivery continues in the background.
+      const devices = await devicesForAll(db);
+      pushInBackground(db, devices, { title: b.title, body: b.body.length > 160 ? b.body.slice(0, 157) + "…" : b.body, type: "announcement", id: a!.id }, req.log);
+      return reply.code(201).send({ id: a!.id, notified: devices.length });
     });
+    api.get("/admin/api/push", async () => { const [r] = await db.query("SELECT count(*)::int AS n FROM push_tokens t JOIN users u ON u.id=t.user_id AND u.status='active'"); return { devices: r!.n }; });
     api.delete("/admin/api/announcements/:id", async (req) => {
       const { id } = Id.parse(req.params);
       await db.query("DELETE FROM announcements WHERE id=$1", [id]); await audit(db, req, "announcement.delete", "announcement", id); return { ok: true };
@@ -246,6 +252,8 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       if (!t) return reply.code(404).send({ error: "not_found" });
       await db.query("INSERT INTO ticket_messages (ticket_id,author,body) VALUES ($1,'admin',$2)", [id, body]);
       await db.query("UPDATE tickets SET updated_at=now(), status=CASE WHEN status='open' THEN 'in_progress' ELSE status END WHERE id=$1", [id]);
+      const [owner] = await db.query("SELECT user_id FROM tickets WHERE id=$1", [id]);
+      pushInBackground(db, await devicesForUser(db, owner!.user_id), { title: `Reply on ${t.code}`, body: body.length > 160 ? body.slice(0, 157) + "…" : body, type: "ticket", id }, req.log);
       await audit(db, req, "ticket.reply", "ticket", id); return { ok: true };
     });
     api.patch("/admin/api/tickets/:id", async (req) => {

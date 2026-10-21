@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -14,8 +15,8 @@ android {
         applicationId = "org.qiskit.fallfest.amaravati"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
         // Backend URL. Release builds must pass it: ./gradlew assembleRelease -PapiBase=https://your-service.run.app
         val apiBase = providers.gradleProperty("apiBase").orNull
         buildConfigField("String", "API_BASE", "\"${apiBase ?: "https://api.invalid"}\"")
@@ -74,6 +75,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.google.zxing:core:3.5.3")
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging") // instant notifications (announcements + support replies only)
     implementation("dev.chrisbanes.haze:haze:1.6.10") // backdrop blur for the glass surfaces
     val camerax = "1.4.2"
     implementation("androidx.camera:camera-core:$camerax")

@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct QFFApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var app: AppState
 
     init() {
@@ -21,6 +22,10 @@ struct QFFApp: App {
                 .environmentObject(app)
                 .background(P.bg.ignoresSafeArea())
                 .preferredColorScheme(.light)
+                .onAppear {
+                    AppDelegate.state = app
+                    if let p = AppDelegate.pendingType { app.pendingOpen = p; AppDelegate.pendingType = nil }
+                }
         }
     }
 }

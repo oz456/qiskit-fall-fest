@@ -25,8 +25,8 @@ Admin: `/admin/`. Door scanner: `/check/` (a different login, give only this one
 5. If the photo can't load the sheet says PHOTO UNREADABLE: check the person's ID instead.
 
 ## Support, announcements, content
-- **Support**: open a ticket, reply (the attendee sees it in the app after they refresh; the Support tab shows a red dot), change its status. Replies are *not* emailed.
-- **Announcements** appear in the app's bell menu. They are not emailed (the daily mail quota is kept for login codes).
+- **Support**: open a ticket, reply (the attendee sees it in the app after they refresh; the Support tab shows a red dot), change its status. Replies are *not* emailed; the attendee gets a push notification instead.
+- **Announcements** are sent **instantly as a push notification** to every phone that has notifications on (the page shows how many), and are listed in the app's bell menu. They are not emailed (the daily mail quota is kept for login codes). Support replies also push to that attendee's phone.
 - **Content**: festival name/venue/first and last day (drives the countdown and the scanner's days), support note, FAQs.
 - **Attendance**: pick *Venue entry* or an event; download the list as CSV.
 - **Activity** (bottom of the menu): every admin change and failed login.

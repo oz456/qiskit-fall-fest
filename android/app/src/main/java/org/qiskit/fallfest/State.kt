@@ -16,6 +16,7 @@ private const val STEP_SEC = 30L
 
 /** Single source of truth for UI. Network-first with an on-device cache so the schedule still opens offline. */
 class AppState(context: Context) {
+    private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("qff", Context.MODE_PRIVATE)
     private val secure = SecureStore(context)
     private val api = Api(BuildConfig.API_BASE) { prefs.edit().putLong("skew_ms", it).apply() }.also { it.skewMs = prefs.getLong("skew_ms", 0) }
@@ -49,6 +50,25 @@ class AppState(context: Context) {
     }
 
     val signedIn: Boolean get() = profile != null
+    // ---- notifications (announcements + support replies only) ----
+    var notifEnabled by mutableStateOf(Push.enabled(context.applicationContext)); private set
+    /** "ticket" / "announcement" when the user tapped a notification; the UI consumes it and sets it back to null. */
+    var pendingOpen by mutableStateOf<String?>(null)
+    /** Ask once, right after sign-in + selfie, on Android 13+ (older versions allow notifications without asking). */
+    fun shouldAskNotifications(): Boolean = signedIn && !needsSelfie && !prefs.getBoolean("notif_asked", false) && android.os.Build.VERSION.SDK_INT >= 33 && !Push.enabled(appContext)
+    fun markNotificationsAsked() { prefs.edit().putBoolean("notif_asked", true).apply() }
+    fun notificationsChanged() { notifEnabled = Push.enabled(appContext); syncPush() }
+    /** Registers this phone's Firebase token with the server when notifications are allowed. Safe to call any time; it only sends when something changed. */
+    fun syncPush() {
+        if (!signedIn || needsSelfie || !Push.enabled(appContext)) return
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnSuccessListener { t ->
+            if (t == prefs.getString("push_registered", null)) return@addOnSuccessListener
+            scope.launch {
+                try { authed("PUT", "/v1/me/push-token", JSONObject().put("token", t).put("platform", "android")); prefs.edit().putString("push_registered", t).apply() }
+                catch (_: Exception) { /* retried on the next refresh */ }
+            }
+        }
+    }
     private val greetingSeed = kotlin.random.Random.nextInt(0, 10_000)
     val greeting: String get() = Greetings[greetingSeed % Greetings.size].replace("{n}", profile?.firstName.orEmpty())
     val unread: Boolean get() = announcements.firstOrNull()?.let { it.id != seenAnnouncement } == true
@@ -56,6 +76,8 @@ class AppState(context: Context) {
     fun now(): ZonedDateTime = Instant.ofEpochMilli(nowMs).atZone(IST)
 
     init {
+        Push.createChannels(appContext)
+        Push.onArrived = { type -> if (type == "token") syncPush() else refresh() } // a notification arriving while the app is open updates it at once
         if (signedIn) { loadCache(); refresh() }
         scope.launch { while (true) { nowMs = System.currentTimeMillis(); delay(15_000) } }
     }
@@ -87,7 +109,13 @@ class AppState(context: Context) {
 
     fun signOut() {
         val t = accessToken
-        scope.launch { runCatching { api.call("POST", "/v1/auth/logout", null, t) } }
+        val pushToken = prefs.getString("push_registered", null)
+        scope.launch {
+            // stop notifications for this phone before the session ends
+            if (pushToken != null) runCatching { api.call("DELETE", "/v1/me/push-token?token=" + java.net.URLEncoder.encode(pushToken, "UTF-8"), null, t) }
+            runCatching { api.call("POST", "/v1/auth/logout", null, t) }
+        }
+        runCatching { com.google.firebase.messaging.FirebaseMessaging.getInstance().deleteToken() }
         wipe()
     }
     private fun wipe() {
@@ -132,6 +160,7 @@ class AppState(context: Context) {
                     if (missing != needsSelfie) { needsSelfie = missing; prefs.edit().putBoolean("needs_selfie", missing).apply() }
                 }
                 offline = false
+                notifEnabled = Push.enabled(appContext); syncPush()
                 prefs.edit().putString("cache_events", ev.toString()).putString("cache_ann", announcementsJson()).apply()
             } catch (e: ApiException) {
                 if (e.code == "photo_required") { needsSelfie = true; prefs.edit().putBoolean("needs_selfie", true).apply() } // the server blocks the app until the selfie exists

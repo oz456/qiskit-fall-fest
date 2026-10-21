@@ -36,5 +36,8 @@ Apple only runs apps that are signed by Apple-issued certificates, so an `.ipa` 
 4. Actions → **iOS release (TestFlight)** → Run workflow. (`ios-release.yml` is written but untested until real credentials exist.)
 5. In TestFlight create a public link and put it on the `/download` page.
 
+## Notifications on iPhone
+The app asks for notification permission once (after sign-in and selfie) and registers with APNs. Delivery needs the Apple Developer account: create an APNs key and give the server `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID` (see DEPLOY.md). Not testable in the simulator or with an unsigned IPA.
+
 ## Cost note
 macOS runner minutes count 10× on private repos (free plan: 200 macOS minutes/month ≈ 15–20 builds). The workflow only runs when `ios/**` changes.

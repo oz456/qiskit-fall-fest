@@ -216,13 +216,13 @@ async function people(m) {
 }
 
 async function announce(m) {
-  const list = await api("GET", "/announcements");
+  const [list, push] = await Promise.all([api("GET", "/announcements"), api("GET", "/push")]);
   const t = h("input", { maxlength: 120 }), b = h("textarea", { maxlength: 2000 });
   m.append(head("Announcements"), h("div", { class: "card" }, h("h2", {}, "New announcement"), field("Title", t), field("Message", b),
-    h("p", { class: "muted small", style: "margin-top:12px" }, "Appears in every attendee’s notifications inside the app. It is not emailed."),
+    h("p", { class: "muted small", style: "margin-top:12px" }, `Sent instantly as a notification to every phone that has notifications on (${push.devices} right now), and listed in the app’s bell menu. Not emailed.`),
     h("div", { class: "row" }, h("button", { class: "btn", onclick: guard(async (ev) => {
       const btn = ev.currentTarget; btn.disabled = true;
-      try { await api("POST", "/announcements", { title: t.value, body: b.value }); toast("Published"); route(); } finally { btn.disabled = false; }
+      try { const r = await api("POST", "/announcements", { title: t.value, body: b.value }); toast(r.notified ? `Published. Notifying ${r.notified} phone${r.notified > 1 ? "s" : ""} now` : "Published"); route(); } finally { btn.disabled = false; }
     }) }, "Publish"))),
     h("div", { class: "card" }, h("h2", {}, "Previous"), list.length ? list.map((a) => h("div", { class: "row item" }, h("div", { class: "grow" }, h("b", {}, a.title), " ", h("span", { class: "muted small" }, fmt(a.createdAt, { dateStyle: "medium", timeStyle: "short" })), h("div", { class: "muted" }, a.body)),
       h("button", { class: "btn danger sm", onclick: () => confirmDo("Delete this announcement?", async () => { await api("DELETE", "/announcements/" + a.id); route(); }) }, "Delete"))) : h("p", { class: "muted" }, "Nothing yet.")));

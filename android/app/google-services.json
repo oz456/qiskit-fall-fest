@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "666549809539",
+    "project_id": "qiskit-511416",
+    "storage_bucket": "qiskit-511416.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:666549809539:android:c303bd86d4175a15cf46b6",
+        "android_client_info": {
+          "package_name": "org.qiskit.fallfest.amaravati"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAw_sWv61-Nnb8DrrrJWAMkmMLPBlSb5us"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

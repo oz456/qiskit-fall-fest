@@ -18,10 +18,14 @@ targets:
     platform: iOS
     sources:
       - path: QFF
+    entitlements:
+      path: QFF/QFF.entitlements
+      properties:
+        aps-environment: development   # the signed/TestFlight build switches this to production automatically
     info:
       path: QFF/Info.plist
       properties:
-        CFBundleDisplayName: "Fall Fest ’26"
+        CFBundleDisplayName: "QFF 2026"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         APIBase: "$(QFF_API_BASE)"

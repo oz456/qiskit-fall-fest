@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RootView: View {
     @EnvironmentObject var app: AppState
@@ -36,6 +37,7 @@ struct RootView: View {
         let firstTicket = app.tickets.first?.id ?? ""
         let firstEvent = app.events.first(where: { app.status(of: $0) == .live })?.id ?? app.events.first?.id ?? ""
         if s == "selfie" { app.needsSelfie = true; return }
+        if s == "notify" { app.previewAskNotif = true; return }
         switch s {
         case "pass", "qr": router.tab = .pass
         case "support", "ticket", "thread", "faq": router.tab = .support
@@ -58,6 +60,14 @@ struct RootView: View {
 struct MainView: View {
     @EnvironmentObject var app: AppState
     @EnvironmentObject var router: Router
+    @State private var askNotif = false
+
+    private func openPending() {
+        guard let t = app.pendingOpen else { return }
+        if t == "ticket" { router.tab = .support } else if t == "announcement" { router.tab = .hub; router.sheet = .notifications; app.markAnnouncementsSeen() }
+        app.pendingOpen = nil
+        Task { await app.refresh() }
+    }
 
     var body: some View {
         TabView(selection: $router.tab) {
@@ -66,6 +76,15 @@ struct MainView: View {
             SupportView().tabItem { Label("Support", systemImage: "headphones") }.badge(app.newReplyCount).tag(AppTab.support)
         }
         .onChange(of: router.tab) { _ in Haptics.select() }
+        // tapping a notification opens Support or the announcements list
+        .onChange(of: app.pendingOpen) { _ in openPending() }
+        .onAppear { openPending() }
+        // ask for notification permission once, a moment after the attendee first lands here (right after sign-in and selfie)
+        .task {
+            await app.refreshNotifStatus()
+            if app.shouldAskNotifications { try? await Task.sleep(nanoseconds: 1_500_000_000); if app.shouldAskNotifications { askNotif = true } }
+        }
+        .sheet(isPresented: $askNotif) { NotificationPrompt().environmentObject(app).presentationDetents([.medium]).presentationDragIndicator(.visible) }
         .sheet(item: $router.sheet) { s in
             Group {
                 switch s {
@@ -125,6 +144,21 @@ struct ProfileSheet: View {
                 }
             }
             .padding(.top, 8)
+            HStack(spacing: 12) {
+                Image(systemName: app.notifOn ? "bell.badge" : "bell.slash").font(.system(size: 18)).foregroundStyle(P.muted)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Notifications").font(T.bodyM).foregroundStyle(P.ink)
+                    Text(app.notifOn ? "On: announcements and support replies" : "Off").font(T.small).foregroundStyle(P.muted)
+                }
+                Spacer()
+                if !app.notifOn {
+                    Button("TURN ON") {
+                        if app.notifStatus == .notDetermined { Task { await app.enableNotifications() } }
+                        else if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
+                    }.font(T.label).tracking(1.1).foregroundStyle(P.primary)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12).background(P.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(P.line))
             Spacer()
             Button(role: .destructive) { confirm = true } label: {
                 Label("SIGN OUT", systemImage: "rectangle.portrait.and.arrow.right").font(T.button).tracking(1).foregroundStyle(P.danger)

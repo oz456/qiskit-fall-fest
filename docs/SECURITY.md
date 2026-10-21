@@ -7,6 +7,7 @@
 **API hardening** — zod validation on every input, parameterised SQL only, 100 KB body limit, security headers (HSTS, nosniff, frame-deny, no-referrer, COOP/CORP, Permissions-Policy), `no-store` on API responses, generic 500s, secrets/tokens redacted from logs, fail-fast on missing prod config, non-root container.
 **Selfie** — mandatory, one immutable row per attendee (admin reset only), claimed atomically before upload, validated and stripped of EXIF, stored in a private bucket, streamed only to `/check` (via a 2-minute signed ticket) and `/admin`.
 **Door verification** — a scan only verifies; the entry is recorded when the volunteer confirms against the selfie; rejections are audited.
+**Notifications** — only two server-originated kinds (announcement, ticket reply); a device token belongs to one attendee, is removed on sign-out/block/device reset, and notification text is capped at 160 characters. FCM sends use the Cloud Run service account (no key). APNs key, when added, lives in Secret Manager.
 **Staff sessions** — recorded server-side (`staff_sessions`); logout revokes immediately.
 **Android** — HTTPS only (cleartext disabled in release), refresh token + pass secret encrypted with an Android-Keystore AES-GCM key, backup/transfer disabled, R8-minified, release key stored outside the repo.
 **Emails** — HTML-escaped, tracking disabled.

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UserNotifications
 
 /// Single source of truth for the UI. Network-first, with an on-device cache so the schedule still opens offline.
 @MainActor
@@ -13,6 +14,14 @@ final class AppState: ObservableObject {
     @Published var checkins: [String: Date] = [:]
     @Published var refreshing = false
     @Published var offline = false
+    @Published var notifStatus: UNAuthorizationStatus = .notDetermined
+    /// "ticket" / "announcement" when the user tapped a notification; the UI consumes it and sets it back to nil.
+    @Published var pendingOpen: String?
+    @Published var previewAskNotif = false   // CI screenshots only
+    var defaultsAsked: Bool { defaults.bool(forKey: "notif_asked") }
+    func markNotificationsAsked() { defaults.set(true, forKey: "notif_asked") }
+    var pushRegistered: String? { defaults.string(forKey: "push_registered") }
+    func setPushRegistered(_ t: String) { defaults.set(t, forKey: "push_registered") }
     @Published var message: String?
     @Published var now = Date()
     @Published var seenAnnouncement: String?
@@ -99,14 +108,19 @@ final class AppState: ObservableObject {
 
     func signOut() {
         let t = accessToken
-        Task { [self] in _ = try? await api.data("POST", "/v1/auth/logout", token: t) }
+        let pushToken = pushRegistered
+        Task { [self] in
+            // stop notifications for this phone before the session ends
+            if let pushToken { _ = try? await api.data("DELETE", "/v1/me/push-token?token=\(pushToken)", token: t) }
+            _ = try? await api.data("POST", "/v1/auth/logout", token: t)
+        }
         wipe()
     }
 
     private func wipe() {
         accessToken = nil; passSecret = nil
         keychain.wipe()
-        for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "seen_tickets"] { defaults.removeObject(forKey: k) }
+        for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "seen_tickets", "push_registered", "notif_asked"] { defaults.removeObject(forKey: k) }
         seenTickets = [:]
         needsSelfie = false
         profile = nil; events = []; announcements = []; tickets = []; checkins = [:]; faqs = []; settings = [:]
@@ -162,6 +176,7 @@ final class AppState: ObservableObject {
             checkins = Dictionary(me.checkins.map { ($0.scope, $0.at) }, uniquingKeysWith: { a, _ in a })
             if let has = me.profile.hasPhoto, needsSelfie == has { needsSelfie = !has; defaults.set(needsSelfie, forKey: "needs_selfie") }
             offline = false
+            Task { [self] in await refreshNotifStatus() }
             defaults.set(evData, forKey: "cache_events"); defaults.set(annData, forKey: "cache_ann")
         } catch let e as APIError where e.code == "photo_required" { needsSelfie = true; defaults.set(true, forKey: "needs_selfie") } // the server blocks the app until the selfie exists
         catch let e as APIError where e.http == 401 { /* signed out by refreshToken() */ }
@@ -224,7 +239,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func authedData2(_ method: String, _ path: String, _ body: [String: Any]) async throws -> Data {
+    func authedData2(_ method: String, _ path: String, _ body: [String: Any]) async throws -> Data {
         let first = try await currentToken()
         do { return try await api.data(method, path, body: body, token: first) }
         catch let e as APIError where e.http == 401 { return try await api.data(method, path, body: body, token: try await refreshToken()) }

@@ -87,6 +87,42 @@ fun App(app: AppState) {
     if (notifs) NotificationsSheet(app) { notifs = false }
     app.message?.let { msg -> Toast(msg) { app.message = null } }
     if (profile) ProfileSheet(app) { profile = false }
+
+    // A tapped notification opens the right place once the app is ready (signed in, selfie done).
+    LaunchedEffect(app.pendingOpen, app.signedIn, app.needsSelfie) {
+        val open = app.pendingOpen ?: return@LaunchedEffect
+        if (!app.signedIn || app.needsSelfie) return@LaunchedEffect
+        when (open) { "ticket" -> tab = Tab.Support; "announcement" -> { tab = Tab.Hub; notifs = true; app.markAnnouncementsSeen() } }
+        app.pendingOpen = null
+        app.refresh()
+    }
+
+    // Ask for notification permission once, a moment after the attendee first lands on the Hub (right after sign-in and selfie).
+    var askNotif by remember { mutableStateOf(false) }
+    LaunchedEffect(app.signedIn, app.needsSelfie) {
+        if (app.shouldAskNotifications()) { kotlinx.coroutines.delay(1500); if (app.shouldAskNotifications()) askNotif = true }
+        else if (app.signedIn && !app.needsSelfie) app.syncPush() // Android 12 and older: no prompt needed
+    }
+    if (askNotif) NotificationPrompt(app) { askNotif = false }
+}
+
+/** Why we want notifications, in two lines, before the system dialog appears. Asked once. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NotificationPrompt(app: AppState, onDone: () -> Unit) {
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
+        app.markNotificationsAsked(); app.notificationsChanged(); onDone()
+    }
+    ModalBottomSheet(onDismissRequest = { app.markNotificationsAsked(); onDone() }, containerColor = P.bg, dragHandle = { BottomSheetDefaults.DragHandle(color = P.line) }) {
+        Column(Modifier.padding(horizontal = 28.dp).padding(bottom = 28.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            IconBubble(Icons.Outlined.NotificationsActive, 60.dp, P.mintInk, P.mint)
+            Text("Never miss an update", style = T.h1.copy(fontSize = 26.sp, lineHeight = 30.sp), color = P.ink)
+            Text("We’ll notify you the moment the team posts an announcement or replies to your support ticket. Nothing else, ever.", style = T.body, color = P.muted)
+            PrimaryButton("TURN ON NOTIFICATIONS") { if (android.os.Build.VERSION.SDK_INT >= 33) launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+            Text("Not now", style = T.bodyM, color = P.muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().pressable(RoundedCornerShape(12.dp)) { app.markNotificationsAsked(); onDone() }.padding(12.dp))
+        }
+    }
 }
 
 @Composable
@@ -163,6 +199,14 @@ private fun ProfileSheet(app: AppState, onDismiss: () -> Unit) {
                     Text(app.profile?.name.orEmpty(), style = T.h2, color = P.ink)
                     Text("${app.profile?.email.orEmpty()} · Attendee", style = T.small, color = P.muted)
                 }
+            }
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(P.surface).border(1.dp, P.line, RoundedCornerShape(18.dp)).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(if (app.notifEnabled) Icons.Outlined.NotificationsActive else Icons.Outlined.NotificationsOff, null, tint = P.muted, modifier = Modifier.size(22.dp)); Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) { Text("Notifications", style = T.bodyM, color = P.ink); Text(if (app.notifEnabled) "On: announcements and support replies" else "Off", style = T.small, color = P.muted) }
+                if (!app.notifEnabled) Text("TURN ON", style = T.label, color = P.primary, modifier = Modifier.pressable(CircleShape) {
+                    ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }.padding(8.dp))
             }
             Row(
                 Modifier.fillMaxWidth().height(56.dp).pressable(CircleShape, true) { app.signOut(); onDismiss() }.border(1.dp, P.line, CircleShape),
