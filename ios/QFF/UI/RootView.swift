@@ -80,7 +80,7 @@ struct MainView: View {
         .onChange(of: app.pendingOpen) { _ in openPending() }
         .onAppear { openPending() }
         // ask for notification permission once, a moment after the attendee first lands here (right after sign-in and selfie)
-        .task {
+        .task(id: app.previewAskNotif) {
             await app.refreshNotifStatus()
             if app.shouldAskNotifications { try? await Task.sleep(nanoseconds: 1_500_000_000); if app.shouldAskNotifications { askNotif = true } }
         }
