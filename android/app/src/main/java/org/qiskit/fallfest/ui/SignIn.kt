@@ -94,12 +94,13 @@ fun SignInScreen(app: AppState) {
                 Logo(Modifier.weight(1f))
                 Text("Learn\nBuild\nBelong", style = T.small.copy(fontSize = 11.sp, lineHeight = 14.sp), color = P.muted, modifier = Modifier.padding(top = 4.dp))
             }
-            Spacer(Modifier.height(80.dp))
+            Spacer(Modifier.height(36.dp))
             val a1 by animateFloatAsState(if (entered) 1f else 0f, stagger(1), label = "a1")
             Column(Modifier.alpha(a1).offset { IntOffset(0, ((1 - a1) * 40).dp.roundToPx()) }) {
                 Text(androidx.compose.ui.text.buildAnnotatedString {
-                    append("QISKIT\n"); pushStyle(androidx.compose.ui.text.SpanStyle(color = P.primary)); append("FALL FEST"); pop()
-                }, style = T.hero, color = P.ink)
+                    append("QISKIT\n"); pushStyle(androidx.compose.ui.text.SpanStyle(color = P.primary)); append("FALL FEST\n"); pop()
+                    pushStyle(androidx.compose.ui.text.SpanStyle(fontSize = 40.sp, letterSpacing = 3.sp)); append("SRMAP 2026"); pop()
+                }, style = T.hero.copy(fontSize = 56.sp, lineHeight = 58.sp), color = P.ink)
             }
             Box(Modifier.weight(1f).fillMaxWidth().heightIn(min = 210.dp)) { // always tall enough for the sun and orbits, even on short screens
                 run {

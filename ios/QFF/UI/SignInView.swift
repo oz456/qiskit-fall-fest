@@ -36,9 +36,9 @@ struct SignInView: View {
                     .padding(.top, 20)
                     .opacity(entered ? 1 : 0)
 
-                    Spacer(minLength: 64)
+                    Spacer(minLength: 28)
                     VStack(alignment: .leading, spacing: 16) {
-                        (Text("QISKIT\n").foregroundColor(P.ink) + Text("FALL FEST").foregroundColor(P.primary)).font(T.hero).tracking(0.5).lineSpacing(-28)
+                        (Text("QISKIT\n").font(Fonts.poster(56)).foregroundColor(P.ink) + Text("FALL FEST\n").font(Fonts.poster(56)).foregroundColor(P.primary) + Text("SRMAP 2026").font(Fonts.poster(40)).foregroundColor(P.ink)).tracking(0.5).lineSpacing(-26)
                     }
                     .opacity(entered ? 1 : 0).offset(y: entered ? 0 : 30)
 
