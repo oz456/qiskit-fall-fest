@@ -60,7 +60,7 @@ async function boot() {
     try {
       const s = await api("GET", "/stats?scope=" + encodeURIComponent(scope.value));
       count.textContent = s.count; totalEl.textContent = " of " + s.total; clear(recent);
-      if (s.recent.length) recent.append(h("h3", {}, "Latest"), s.recent.slice(0, 5).map((r) => h("div", { class: "item" }, h("div", { class: "grow" }, h("div", { class: "name" }, r.name), h("div", { class: "muted small" }, [r.passCode, r.college].filter(Boolean).join(" · "))), h("div", { class: "muted small" }, fmtTime(r.at)))));
+      if (s.recent.length) recent.append(h("h3", {}, "Latest"), ...s.recent.slice(0, 5).map((r) => h("div", { class: "item" }, h("div", { class: "grow" }, h("div", { class: "name" }, r.name), h("div", { class: "muted small" }, [r.passCode, r.college].filter(Boolean).join(" · "))), h("div", { class: "muted small" }, fmtTime(r.at)))));
     } catch {}
   }
   const flash = (text, kind) => { toastEl.textContent = text; toastEl.className = "toast show " + kind; clearTimeout(flash.t); flash.t = setTimeout(() => (toastEl.className = "toast"), 1600); };

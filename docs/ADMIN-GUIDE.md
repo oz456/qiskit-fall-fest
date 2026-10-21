@@ -1,6 +1,6 @@
 # Admin guide (for the organising team)
 
-Admin: `/admin/`. Door scanner: `/check/` (a different login, give only this one to door volunteers). Logins are in `~/.qff/CREDENTIALS.txt` on the setup machine.
+Admin: `/admin/`. Door scanner: `/check/` (a different login, give only this one to door volunteers). Both work on phones: the admin menu scrolls sideways along the top, lists become cards, and dialogs open as bottom sheets. Logins are in `~/.qff/CREDENTIALS.txt` on the setup machine.
 
 ## Events
 - **New event**: title, track, start/end (multi-day: set the end on a later day), location, speaker, description.

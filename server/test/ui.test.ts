@@ -14,7 +14,7 @@ const chromeBin = [process.env.CHROME_BIN, "google-chrome", "google-chrome-stabl
   .find((b) => spawnSync(b!, ["--version"], { stdio: "ignore" }).status === 0);
 
 describe("browser smoke (admin + scanner)", { skip: chromeBin ? false : "no Chrome/Chromium found" }, () => {
-  let app: Awaited<ReturnType<typeof buildApp>>; let chrome: ChildProcess; let ws: WebSocket;
+  let db: Awaited<ReturnType<typeof openDb>>; let app: Awaited<ReturnType<typeof buildApp>>; let chrome: ChildProcess; let ws: WebSocket;
   const errors: string[] = []; const pend = new Map<number, (r: any) => void>(); let nid = 0;
   const cdp = (method: string, params: object = {}) => new Promise<any>((res) => { const id = ++nid; pend.set(id, res); ws.send(JSON.stringify({ id, method, params })); });
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -23,7 +23,7 @@ describe("browser smoke (admin + scanner)", { skip: chromeBin ? false : "no Chro
   let base = ""; const debugPort = 9500 + Math.floor(Math.random() * 400);
 
   before(async () => {
-    const db = await openDb(); await migrate(db); app = await buildApp(db);
+    db = await openDb(); await migrate(db); app = await buildApp(db);
     await app.listen({ port: 0, host: "127.0.0.1" }); base = `http://127.0.0.1:${(app.server.address() as any).port}`;
     chrome = spawn(chromeBin!, ["--headless=new", "--no-sandbox", "--disable-gpu", `--remote-debugging-port=${debugPort}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), "qff-ui-"))}`, "about:blank"], { stdio: "ignore" });
     let tabs: any[] = []; for (let i = 0; i < 50 && !tabs.length; i++) { await wait(200); tabs = await fetch(`http://127.0.0.1:${debugPort}/json`).then((r) => r.json()).catch(() => []); }
@@ -57,8 +57,14 @@ describe("browser smoke (admin + scanner)", { skip: chromeBin ? false : "no Chro
 
   it("scanner: signing in shows the scan screen with no script errors", async () => {
     errors.length = 0;
+    // one existing check-in, so the "Latest" list has something to draw
+    const [u] = await db.query("INSERT INTO users (email,name,college,pass_code,pass_secret) VALUES ('ui@example.org','Ui Tester','SRM AP','QFF-0001',$1) RETURNING id", [Buffer.alloc(32, 1)]);
+    const d = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    await db.query("INSERT INTO checkins (user_id, scope) VALUES ($1,$2)", [u!.id, `day:${d}`]);
+    await db.query("INSERT INTO settings (key,value) VALUES ('fest_start',$1),('fest_end',$1) ON CONFLICT (key) DO UPDATE SET value=$1", [d]); // gives the scanner today as an entry day
     await login("/check/", "check", "check-dev-password");
     assert.ok(await until(`!!document.querySelector('.scopebar select')`), "the scan screen appears right after login");
+    assert.ok(await until(`document.querySelector('.recent')?.textContent.includes('Ui Tester')`), "the Latest list shows real names (not [object HTMLDivElement])");
     assert.deepEqual(errors.filter((e) => !/getUserMedia|Permission|NotAllowed|NotFound|Requested device/i.test(e)), [], "no JavaScript errors on the scanner (camera permission errors are expected headless)");
   });
 });

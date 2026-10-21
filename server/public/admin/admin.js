@@ -69,7 +69,7 @@ async function boot() {
   csrf = me.csrf; TZ = me.tz; clear($app);
   main = h("main");
   $app.append(h("div", { class: "shell" },
-    h("nav", {}, h("div", { class: "brand" }, h("img", { src: "qiskit.svg", alt: "" }), "Fall Fest"),
+    h("nav", {}, h("div", { class: "brand" }, h("img", { src: "qiskit.svg", alt: "" }), h("span", {}, "Fall Fest")),
       PAGES.map(([id, label]) => h("a", { href: "#" + id, "data-p": id }, label)),
       h("div", { class: "grow" }),
       h("a", { href: "#activity", "data-p": "activity" }, "Activity"),
@@ -98,8 +98,8 @@ async function events(m) {
   m.append(head("Events", h("button", { class: "btn", onclick: () => editEvent() }, "New event")));
   m.append(h("div", { class: "card" }, h("table", {}, h("tr", {}, ["When", "Event", "Track", "Where", "Entry", "Enrolled · Saved", ""].map((x) => h("th", {}, x))),
     list.map((e) => h("tr", { class: "click", onclick: () => editEvent(e) },
-      h("td", {}, fmtRange(e.startsAt, e.endsAt)), h("td", {}, h("b", {}, e.title), " ", !e.published && h("span", { class: "pill warn" }, "HIDDEN"), " ", fmt(e.startsAt, { dateStyle: "short" }) !== fmt(e.endsAt, { dateStyle: "short" }) && h("span", { class: "pill" }, "MULTI-DAY")),
-      h("td", {}, e.track), h("td", {}, e.location), h("td", {}, h("span", { class: "pill" + (e.access === "prereg" ? " warn" : "") }, ACCESS[e.access] || "OPEN")), h("td", {}, `${e.registered}${e.capacity ? " / " + e.capacity : ""} · ${e.saved}`), h("td", {}, "›"))))));
+      h("td", {}, fmtRange(e.startsAt, e.endsAt)), h("td", { class: "lead" }, h("b", {}, e.title), " ", !e.published && h("span", { class: "pill warn" }, "HIDDEN"), " ", fmt(e.startsAt, { dateStyle: "short" }) !== fmt(e.endsAt, { dateStyle: "short" }) && h("span", { class: "pill" }, "MULTI-DAY")),
+      h("td", {}, e.track), h("td", {}, e.location), h("td", {}, h("span", { class: "pill" + (e.access === "prereg" ? " warn" : "") }, ACCESS[e.access] || "OPEN")), h("td", {}, `${e.registered}${e.capacity ? " / " + e.capacity : ""} · ${e.saved}`), h("td", { class: "chev" }, "›"))))));
   if (!list.length) m.append(h("p", { class: "muted" }, "No events yet."));
 }
 function editEvent(e) {
@@ -161,7 +161,7 @@ async function people(m) {
     out.append(h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Status", ""].map((x) => h("th", {}, x))),
       list.map((u) => h("tr", { class: "click", onclick: guard(() => openUser(u)) }, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, u.college || "")), h("td", {}, u.email), h("td", {}, u.passCode),
         h("td", {}, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), h("div", { class: "muted small", style: "margin-top:4px" }, [u.hasApp ? "Signed in" : "Not signed in", u.hasPhoto ? "Selfie ✓" : "No selfie"].join(" · "))),
-        h("td", {}, "›")))));
+        h("td", { class: "chev" }, "›")))));
     if (!list.length) out.append(h("p", { class: "muted" }, "No attendees found."));
   }
   await load();
@@ -298,3 +298,15 @@ async function activity(m) {
 
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 boot();
+
+// Label every table cell with its column header, so on phones (where rows become cards) each value says what it is.
+new MutationObserver((muts) => {
+  for (const m of muts) for (const n of m.addedNodes) {
+    if (n.nodeType !== 1) continue;
+    for (const t of n.matches("table") ? [n] : n.querySelectorAll("table")) {
+      const heads = [...(t.querySelector("tr")?.querySelectorAll("th") || [])].map((x) => x.textContent);
+      if (!heads.length) continue;
+      t.querySelectorAll("tr").forEach((tr) => [...tr.children].forEach((td, i) => { if (td.tagName === "TD" && heads[i] !== undefined) td.dataset.label = heads[i]; }));
+    }
+  }
+}).observe(document.body, { childList: true, subtree: true });
