@@ -63,7 +63,7 @@ export async function removePhoto(q: Queryable, userId: string): Promise<void> {
  * EXIF / XMP / ICC / comment segments are dropped (that is where GPS and device data live).
  */
 export function sanitizeJpeg(b: Buffer): Buffer | null {
-  if (b.length < 8_000 || b.length > 400_000 || b[0] !== 0xff || b[1] !== 0xd8) return null;
+  if (b.length < 2_500 || b.length > 400_000 || b[0] !== 0xff || b[1] !== 0xd8) return null;
   const out: Buffer[] = [b.subarray(0, 2)];
   let i = 2; let dims: [number, number] | null = null;
   while (i + 4 <= b.length) {

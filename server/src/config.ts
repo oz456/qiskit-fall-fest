@@ -21,12 +21,15 @@ const Env = z.object({
   MAIL_FROM_NAME: z.string().default("Qiskit Fall Fest"),
   PUBLIC_URL: z.string().url().optional(),
   EVENT_TZ: z.string().default("Asia/Kolkata"),
+  VAPID_PUBLIC_KEY: z.string().optional(),   // web push for the home-screen web app (generate once with `npm run vapid`)
+  VAPID_PRIVATE_KEY: z.string().optional(),
   FCM_PROJECT: z.string().optional(),      // Firebase project for Android pushes (default: the Cloud Run project)
   FCM_TEST_TOKEN: z.string().optional(),   // dev only: a gcloud access token so a local server can send real pushes
   APNS_KEY_P8: z.string().optional(),      // Apple push key (.p8 text); iPhone pushes stay off until this + the two below are set
   APNS_KEY_ID: z.string().optional(),
   APNS_TEAM_ID: z.string().optional(),
   APNS_TOPIC: z.string().default("org.qiskit.fallfest.amaravati"),
+  USER_APP_PLATFORMS: z.string().default("ios"), // who may open the /user web app: comma list of ios,android,desktop (production: ios only)
   PHOTO_BUCKET: z.string().optional(), // private GCS bucket for attendee selfies (prod); dev/tests use PHOTO_DIR
   PHOTO_DIR: z.string().default(".photos"),
 });
@@ -58,6 +61,8 @@ const dev = (s: string) => `dev-only-${s}-`.padEnd(40, "x");
 export const config = {
   env: e.NODE_ENV,
   photoBucket: e.PHOTO_BUCKET,
+  vapid: e.VAPID_PUBLIC_KEY && e.VAPID_PRIVATE_KEY ? { publicKey: e.VAPID_PUBLIC_KEY, privateKey: e.VAPID_PRIVATE_KEY, subject: e.PUBLIC_URL ?? "https://app.qffsrmap2026.com" } : undefined,
+  userPlatforms: e.USER_APP_PLATFORMS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean),
   fcmProject: e.FCM_PROJECT, fcmTestToken: isProd ? undefined : e.FCM_TEST_TOKEN,
   apns: e.APNS_KEY_P8 && e.APNS_KEY_ID && e.APNS_TEAM_ID ? { key: e.APNS_KEY_P8.replace(/\\n/g, "\n"), keyId: e.APNS_KEY_ID, teamId: e.APNS_TEAM_ID, topic: e.APNS_TOPIC } : undefined,
   photoDir: e.PHOTO_DIR,

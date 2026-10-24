@@ -3,6 +3,7 @@
 // iPhone: Apple's APNs HTTP/2 API directly, with a .p8 key (stays off until APNS_* are configured).
 // Sending is per device token with bounded concurrency, so the whole list gets it within seconds and dead tokens are pruned as we learn of them.
 import { createPrivateKey, sign } from "node:crypto";
+import webpush from "web-push";
 import http2 from "node:http2";
 import { config } from "../config.ts";
 import type { Queryable } from "../db.ts";
@@ -63,7 +64,7 @@ function sendApns(session: http2.ClientHttp2Session, token: string, p: Push): Pr
   });
 }
 
-type Dev = { token: string; platform: string; apns_env: string | null };
+type Dev = { token: string; platform: string; apns_env: string | null; p256dh?: string | null; auth?: string | null };
 
 export async function deliver(db: Queryable, devices: Dev[], p: Push, log: { warn: (o: object, m: string) => void } = console as any): Promise<Sent> {
   const out: Sent = { devices: devices.length, delivered: 0, removed: 0 };
@@ -78,7 +79,7 @@ export async function deliver(db: Queryable, devices: Dev[], p: Push, log: { war
   const worker = async () => {
     for (let d = devices[i++]; d; d = devices[i++]) {
       try {
-        const r = d.platform === "android" ? await sendAndroid(d.token, p) : config.apns ? await sendApns(apns(d.apns_env), d.token, p) : "fail";
+        const r = d.platform === "android" ? await sendAndroid(d.token, p) : d.platform === "web" ? await sendWeb(d, p) : config.apns ? await sendApns(apns(d.apns_env), d.token, p) : "fail";
         if (r === "ok") out.delivered++; else if (r === "gone") dead.push(d.token);
       } catch (e: any) { log.warn({ err: e.message }, "push send failed"); }
     }
@@ -89,10 +90,20 @@ export async function deliver(db: Queryable, devices: Dev[], p: Push, log: { war
   return out;
 }
 
+/** Browser push (home-screen web app) with VAPID. 404/410 from the push service means the subscription is gone. */
+async function sendWeb(d: Dev, p: Push): Promise<"ok" | "gone" | "fail"> {
+  const v = config.vapid; if (!v || !d.p256dh || !d.auth) return "fail";
+  try {
+    await webpush.sendNotification({ endpoint: d.token, keys: { p256dh: d.p256dh, auth: d.auth } }, JSON.stringify({ title: p.title, body: p.body, type: p.type, id: p.id }),
+      { timeout: 10_000, TTL: 3600, urgency: "high", vapidDetails: { subject: v.subject, publicKey: v.publicKey, privateKey: v.privateKey } });
+    return "ok";
+  } catch (e: any) { return e.statusCode === 404 || e.statusCode === 410 ? "gone" : "fail"; }
+}
+
 const ACTIVE = "JOIN users u ON u.id = t.user_id AND u.status = 'active'";
 /** Everyone with notifications on. Fire-and-forget callers should not await this. */
-export const devicesForAll = (db: Queryable) => db.query<Dev>(`SELECT t.token, t.platform, t.apns_env FROM push_tokens t ${ACTIVE}`);
-export const devicesForUser = (db: Queryable, userId: string) => db.query<Dev>(`SELECT t.token, t.platform, t.apns_env FROM push_tokens t ${ACTIVE} WHERE t.user_id = $1`, [userId]);
+export const devicesForAll = (db: Queryable) => db.query<Dev>(`SELECT t.token, t.platform, t.apns_env, t.p256dh, t.auth FROM push_tokens t ${ACTIVE}`);
+export const devicesForUser = (db: Queryable, userId: string) => db.query<Dev>(`SELECT t.token, t.platform, t.apns_env, t.p256dh, t.auth FROM push_tokens t ${ACTIVE} WHERE t.user_id = $1`, [userId]);
 
 export function pushInBackground(db: Queryable, devices: Dev[], p: Push, log: { warn: (o: object, m: string) => void; info?: (o: object, m: string) => void }) {
   if (!devices.length) return;

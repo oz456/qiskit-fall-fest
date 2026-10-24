@@ -86,7 +86,7 @@ gcloud run services update qff-api --region us-east5 --update-labels rev=$(date 
 ## Building the apps
 ```bash
 cd android && ./build-release.sh https://qff-api-666549809539.us-east5.run.app
-# → android-artifacts/qiskit-fallfest-2026.apk, also copied to server/public/download/ (+ .sha256) so /download serves it; commit and push to publish
+# → android-artifacts/qff-2026.apk, also copied to server/public/downloads/ (+ .sha256) so the landing page (/) serves it; commit and push to publish
 ```
 The iPhone app builds on GitHub Actions (see [IOS.md](IOS.md)). `android-artifacts/` and `ios-artifacts/` are local, git-ignored output folders. Each APK commit adds ~2.5 MB to the repo history; that's fine for this project.
 

@@ -1,14 +1,14 @@
 # Qiskit Fall Fest SRMAP 2026 ("QFF 2026"): app + backend
 
-SRM University AP × IBM Quantum, Amaravati, 26–30 October 2026. A native Android app, a native iPhone app, one backend, an admin portal and a door scanner.
+SRM University AP × IBM Quantum, Amaravati, 26–30 October 2026. A native Android app (direct APK download), a native iPhone app (kept in the repo, App Store release pending), a web app for iPhones in the meantime, one backend, an admin portal and a door scanner, all served from `app.qffsrmap2026.com`.
 
 ```
 qff/
   android/    Native Android app (Kotlin, Jetpack Compose)        → build-release.sh writes android-artifacts/
   ios/        Native iPhone app (SwiftUI, built by GitHub Actions) → output in ios-artifacts/
-  server/     API + /admin + /check + /download (Node 22, Fastify, Postgres), one Cloud Run service
+  server/     API + /admin + /check + /user + landing page (Node 22, Fastify, Postgres), one Cloud Run service
   design/     Poster (theme reference), logo source and traced vector, original mockup
-  docs/       ADMIN-GUIDE, DEPLOY, SECURITY, IOS
+  docs/       ADMIN-GUIDE, DEPLOY, SECURITY, IOS, WEB-APP
   .github/    CI/CD: server (test → deploy → backup check), iOS (build/test/screenshots/IPA)
 ```
 
@@ -21,7 +21,8 @@ qff/
 - **Support**: tickets with a chat-style thread, pull-to-refresh, and a red dot/badge on the Support tab when the team replies.
 - **Notifications**: instant push notifications for exactly two things: a new announcement (to everyone) and a reply to your support ticket (to you). The app asks once, right after sign-in and selfie. Android uses Firebase Cloud Messaging; iPhone uses Apple's push service (needs the Apple Developer account, see docs/IOS.md). Nothing is emailed except login codes.
 - **Admin portal** (`/admin`, its own login): events, attendees (photo, registrations, reset device/selfie), announcements (instant push + in-app list), support inbox, attendance, content/FAQs, activity log.
-- **Download page** (`/download`): the Android APK with its SHA-256.
+- **Landing page** (`/`): the Android APK (`/downloads/qff-2026.apk`, with its SHA-256) and, for iPhone, a button into the web app while the App Store release is pending.
+- **iPhone web app** (`/user`, `/user/hub`, `/user/pass`, `/user/support`): same screens and backend as the apps, **iPhone only**. Android and desktop get a blocking popup that sends them to `/`. Details: [docs/WEB-APP.md](docs/WEB-APP.md).
 
 ## Design
 The look comes from the fest poster (`design/theme-reference.png`): cream `#F2E7D7`, maroon `#7E1322`, ink `#161818`, orange `#EB732F`, Anton display type, and the supplied black Qiskit mark (`design/logo-source.png`, traced to `design/qiskit.svg`). Light only, no dark mode. Glass surfaces: real backdrop blur on Android (Haze) and frosted material on iPhone.
@@ -31,10 +32,10 @@ The look comes from the fest poster (`design/theme-reference.png`): cream `#F2E7
 cd server && npm install
 npm run dev            # embedded Postgres (PGlite), mail printed to console, admin: admin / admin-dev-password, scanner: check / check-dev-password
 node scripts/seed.ts   # optional sample events (stop the dev server first)
-npm test               # 22 tests: API, security, and a headless-Chrome smoke test of the admin + scanner pages
+npm test               # API, security, and headless-Chrome tests of the admin, scanner and /user web app (skipped without Chrome)
 cd ../android && ./gradlew :app:assembleDebug   # debug build talks to http://10.0.2.2:8080 (emulator → your machine)
 ```
 iOS cannot be built on Linux; push to `main` and read the "iOS build" workflow's artifacts (see [docs/IOS.md](docs/IOS.md)).
 
 ## Production
-Live on Cloud Run; every push to `main` that touches `server/**` redeploys. Operations: [docs/DEPLOY.md](docs/DEPLOY.md). Using the admin portal: [docs/ADMIN-GUIDE.md](docs/ADMIN-GUIDE.md). Security model and audit: [docs/SECURITY.md](docs/SECURITY.md).
+Live on Cloud Run; every push to `main` that touches `server/**` redeploys. Web app and domain: [docs/WEB-APP.md](docs/WEB-APP.md). Operations: [docs/DEPLOY.md](docs/DEPLOY.md). Using the admin portal: [docs/ADMIN-GUIDE.md](docs/ADMIN-GUIDE.md). Security model and audit: [docs/SECURITY.md](docs/SECURITY.md).

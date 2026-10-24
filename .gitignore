@@ -7,7 +7,7 @@ dist/
 *.jks
 local.properties
 *.apk
-!server/public/download/*.apk
+!server/public/downloads/*.apk
 ios-artifacts/
 android-artifacts/
 .photos/

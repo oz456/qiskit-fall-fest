@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /admin
+Disallow: /check
+Disallow: /user
+Disallow: /v1
+Allow: /
