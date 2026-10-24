@@ -2,10 +2,10 @@
 # One-time / config-change deploy of the API + /admin + /check to Cloud Run (builds from source with Cloud Build).
 # Routine code deploys happen automatically on `git push` via .github/workflows/deploy.yml — this script is for changing env/secrets wiring.
 set -euo pipefail
-PROJECT="${PROJECT:-qiskit-511416}"; REGION="${REGION:-us-east5}"; SERVICE="${SERVICE:-qff-api}"
+PROJECT="${PROJECT:-qiskit-511416}"; REGION="${REGION:-us-east4}"; SERVICE="${SERVICE:-qff-api}"
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
 PUBLIC_URL="${PUBLIC_URL:-$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format='value(status.url)' 2>/dev/null || true)}"
-PUBLIC_URL="${PUBLIC_URL:-https://$SERVICE-$PROJECT_NUMBER.$REGION.run.app}"
+PUBLIC_URL="${PUBLIC_URL:-https://app.qffsrmap2026.com}"
 
 # Web-push keys (for the /user web app on iPhone) are optional: wired in only once the two secrets exist (see docs/WEB-APP.md).
 SECRETS="DATABASE_URL=qff-database-url:latest,JWT_SECRET=qff-jwt-secret:latest,SESSION_SECRET=qff-session-secret:latest,OTP_PEPPER=qff-otp-pepper:latest,ADMIN_USERNAME=qff-admin-username:latest,ADMIN_PASSWORD_HASH=qff-admin-password-hash:latest,CHECK_USERNAME=qff-check-username:latest,CHECK_PASSWORD_HASH=qff-check-password-hash:latest,SMTP_ACCOUNTS=qff-smtp-accounts:latest"

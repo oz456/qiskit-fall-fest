@@ -36,10 +36,9 @@ Without keys the web app works normally and simply offers no notifications.
 
 ## Putting it on `app.qffsrmap2026.com`
 1. Verify the domain with Google (Search Console / `gcloud domains verify`) for the account that owns the project.
-2. Map it to the service. Cloud Run domain mappings are not offered in every region (us-east5 may not be); try
-   `gcloud beta run domain-mappings create --service qff-api --domain app.qffsrmap2026.com --region us-east5 --project qiskit-511416`.
-   If that is refused, use a global external HTTPS load balancer with a serverless NEG pointing at `qff-api`, or a Firebase Hosting site with a `rewrites` rule `"**" → run service qff-api (us-east5)`.
-3. Add the DNS records Google shows (A/AAAA or CNAME) at the domain registrar. Certificates are issued automatically.
+2. Map it to the service in a region that supports domain mappings (us-east4; **us-east5 does not**):
+   `gcloud beta run domain-mappings create --service qff-api --domain app.qffsrmap2026.com --region us-east4 --project qiskit-511416`.
+3. In Cloudflare add `CNAME app → ghs.googlehosted.com`, **DNS only** (grey cloud). Certificates are issued automatically.
 4. Redeploy with `PUBLIC_URL=https://app.qffsrmap2026.com ./server/deploy.sh` (sets cookie origins, push subject, scanner links).
 5. Rebuild the Android APK with the new API base URL (see android/build-release.sh) and commit it so the landing page serves the new build; the old APK keeps working on the run.app address as long as that service URL exists.
 

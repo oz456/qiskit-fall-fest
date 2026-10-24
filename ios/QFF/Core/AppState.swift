@@ -52,7 +52,7 @@ final class AppState: ObservableObject {
 
     init(preview: Bool = false) {
         isPreview = preview
-        let base = (Bundle.main.object(forInfoDictionaryKey: "APIBase") as? String) ?? "https://qff-api-666549809539.us-east5.run.app"
+        let base = (Bundle.main.object(forInfoDictionaryKey: "APIBase") as? String) ?? "https://app.qffsrmap2026.com"
         api = API(base: base)
         api.skew = defaults.double(forKey: "skew")
         api.onSkew = { [defaults] s in defaults.set(s, forKey: "skew") }

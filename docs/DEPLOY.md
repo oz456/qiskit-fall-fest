@@ -3,8 +3,8 @@
 ## Where everything lives
 | Piece | Location |
 |---|---|
-| Service (API + `/admin` + `/check`) | Cloud Run `qff-api`, project `qiskit-511416`, region `us-east5` (next to Neon in Ohio) |
-| Live URL | https://qff-api-666549809539.us-east5.run.app |
+| Service (API + `/admin` + `/check`) | Cloud Run `qff-api`, project `qiskit-511416`, region `us-east4` (Neon is in Ohio; us-east4 is used because Cloud Run domain mappings are not available in us-east5) |
+| Live URL | https://app.qffsrmap2026.com (custom domain mapping; Cloudflare DNS: `app` CNAME → `ghs.googlehosted.com`, DNS only). Raw: https://qff-api-666549809539.us-east4.run.app |
 | Database | Neon project `qiskit` (Postgres). Tables are created automatically on boot (`server/migrations/`) |
 | Secrets | GCP Secret Manager: `qff-database-url`, `qff-jwt-secret`, `qff-session-secret`, `qff-otp-pepper`, `qff-smtp-accounts`, `qff-admin-username`, `qff-admin-password-hash`, `qff-check-username`, `qff-check-password-hash` |
 | Code | GitHub `oz456/qiskit-fall-fest` (private) |
@@ -28,7 +28,7 @@ cat > /tmp/smtp.json <<'J'
 [{"user":"a@srmap.edu.in","pass":"16charapppass"},{"user":"b@gmail.com","pass":"16charapppass"}]
 J
 gcloud secrets versions add qff-smtp-accounts --data-file=/tmp/smtp.json && shred -u /tmp/smtp.json
-gcloud run services update qff-api --region us-east5 --update-labels rev=$(date +%s)
+gcloud run services update qff-api --region us-east4 --update-labels rev=$(date +%s)
 ```
 (If any account is a free @gmail.com, deploy with `SMTP_DAILY_LIMIT=450`.)
 - **Where to create an app password:** Google Account → Security → 2-Step Verification (must be on) → App passwords → create one named “Fall Fest”. Workspace admins can disable app passwords; if sending fails with “Application-specific password required/disabled”, ask the domain admin to allow them.
@@ -43,7 +43,7 @@ Only two kinds: a new announcement (everyone) and a support-ticket reply (that a
 
 ## Backups
 - **Automatic:** Cloud Run Job `qff-backup` runs every 6 hours (Cloud Scheduler `qff-backup-6h`, us-east4) and writes `qff-backup-<time>.json.gz` to `gs://qiskit-511416-qff-backups/` (private bucket, files auto-deleted after 30 days). It covers attendees (incl. pass secrets), events, saved/registered, announcements, tickets, FAQs, settings, check-ins, audit log. Sign-in sessions and one-time codes are intentionally not backed up — after a restore people just sign in again.
-- **Run one now:** `gcloud run jobs execute qff-backup --region us-east5 --wait` (do this right before the event and right after).
+- **Run one now:** `gcloud run jobs execute qff-backup --region us-east4 --wait` (do this right before the event and right after).
 - **Restore (destructive — overwrites the target DB):**
 ```bash
 gcloud storage ls gs://qiskit-511416-qff-backups/                         # pick a file
@@ -71,7 +71,7 @@ Logs: Cloud Run → `qff-api` → Logs. Failed emails appear as “otp mail fail
 - `/check`: hand the scanner login to door volunteers. Pick “Entry · today” (once per person per day) or a specific event. Use a phone with the camera, or a USB barcode/QR scanner into the “Backup” box.
 
 ## Event-day tips
-- Set min instances to 1 to avoid cold starts: `gcloud run services update qff-api --region us-east5 --min-instances 1` (back to 0 afterwards).
+- Set min instances to 1 to avoid cold starts: `gcloud run services update qff-api --region us-east4 --min-instances 1` (back to 0 afterwards).
 - Lost phone → `/admin` → Attendees → **Reset device**.
 - Take a Neon branch/snapshot before the event.
 
@@ -79,13 +79,13 @@ Logs: Cloud Run → `qff-api` → Logs. Failed emails appear as “otp mail fail
 ```bash
 cd server && node scripts/hash-password.ts 'new-long-password'      # prints scrypt$...
 printf %s '<hash>' | gcloud secrets versions add qff-check-password-hash --data-file=-
-gcloud run services update qff-api --region us-east5 --update-labels rev=$(date +%s)
+gcloud run services update qff-api --region us-east4 --update-labels rev=$(date +%s)
 ```
 (Use `qff-admin-password-hash` for the admin; usernames are the `qff-*-username` secrets.)
 
 ## Building the apps
 ```bash
-cd android && ./build-release.sh https://qff-api-666549809539.us-east5.run.app
+cd android && ./build-release.sh https://app.qffsrmap2026.com
 # → android-artifacts/qff-2026.apk, also copied to server/public/downloads/ (+ .sha256) so the landing page (/) serves it; commit and push to publish
 ```
 The iPhone app builds on GitHub Actions (see [IOS.md](IOS.md)). `android-artifacts/` and `ios-artifacts/` are local, git-ignored output folders. Each APK commit adds ~2.5 MB to the repo history; that's fine for this project.
