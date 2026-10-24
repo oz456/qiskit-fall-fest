@@ -95,7 +95,7 @@ async function sendWeb(d: Dev, p: Push): Promise<"ok" | "gone" | "fail"> {
   const v = config.vapid; if (!v || !d.p256dh || !d.auth) return "fail";
   try {
     await webpush.sendNotification({ endpoint: d.token, keys: { p256dh: d.p256dh, auth: d.auth } }, JSON.stringify({ title: p.title, body: p.body, type: p.type, id: p.id }),
-      { TTL: 3600, urgency: "high", vapidDetails: { subject: v.subject, publicKey: v.publicKey, privateKey: v.privateKey } });
+      { timeout: 10_000, TTL: 3600, urgency: "high", vapidDetails: { subject: v.subject, publicKey: v.publicKey, privateKey: v.privateKey } });
     return "ok";
   } catch (e: any) { return e.statusCode === 404 || e.statusCode === 410 ? "gone" : "fail"; }
 }

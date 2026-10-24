@@ -13,7 +13,7 @@ function accessCard(e) {
     : ["lockOpen", "Open to everyone", "No registration needed. Just walk in.", false];
   return h("div", { class: "card access" }, bubble(ic, 44, good), h("div", {}, h("div", { class: "title" }, title + seats), h("p", {}, sub)));
 }
-const icsEscape = (s) => String(s).replace(/\\/g, "\\\\").replace(/;/g, "\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+const icsEscape = (s) => String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n?|\n/g, "\\n");
 const icsTime = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 function downloadIcs(e) {
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Qiskit Fall Fest//EN", "BEGIN:VEVENT", `UID:${e.id}@qff`, `DTSTAMP:${icsTime(Date.now())}`, `DTSTART:${icsTime(e.startMs)}`, `DTEND:${icsTime(e.endMs)}`,

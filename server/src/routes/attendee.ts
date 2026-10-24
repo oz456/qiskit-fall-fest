@@ -21,6 +21,9 @@ declare module "fastify" { interface FastifyRequest { uid?: string; sid?: string
 
 /** The browser app sends this header on every call. Native apps don't, and keep using body tokens exactly as before. */
 const isWeb = (req: FastifyRequest) => req.headers["x-qff-client"] === "web";
+/** Browsers only ever hand out endpoints on their vendor's push service; anything else would make the server call an arbitrary host. */
+const PUSH_HOSTS = [/(^|\.)push\.apple\.com$/, /^fcm\.googleapis\.com$/, /(^|\.)push\.services\.mozilla\.com$/, /\.notify\.windows\.com$/];
+export function isPushServiceUrl(t: string) { try { const u = new URL(t); return u.protocol === "https:" && (u.port === "" || u.port === "443") && !u.username && PUSH_HOSTS.some((r) => r.test(u.hostname)); } catch { return false; } }
 const RT_COOKIE = "qff_rt";
 /** The web refresh token lives ONLY in this cookie: HttpOnly (scripts can't read it), SameSite=Strict, and scoped to the auth endpoints. */
 const rtCookie = (maxAgeMs: number) => ({ httpOnly: true, secure: isProd, sameSite: "strict" as const, path: "/v1/auth", maxAge: Math.floor(maxAgeMs / 1000) });
@@ -110,6 +113,9 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     const [s] = await db.query("SELECT * FROM sessions WHERE refresh_hash=$1 OR prev_refresh_hash=$1", [h]);
     const deny = () => { if (web) reply.clearCookie(RT_COOKIE, { path: "/v1/auth" }); return reply.code(401).send({ error: "invalid_session", message: "Please sign in again." }); };
     if (!s || s.revoked_at || new Date(s.expires_at) < new Date()) return deny();
+    if (s.refresh_hash !== h && web && Date.now() - new Date(s.last_used_at).getTime() < 20_000) { // two tabs sharing one cookie raced: the other tab already rotated it, so just hand out an access token
+      return { accessToken: signJwt({ sub: s.user_id, sid: s.id }, config.jwtSecret, ACCESS_TTL), expiresIn: ACCESS_TTL };
+    }
     if (s.refresh_hash !== h) { // an already-rotated token was replayed: assume theft, kill the session
       await db.query("UPDATE sessions SET revoked_at = now() WHERE id=$1", [s.id]);
       return deny();
@@ -150,9 +156,10 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     api.post("/v1/auth/logout", async (req, reply) => { await db.query("UPDATE sessions SET revoked_at = now() WHERE id=$1", [req.sid]); reply.clearCookie(RT_COOKIE, { path: "/v1/auth" }); return { ok: true }; });
 
     // Notifications: the app registers its device token after the attendee opts in. A token belongs to one person at a time.
-    api.put("/v1/me/push-token", async (req, reply) => {
+    api.put("/v1/me/push-token", { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } }, async (req, reply) => {
       const b = z.object({ token: z.string().min(20).max(4096), platform: z.enum(["android", "ios", "web"]), apnsEnv: z.enum(["production", "sandbox"]).optional(), p256dh: z.string().max(200).optional(), auth: z.string().max(100).optional() }).parse(req.body);
-      if (b.platform === "web" && (!b.p256dh || !b.auth || !/^https:\/\//.test(b.token))) return reply.code(400).send({ error: "invalid_request", message: "A web subscription needs an https endpoint and its keys." });
+      if (b.platform === "web" && (!b.p256dh || !b.auth || !isPushServiceUrl(b.token))) return reply.code(400).send({ error: "invalid_request", message: "A web subscription needs an https endpoint and its keys." });
+      if (b.platform === "web") await db.query("DELETE FROM push_tokens WHERE user_id=$1 AND platform='web' AND token<>$2 AND token NOT IN (SELECT token FROM push_tokens WHERE user_id=$1 AND platform='web' AND token<>$2 ORDER BY updated_at DESC LIMIT 4)", [req.uid, b.token]);
       await db.query("INSERT INTO push_tokens (token,user_id,platform,apns_env,p256dh,auth) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (token) DO UPDATE SET user_id=$2, platform=$3, apns_env=$4, p256dh=$5, auth=$6, updated_at=now()", [b.token, req.uid, b.platform, b.apnsEnv ?? null, b.p256dh ?? null, b.auth ?? null]);
       return { ok: true };
     });
@@ -211,7 +218,7 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
 
     // Browser pass: the server computes the codes, so the pass secret never reaches the browser. Returns this 30-second window and the next few
     // (about 5 minutes) so the QR keeps rotating through a patchy connection. serverTime lets the page correct for a wrong phone clock.
-    api.get("/v1/pass/codes", async (req) => {
+    api.get("/v1/pass/codes", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req) => {
       const { n } = z.object({ n: z.coerce.number().int().min(1).max(12).default(11) }).parse(req.query);
       const [u] = await db.query("SELECT pass_code, pass_secret FROM users WHERE id=$1", [req.uid]);
       const now = Date.now(); const secret = Buffer.from(u!.pass_secret);

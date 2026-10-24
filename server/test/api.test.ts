@@ -371,7 +371,11 @@ describe("web app: device gate and browser sessions", () => {
     const r1 = await app.inject({ method: "POST", url: "/v1/auth/refresh", headers: W({ cookie: `qff_rt=${rt1}` }), payload: {} });
     assert.equal(r1.statusCode, 200); assert.equal(r1.json().refreshToken, undefined);
     const rt2 = /qff_rt=([^;]+)/.exec(String(r1.headers["set-cookie"]))![1]!; assert.notEqual(rt2, rt1);
-    // replaying the old cookie is treated as theft: the whole session dies, including the fresh cookie
+    // two tabs racing with the same cookie: inside a short grace window the stale one just gets an access token (no new cookie, no sign-out)
+    const race = await app.inject({ method: "POST", url: "/v1/auth/refresh", headers: W({ cookie: `qff_rt=${rt1}` }), payload: {} });
+    assert.equal(race.statusCode, 200); assert.ok(race.json().accessToken); assert.equal(race.headers["set-cookie"], undefined);
+    // later, replaying the old cookie is treated as theft: the whole session dies, including the fresh cookie
+    await db.query("UPDATE sessions SET last_used_at = now() - interval '1 minute'");
     assert.equal((await app.inject({ method: "POST", url: "/v1/auth/refresh", headers: W({ cookie: `qff_rt=${rt1}` }), payload: {} })).statusCode, 401);
     assert.equal((await app.inject({ method: "POST", url: "/v1/auth/refresh", headers: W({ cookie: `qff_rt=${rt2}` }), payload: {} })).statusCode, 401);
     // sign in again, add the (mandatory) selfie, fetch pass codes, then log out without any access token
@@ -391,5 +395,13 @@ describe("web app: device gate and browser sessions", () => {
     assert.equal(lo.statusCode, 200); assert.match(String(lo.headers["set-cookie"]), /qff_rt=;/);
     assert.equal((await app.inject({ url: "/v1/me", headers: A })).statusCode, 401, "the access token dies with the session");
     assert.equal((await app.inject({ method: "POST", url: "/v1/auth/refresh", headers: W({ cookie: `qff_rt=${rt3}` }), payload: {} })).statusCode, 401);
+  });
+});
+
+describe("web push endpoints", () => {
+  it("only accepts the browser vendors' push services (no arbitrary hosts the server could be made to call)", async () => {
+    const { isPushServiceUrl } = await import("../src/routes/attendee.ts");
+    for (const ok of ["https://web.push.apple.com/Qabc", "https://fcm.googleapis.com/fcm/send/x", "https://updates.push.services.mozilla.com/wpush/v2/x", "https://wns2-par02p.notify.windows.com/w/?token=x"]) assert.equal(isPushServiceUrl(ok), true, ok);
+    for (const bad of ["https://127.0.0.1/x", "https://evil.example/x", "https://web.push.apple.com.evil.example/x", "http://web.push.apple.com/x", "https://web.push.apple.com:8443/x", "https://user@web.push.apple.com/x", "https://169.254.169.254/", "nonsense"]) assert.equal(isPushServiceUrl(bad), false, bad);
   });
 });
