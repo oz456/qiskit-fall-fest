@@ -1,0 +1,17 @@
+{
+  "name": "QFF 2026: Qiskit Fall Fest SRMAP",
+  "short_name": "QFF 2026",
+  "description": "Your pass, schedule and support for Qiskit Fall Fest SRMAP 2026.",
+  "id": "/user/",
+  "start_url": "/user/hub",
+  "scope": "/user/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2e7d7",
+  "theme_color": "#f2e7d7",
+  "icons": [
+    { "src": "/user/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/user/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/user/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

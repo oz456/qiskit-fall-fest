@@ -315,3 +315,81 @@ describe("rotating QR check-in", () => {
     assert.equal((await check("POST", "/check/api/scan", { payload: stale, scope: "day:2026-10-18" })).json().result, "invalid");
   });
 });
+
+describe("web app: device gate and browser sessions", () => {
+  const IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
+  const ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36";
+  const DESKTOP = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+  const get = (url: string, ua: string, extra: Record<string, string> = {}) => app.inject({ url, headers: { "user-agent": ua, ...extra } });
+
+  it("iPhone gets the app; Android and desktop only ever get the popup (pages, scripts, fonts, manifest, even missing files)", async () => {
+    for (const path of ["/user", "/user/", "/user/hub", "/user/pass", "/user/support"]) {
+      const r = await get(path, IOS); assert.equal(r.statusCode, 200, path); assert.match(r.headers["content-type"] as string, /html/);
+    }
+    for (const path of ["/user", "/user/hub", "/user/js/main.js", "/user/css/user.css", "/user/manifest.webmanifest", "/user/nothing.png"]) {
+      const a = await get(path, ANDROID); assert.equal(a.statusCode, 403, "android " + path); assert.match(a.body, /isn’t available on Android/); assert.match(a.body, /href="\/\?from=user/);
+      const d = await get(path, DESKTOP); assert.equal(d.statusCode, 403, "desktop " + path); assert.match(d.body, /Open this on your iPhone/);
+      assert.equal(a.headers["cache-control"], "no-store");
+    }
+    assert.ok(!(await get("/user/hub", ANDROID)).body.includes("<script"), "the popup has no script to tamper with");
+    // spoof attempts: a Chromium client hint that contradicts an iPhone user-agent, or an Android hint on a desktop UA
+    assert.equal((await get("/user/hub", IOS, { "sec-ch-ua-platform": '"Windows"' })).statusCode, 403);
+    assert.equal((await get("/user/hub", DESKTOP, { "sec-ch-ua-platform": '"Android"' })).statusCode, 403);
+    assert.match((await get("/user/hub", DESKTOP, { "sec-ch-ua-platform": '"Android"' })).body, /isn’t available on Android/);
+  });
+
+  it("the landing page, downloads and old links work for everyone", async () => {
+    for (const ua of [IOS, ANDROID, DESKTOP]) { const r = await get("/", ua); assert.equal(r.statusCode, 200); assert.match(r.body, /Download the app \(APK\)/); assert.match(r.body, /href="\/user"/); }
+    assert.equal((await get("/downloads/qff-2026.apk", ANDROID)).headers["content-type"], "application/vnd.android.package-archive");
+    const old = await get("/download/qiskit-fallfest-2026.apk", ANDROID); assert.equal(old.statusCode, 301); assert.equal(old.headers.location, "/downloads/qff-2026.apk");
+    assert.equal((await get("/download", ANDROID)).headers.location, "/");
+    assert.match((await get("/robots.txt", DESKTOP)).body, /Disallow: \/user/);
+    assert.equal((await get("/admin/", DESKTOP)).statusCode, 200); assert.equal((await get("/check/", DESKTOP)).statusCode, 200);
+    assert.match(String((await get("/user/hub", IOS)).headers["x-robots-tag"]), /noindex/);
+  });
+
+  it("browser sessions: refresh token only in an HttpOnly cookie, pass secret never sent, rotation + replay detection, real logout", async () => {
+    const em = "web@example.org";
+    await admin("POST", "/admin/api/users", { email: em, name: "Web Tester" });
+    const W = (extra: Record<string, string> = {}) => ({ "user-agent": IOS, "x-qff-client": "web", ...extra });
+    // the API refuses browser calls from Android / desktop
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", headers: { ...W(), "user-agent": ANDROID }, payload: { email: em } })).statusCode, 403);
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", headers: { ...W(), "user-agent": DESKTOP }, payload: { email: em } })).json().error, "platform_not_supported");
+    // cross-site POST refused
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", headers: W({ origin: "https://evil.example" }), payload: { email: em } })).statusCode, 403);
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", headers: W(), payload: { email: em } })).statusCode, 200);
+    const v = await app.inject({ method: "POST", url: "/v1/auth/verify", headers: W(), payload: { email: em, code: await lastOtp(em), deviceId: "web-device-0001", deviceName: "Web (iPhone)" } });
+    assert.equal(v.statusCode, 200);
+    const body = v.json(); assert.ok(body.accessToken); assert.equal(body.refreshToken, undefined, "no refresh token in the body"); assert.equal(body.passSecret, undefined, "no pass secret in the body");
+    const setCookie = String(v.headers["set-cookie"]); assert.match(setCookie, /qff_rt=/); assert.match(setCookie, /HttpOnly/i); assert.match(setCookie, /SameSite=Strict/i); assert.match(setCookie, /Path=\/v1\/auth/);
+    const rt1 = /qff_rt=([^;]+)/.exec(setCookie)![1]!;
+    // a cookie alone is not accepted from a non-browser client (no web header) ...
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/refresh", headers: { cookie: `qff_rt=${rt1}` }, payload: {} })).statusCode, 401);
+    // ... and a refresh token in the body is ignored for browsers
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/refresh", headers: W(), payload: { refreshToken: rt1 } })).statusCode, 401);
+    // normal browser refresh rotates the cookie
+    const r1 = await app.inject({ method: "POST", url: "/v1/auth/refresh", headers: W({ cookie: `qff_rt=${rt1}` }), payload: {} });
+    assert.equal(r1.statusCode, 200); assert.equal(r1.json().refreshToken, undefined);
+    const rt2 = /qff_rt=([^;]+)/.exec(String(r1.headers["set-cookie"]))![1]!; assert.notEqual(rt2, rt1);
+    // replaying the old cookie is treated as theft: the whole session dies, including the fresh cookie
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/refresh", headers: W({ cookie: `qff_rt=${rt1}` }), payload: {} })).statusCode, 401);
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/refresh", headers: W({ cookie: `qff_rt=${rt2}` }), payload: {} })).statusCode, 401);
+    // sign in again, add the (mandatory) selfie, fetch pass codes, then log out without any access token
+    await app.inject({ method: "POST", url: "/v1/auth/request-code", headers: W(), payload: { email: em } });
+    const v2 = await app.inject({ method: "POST", url: "/v1/auth/verify", headers: W(), payload: { email: em, code: await lastOtp(em), deviceId: "web-device-0001" } });
+    const at = v2.json().accessToken; const rt3 = /qff_rt=([^;]+)/.exec(String(v2.headers["set-cookie"]))![1]!;
+    const A = { ...W(), authorization: `Bearer ${at}` };
+    assert.equal((await app.inject({ url: "/v1/pass/codes", headers: A })).json().error, "photo_required");
+    assert.equal((await app.inject({ method: "PUT", url: "/v1/me/photo", headers: { ...A, "content-type": "image/jpeg" }, payload: fakeJpeg() })).statusCode, 200);
+    const codes = (await app.inject({ url: "/v1/pass/codes", headers: A })).json();
+    assert.equal(codes.codes.length, 11); assert.equal(codes.stepSeconds, 30);
+    const [u] = await db.query("SELECT pass_secret, pass_code FROM users WHERE email=$1", [em]);
+    assert.equal(codes.codes[1].payload, passPayload(Buffer.from(u!.pass_secret), u!.pass_code), "codes[1] is the current 30-second window");
+    const sc = (await check("POST", "/check/api/scan", { payload: codes.codes[1].payload, scope: "day:2026-10-29" })).json();
+    assert.equal(sc.result, "verify", "a code from the web app scans at the door");
+    const lo = await app.inject({ method: "POST", url: "/v1/auth/web-logout", headers: W({ cookie: `qff_rt=${rt3}` }), payload: {} });
+    assert.equal(lo.statusCode, 200); assert.match(String(lo.headers["set-cookie"]), /qff_rt=;/);
+    assert.equal((await app.inject({ url: "/v1/me", headers: A })).statusCode, 401, "the access token dies with the session");
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/refresh", headers: W({ cookie: `qff_rt=${rt3}` }), payload: {} })).statusCode, 401);
+  });
+});

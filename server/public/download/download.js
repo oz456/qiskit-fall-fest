@@ -1,1 +1,0 @@
-fetch("qiskit-fallfest-2026.apk.sha256").then((r) => r.text()).then((t) => { document.getElementById("sha").textContent = t.trim(); }).catch(() => { document.getElementById("sha").textContent = "unavailable"; });

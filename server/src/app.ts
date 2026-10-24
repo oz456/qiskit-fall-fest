@@ -1,9 +1,6 @@
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
-import fstatic from "@fastify/static";
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import { config, isProd } from "./config.ts";
@@ -11,7 +8,8 @@ import type { Db } from "./db.ts";
 import { initMail } from "./lib/mail.ts";
 import { adminRoutes } from "./routes/admin.ts";
 import { checkRoutes } from "./routes/check.ts";
-import { appRoutes } from "./routes/app.ts";
+import { attendeeRoutes } from "./routes/attendee.ts";
+import { webRoutes } from "./routes/web.ts";
 
 export async function buildApp(db: Db) {
   const app = Fastify({
@@ -39,8 +37,8 @@ export async function buildApp(db: Db) {
     contentSecurityPolicy: {
       useDefaults: false,
       directives: {
-        defaultSrc: ["'none'"], scriptSrc: ["'self'"], styleSrc: ["'self'"], imgSrc: ["'self'", "data:"],
-        connectSrc: ["'self'"], fontSrc: ["'self'"], mediaSrc: ["'self'"], formAction: ["'self'"], frameAncestors: ["'none'"], baseUri: ["'none'"],
+        defaultSrc: ["'none'"], scriptSrc: ["'self'"], styleSrc: ["'self'"], imgSrc: ["'self'", "data:", "blob:"],
+        connectSrc: ["'self'"], fontSrc: ["'self'"], mediaSrc: ["'self'", "blob:"], workerSrc: ["'self'"], manifestSrc: ["'self'"], formAction: ["'self'"], frameAncestors: ["'none'"], baseUri: ["'none'"],
       },
     },
     strictTransportSecurity: { maxAge: 63072000, includeSubDomains: true, preload: false },
@@ -49,6 +47,7 @@ export async function buildApp(db: Db) {
   });
   app.addHook("onSend", async (req, reply) => {
     reply.header("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=()");
+    if (/^\/(user|admin|check|v1)(\/|$)/.test(req.url)) reply.header("X-Robots-Tag", "noindex, nofollow"); // only the landing page is public
     if (req.url.startsWith("/v1/") || req.url.startsWith("/admin/api/") || req.url.startsWith("/check/api/")) reply.header("Cache-Control", "no-store");
   });
   await app.register(cookie);
@@ -71,20 +70,10 @@ export async function buildApp(db: Db) {
   });
 
   initMail(db);
-  appRoutes(app, db);
+  attendeeRoutes(app, db);
   adminRoutes(app, db);
   checkRoutes(app, db);
 
-  const pub = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
-  const staticOpts = (decorateReply: boolean) => ({ index: ["index.html"], maxAge: "5m", decorateReply, setHeaders: (res: any, p: string) => { if (p.endsWith("index.html")) res.header("Cache-Control", "no-cache"); } });
-  await app.register(fstatic, { root: join(pub, "admin"), prefix: "/admin/", ...staticOpts(true) });
-  await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "check"), prefix: "/check/", ...staticOpts(false) }); });
-  await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "download"), prefix: "/download/", ...staticOpts(false) }); });
-  app.get("/download", async (_req, reply) => reply.redirect("/download/"));
-  app.get("/", async (_req, reply) => reply.redirect("/admin/"));
-  app.get("/admin", async (_req, reply) => reply.redirect("/admin/"));
-  app.get("/scan", async (_req, reply) => reply.redirect("/check/"));
-  app.get("/scan/", async (_req, reply) => reply.redirect("/check/"));
-  app.get("/check", async (_req, reply) => reply.redirect("/check/"));
+  await webRoutes(app);
   return app;
 }

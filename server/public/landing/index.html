@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f2e7d7">
+<meta name="description" content="Qiskit Fall Fest SRMAP 2026: get the QFF 2026 app for Android, or use the web app on iPhone.">
+<title>QFF 2026: Qiskit Fall Fest SRMAP</title>
+<link rel="icon" href="/shared/qiskit.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/landing.css">
+</head>
+<body>
+<main>
+  <header class="brand"><img src="/shared/qiskit.svg" alt="" width="40" height="40"><div><b>IBM <strong>Quantum</strong></b><span>Qiskit Fall Fest 2026</span></div></header>
+  <h1>YOUR PASS, SCHEDULE<br><em>AND SUPPORT. ONE APP.</em></h1>
+  <p class="lead">Qiskit Fall Fest SRMAP 2026 · SRM University AP, Amaravati · 26–30 October</p>
+
+  <div id="notice" class="notice" hidden></div>
+
+  <div id="cards">
+    <section class="card" id="android">
+      <h2>Android</h2>
+      <a class="btn" href="/downloads/qff-2026.apk" download>Download the app (APK)</a>
+      <ol>
+        <li>Open the downloaded file. If Android asks, allow “Install unknown apps” for your browser.</li>
+        <li>Tap <b>Install</b>, then open <b>QFF 2026</b>.</li>
+        <li>Sign in with the email you registered with. We’ll send you a 6-digit code.</li>
+      </ol>
+      <p class="small">Check your download: SHA-256 <code id="sha">…</code></p>
+      <p class="small">Android 8 or newer. Play Protect may say “unrecognised developer”: choose <b>Install anyway</b>. This is our own signed build, shared directly because the event app isn’t on the Play Store.</p>
+    </section>
+
+    <section class="card" id="ios">
+      <h2>iPhone</h2>
+      <a class="webapp" href="/user">
+        <span class="webapp-text"><b>The iOS app is still being published to the App Store.</b> Until then, use the web app. It works just like the app.</span>
+        <svg class="arrow" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+      <p class="small tip">Tip: in Safari tap <b>Share → Add to Home Screen</b> for a full-screen app icon (and notifications on iOS 16.4+).</p>
+    </section>
+
+    <section class="card qr" id="qr">
+      <canvas id="qrcanvas" width="168" height="168" aria-label="QR code for this page"></canvas>
+      <p class="small">Scan to open this page on your phone.</p>
+    </section>
+  </div>
+  <p class="small foot">Need help? Ask a volunteer at the help desk.</p>
+</main>
+<script src="/shared/vendor/qrcode.js"></script>
+<script src="/landing.js"></script>
+</body>
+</html>
