@@ -1,5 +1,5 @@
-// Which devices may use the /user web app. The rule is a WHITELIST (iPhone/iPad only), so "Desktop site" mode, other browsers and spoofed
-// Android strings all fail closed. The check runs here (every /user page, script and font is refused with the gate page, and web API
+// Which devices may use the /attendee web app. The rule is a WHITELIST (iPhone/iPad only), so "Desktop site" mode, other browsers and spoofed
+// Android strings all fail closed. The check runs here (every /attendee page, script and font is refused with the gate page, and web API
 // calls are refused) and again inside the web app itself, which also compares navigator.platform against the user-agent.
 import { config } from "../config.ts";
 
@@ -14,7 +14,7 @@ export function detectPlatform(ua: string | undefined, chPlatform?: string): Pla
   return "desktop";
 }
 
-export const webAppAllowed = (p: Platform) => config.userPlatforms.includes(p);
+export const webAppAllowed = (p: Platform) => config.webAppPlatforms.includes(p);
 
 const COPY: Record<Exclude<Platform, "ios">, { title: string; text: string; cta: string }> = {
   android: {

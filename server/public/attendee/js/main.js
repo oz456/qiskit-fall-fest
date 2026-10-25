@@ -1,4 +1,4 @@
-// QFF 2026 web app: boot, device gate, session, router, tab bar. Routes: /user (sign in), /user/hub, /user/pass, /user/support.
+// QFF 2026 web app: boot, device gate, session, router, tab bar. Routes: /attendee (sign in), /attendee/hub, /attendee/pass, /attendee/support.
 import { ApiError, api, hooks, restoreSession } from "./api.js";
 import * as push from "./push.js";
 import { detectPlatform, showGate } from "./platform.js";
@@ -23,7 +23,7 @@ hooks.onBlocked = () => showGate("desktop", h, document.getElementById("layer"))
 hooks.onPhotoRequired = () => { if (!S.needsSelfie) { S.needsSelfie = true; render(); } };
 hooks.onSignedOut = () => { if (!signedIn) return; endSession(); toast("You were signed out. Sign in again to continue."); };
 
-const currentTab = () => (location.pathname.match(/^\/user\/(hub|pass|support)\/?$/) || [])[1] || "hub";
+const currentTab = () => (location.pathname.match(/^\/attendee\/(hub|pass|support)\/?$/) || [])[1] || "hub";
 function go(path, replace = false) { history[replace ? "replaceState" : "pushState"]({}, "", path); render(); }
 
 function setView(key, make) {
@@ -36,7 +36,7 @@ function render() {
     return setView("signin", () => signInView({ onDone: onSignedIn }));
   }
   if (S.needsSelfie) { tabbar?.remove(); tabbar = null; return setView("selfie", () => selfieView({ onDone: onSelfieDone, onSignOut: signOut })); }
-  if (!/^\/user\/(hub|pass|support)\/?$/.test(location.pathname)) history.replaceState({}, "", "/user/hub");
+  if (!/^\/attendee\/(hub|pass|support)\/?$/.test(location.pathname)) history.replaceState({}, "", "/attendee/hub");
   const tab = currentTab();
   setView("tab:" + tab, () => (tab === "pass" ? passView({ open: openEventSheet }) : tab === "support" ? supportView() : hubView({ open: openEventSheet, openAnnouncements, openProfile: () => openProfile({ onSignOut: signOut }) })));
   drawTabs(tab);
@@ -45,7 +45,7 @@ function render() {
 
 function drawTabs(tab) {
   if (!tabbar) { tabbar = h("nav", { class: "tabbar", "aria-label": "Main" }); document.body.append(tabbar); }
-  tabbar.replaceChildren(...TABS.map(([key, label, ic]) => h("button", { class: "tab" + (key === tab ? " on" : ""), type: "button", "aria-label": label, "aria-current": key === tab ? "page" : null, onclick: () => key !== tab && go("/user/" + key) },
+  tabbar.replaceChildren(...TABS.map(([key, label, ic]) => h("button", { class: "tab" + (key === tab ? " on" : ""), type: "button", "aria-label": label, "aria-current": key === tab ? "page" : null, onclick: () => key !== tab && go("/attendee/" + key) },
     icon(ic), h("span", {}, label), key === "support" && newReplies() ? h("i", { class: "dot" }) : null)));
 }
 subscribe(() => { if (signedIn && !S.needsSelfie && tabbar) drawTabs(currentTab()); });
@@ -60,14 +60,14 @@ async function afterAuth() {
 }
 async function onSelfieDone() { S.needsSelfie = false; viewKey = ""; await afterAuth(); }
 
-function endSession() { signedIn = false; viewKey = ""; resetState(); closeAllSheets(); history.replaceState({}, "", "/user"); render(); }
+function endSession() { signedIn = false; viewKey = ""; resetState(); closeAllSheets(); history.replaceState({}, "", "/attendee"); render(); }
 async function signOut() { await push.forget().catch(() => {}); await api.logout(); endSession(); }
 
 function openFromHash() { if (location.hash === "#announcements") { history.replaceState({}, "", location.pathname); openAnnouncements(); } }
 
 async function boot() {
   window.addEventListener("popstate", () => { if (!closeTopSheet()) render(); });
-  navigator.serviceWorker?.register("/user/sw.js", { scope: "/user/" }).catch(() => {});
+  navigator.serviceWorker?.register("/attendee/sw.js", { scope: "/attendee/" }).catch(() => {});
   navigator.serviceWorker?.addEventListener("message", (e) => { if (e.data?.open) { const u = new URL(e.data.open, location.origin); closeAllSheets(); history.pushState({}, "", u.pathname); render(); if (u.hash === "#announcements") openAnnouncements(); loadAll().catch(() => {}); } });
   pullToRefresh(async () => { await (view?.refresh?.() ?? loadAll()).catch(() => {}); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && signedIn) loadAll().catch(() => {}); });

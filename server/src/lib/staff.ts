@@ -8,7 +8,8 @@ import { randomToken, safeEqual, signJwt, verifyJwt, verifyPasswordHash } from "
 import { audit } from "./util.ts";
 
 export interface StaffCfg {
-  name: "admin" | "check";
+  name: "admin" | "check";   // internal site id (cookie, session table, audit log)
+  base?: string;             // public address, defaults to /<name>
   user: string;
   password?: string;
   hash?: string;
@@ -17,7 +18,7 @@ export interface StaffCfg {
 
 export function staffAuth(app: FastifyInstance, db: Db, cfg: StaffCfg) {
   const cookie = `qff_${cfg.name}`;
-  const base = `/${cfg.name}`;
+  const base = cfg.base ?? `/${cfg.name}`;
   const claims = (req: FastifyRequest) => {
     const t = req.cookies[cookie];
     const c = t ? verifyJwt<{ aud: string; csrf: string; jti: string }>(t, config.sessionSecret) : null;

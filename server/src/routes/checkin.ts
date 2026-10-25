@@ -1,4 +1,4 @@
-// Door-scanning site (/check): separate login, separate API. It can verify passes and read attendance counts — nothing else.
+// Door check-in site (/checkin): separate login, separate API. It can verify passes and read attendance counts — nothing else.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { config } from "../config.ts";
@@ -10,14 +10,14 @@ import { audit, eventDay } from "../lib/util.ts";
 
 const Scope = z.string().regex(/^(day:\d{4}-\d{2}-\d{2}|event:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/);
 
-export function checkRoutes(app: FastifyInstance, db: Db) {
-  const { guard, common } = staffAuth(app, db, { name: "check", user: config.checkUser, password: config.checkPassword, hash: config.checkPasswordHash, ttlSec: 12 * 3600 });
+export function checkinRoutes(app: FastifyInstance, db: Db) {
+  const { guard, common } = staffAuth(app, db, { name: "check", base: "/checkin", user: config.checkUser, password: config.checkPassword, hash: config.checkPasswordHash, ttlSec: 12 * 3600 });
 
   app.register(async (api) => {
     api.addHook("preHandler", guard);
     common(api);
 
-    api.get("/check/api/scopes", async () => {
+    api.get("/checkin/api/scopes", async () => {
       // Entry days = every day of the festival window (admin setting) ∪ every day any event touches, so a gate can be scanned
       // on a day even before sessions for it are entered.
       const set = new Set<string>();
@@ -33,7 +33,7 @@ export function checkRoutes(app: FastifyInstance, db: Db) {
       return { today, defaultScope: `day:${defaultDay}`, days, events: events.map((e) => ({ id: e.id, title: e.title })) };
     });
 
-    api.get("/check/api/stats", async (req) => {
+    api.get("/checkin/api/stats", async (req) => {
       const { scope } = z.object({ scope: Scope }).parse(req.query);
       const [c] = await db.query("SELECT count(*)::int AS n FROM checkins WHERE scope=$1", [scope]);
       const [t] = await db.query("SELECT count(*)::int AS n FROM users WHERE status='active'");
@@ -43,7 +43,7 @@ export function checkRoutes(app: FastifyInstance, db: Db) {
 
     // Scanning only VERIFIES the pass. The door volunteer compares the face with the attendee's selfie, then confirms or rejects;
     // the check-in is recorded on confirm. The short-lived ticket binds that decision to this attendee and scope.
-    api.post("/check/api/scan", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req) => {
+    api.post("/checkin/api/scan", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req) => {
       const b = z.object({ payload: z.string().max(200), scope: Scope }).parse(req.body);
       const m = /^QFF1\.([A-Z0-9-]{4,20})\.(\d{1,12})\.([A-Za-z0-9_-]{12})$/.exec(b.payload.trim());
       if (!m) return { result: "invalid", message: "Not a Fall Fest pass." };
@@ -72,7 +72,7 @@ export function checkRoutes(app: FastifyInstance, db: Db) {
 
     const ticketOf = (t: string) => { const c = verifyJwt<{ aud: string; uid: string; scope: string }>(t, config.sessionSecret); return c && c.aud === "check-ticket" ? c : null; };
 
-    api.post("/check/api/confirm", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req, reply) => {
+    api.post("/checkin/api/confirm", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req, reply) => {
       const b = z.object({ ticket: z.string().max(1000), decision: z.enum(["confirm", "reject"]) }).parse(req.body);
       const t = ticketOf(b.ticket);
       if (!t) return reply.code(400).send({ result: "expired", message: "That scan timed out. Scan the pass again." });
@@ -82,7 +82,7 @@ export function checkRoutes(app: FastifyInstance, db: Db) {
       return { result: "ok", message: "Checked in." };
     });
 
-    api.get("/check/api/photo", async (req, reply) => {
+    api.get("/checkin/api/photo", async (req, reply) => {
       const { ticket } = z.object({ ticket: z.string().max(1000) }).parse(req.query);
       const t = ticketOf(ticket);
       const img = t ? await getPhoto(db, t.uid) : null;

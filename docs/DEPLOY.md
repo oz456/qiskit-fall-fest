@@ -3,13 +3,13 @@
 ## Where everything lives
 | Piece | Location |
 |---|---|
-| Service (API + `/admin` + `/check`) | Cloud Run `qff-api`, project `qiskit-511416`, region `us-east4` (Neon is in Ohio; us-east4 is used because Cloud Run domain mappings are not available in us-east5) |
+| Service (API + `/admin` + `/checkin`) | Cloud Run `qff-api`, project `qiskit-511416`, region `us-east4` (Neon is in Ohio; us-east4 is used because Cloud Run domain mappings are not available in us-east5) |
 | Live URL | https://app.qffsrmap2026.com (custom domain mapping; Cloudflare DNS: `app` CNAME → `ghs.googlehosted.com`, DNS only). Raw: https://qff-api-666549809539.us-east4.run.app |
 | Database | Neon project `qiskit` (Postgres). Tables are created automatically on boot (`server/migrations/`) |
 | Secrets | GCP Secret Manager: `qff-database-url`, `qff-jwt-secret`, `qff-session-secret`, `qff-otp-pepper`, `qff-smtp-accounts`, `qff-admin-username`, `qff-admin-password-hash`, `qff-check-username`, `qff-check-password-hash` |
 | Code | GitHub `oz456/qiskit-fall-fest` (private) |
 | Logins | `~/.qff/CREDENTIALS.txt` on the machine that set this up (admin + check-in, random) |
-| Selfie bucket | `gs://qiskit-511416-qff-photos` (private, uniform access; the Cloud Run service account is `objectAdmin`). Env `PHOTO_BUCKET`. Photos are only streamed by `/check` and `/admin` behind their logins. Consider deleting them after the event. |
+| Selfie bucket | `gs://qiskit-511416-qff-photos` (private, uniform access; the Cloud Run service account is `objectAdmin`). Env `PHOTO_BUCKET`. Photos are only streamed by `/checkin` and `/admin` behind their logins. Consider deleting them after the event. |
 | Android signing key | `~/.qff/event.keystore` + `keystore.properties` — **back these up** |
 
 ## Continuous deployment
@@ -66,9 +66,9 @@ Logs: Cloud Run → `qff-api` → Logs. Failed emails appear as “otp mail fail
 ## First-run checklist
 - `/admin` → Attendees → **Import CSV** (the window shows the format and a template, including one column per event for registrations). Only these emails can sign in.
 - `/admin` → Events: the app covers the **offline phase (26–30 Oct, SRM University AP)**. Loaded so far: Project Q Grand Finale (28–29 Oct) and the Winner Announcement (30 Oct). Add every other on-campus session there; for multi-day events set the end on a later day.
-- `/admin` → Content → **Festival first/last day** (26–30 Oct) drives the app's countdown and guarantees those days are in the `/check` scanner even before sessions are entered.
+- `/admin` → Content → **Festival first/last day** (26–30 Oct) drives the app's countdown and guarantees those days are in the `/checkin` scanner even before sessions are entered.
 - `/admin` → Content: FAQs and venue text.
-- `/check`: hand the scanner login to door volunteers. Pick “Entry · today” (once per person per day) or a specific event. Use a phone with the camera, or a USB barcode/QR scanner into the “Backup” box.
+- `/checkin`: hand the scanner login to door volunteers. Pick “Entry · today” (once per person per day) or a specific event. Use a phone with the camera, or a USB barcode/QR scanner into the “Backup” box.
 
 ## Event-day tips
 - Set min instances to 1 to avoid cold starts: `gcloud run services update qff-api --region us-east4 --min-instances 1` (back to 0 afterwards).

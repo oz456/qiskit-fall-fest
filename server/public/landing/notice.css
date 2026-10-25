@@ -1,4 +1,4 @@
-/* The blocked-device popup (served by the server for Android and desktop visitors of /user). Not dismissable: no close button, no script. */
+/* The blocked-device popup (served by the server for Android and desktop visitors of /attendee). Not dismissable: no close button, no script. */
 @font-face{font-family:Anton;src:url(/shared/fonts/anton.ttf) format("truetype");font-display:swap}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}

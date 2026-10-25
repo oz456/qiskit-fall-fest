@@ -5,7 +5,7 @@ import { button, h, icon, openSheet } from "./ui.js";
 
 export const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 const urlB64 = (b64) => { const pad = "=".repeat((4 - (b64.length % 4)) % 4), raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); };
-const reg = () => navigator.serviceWorker.getRegistration("/user/");   // never wait on .ready: it hangs forever when no worker is registered
+const reg = () => navigator.serviceWorker.getRegistration("/attendee/");   // never wait on .ready: it hangs forever when no worker is registered
 
 /** "install" | "unsupported" | "denied" | "off" | "on" */
 export async function status() {

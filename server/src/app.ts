@@ -7,7 +7,7 @@ import { config, isProd } from "./config.ts";
 import type { Db } from "./db.ts";
 import { initMail } from "./lib/mail.ts";
 import { adminRoutes } from "./routes/admin.ts";
-import { checkRoutes } from "./routes/check.ts";
+import { checkinRoutes } from "./routes/checkin.ts";
 import { attendeeRoutes } from "./routes/attendee.ts";
 import { notFoundPage } from "./lib/platform.ts";
 import { siteRoutes } from "./routes/site.ts";
@@ -48,8 +48,8 @@ export async function buildApp(db: Db) {
   });
   app.addHook("onSend", async (req, reply) => {
     reply.header("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=()");
-    if (/^\/(user|admin|check|v1)(\/|$)/.test(req.url)) reply.header("X-Robots-Tag", "noindex, nofollow"); // only the landing page is public
-    if (req.url.startsWith("/v1/") || req.url.startsWith("/admin/api/") || req.url.startsWith("/check/api/")) reply.header("Cache-Control", "no-store");
+    if (/^\/(attendee|admin|checkin|v1)(\/|$)/.test(req.url)) reply.header("X-Robots-Tag", "noindex, nofollow"); // only the landing page is public
+    if (req.url.startsWith("/v1/") || req.url.startsWith("/admin/api/") || req.url.startsWith("/checkin/api/")) reply.header("Cache-Control", "no-store");
   });
   await app.register(cookie);
   await app.register(rateLimit, { global: true, max: 240, timeWindow: "1 minute" });
@@ -64,7 +64,7 @@ export async function buildApp(db: Db) {
   });
   app.setNotFoundHandler((req, reply) => {   // browsers get a page, API clients get JSON
     const path = req.url.split("?")[0]!;
-    const api = /^\/(v1|admin\/api|check\/api)(\/|$)/.test(path);
+    const api = /^\/(v1|admin\/api|checkin\/api)(\/|$)/.test(path);
     if (!api && (req.method === "GET" || req.method === "HEAD") && String(req.headers.accept ?? "").includes("text/html")) return reply.code(404).header("Cache-Control", "no-store").type("text/html; charset=utf-8").send(notFoundPage());
     return reply.code(404).send({ error: "not_found", message: "Not found." });
   });
@@ -78,7 +78,7 @@ export async function buildApp(db: Db) {
   initMail(db);
   attendeeRoutes(app, db);
   adminRoutes(app, db);
-  checkRoutes(app, db);
+  checkinRoutes(app, db);
 
   await siteRoutes(app);
   return app;

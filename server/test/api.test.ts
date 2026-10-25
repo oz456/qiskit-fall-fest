@@ -33,7 +33,7 @@ before(async () => {
   const r = await app.inject({ method: "POST", url: "/admin/api/login", payload: { username: "admin", password: "admin-dev-password" } });
   assert.equal(r.statusCode, 200);
   cookie = (r.headers["set-cookie"] as string).split(";")[0]!; csrf = r.json().csrf;
-  const c = await app.inject({ method: "POST", url: "/check/api/login", payload: { username: "check", password: "check-dev-password" } });
+  const c = await app.inject({ method: "POST", url: "/checkin/api/login", payload: { username: "check", password: "check-dev-password" } });
   assert.equal(c.statusCode, 200);
   ccookie = (c.headers["set-cookie"] as string).split(";")[0]!; ccsrf = c.json().csrf;
 });
@@ -53,8 +53,8 @@ describe("admin security", () => {
 describe("scanner/admin separation", () => {
   it("check login cannot reach admin APIs and admin login cannot scan", async () => {
     assert.equal((await check("GET", "/admin/api/users")).statusCode, 401);
-    assert.equal((await app.inject({ method: "GET", url: "/check/api/scopes", headers: { cookie } })).statusCode, 401);
-    assert.equal((await app.inject({ method: "POST", url: "/check/api/login", payload: { username: "admin", password: "admin-dev-password" } })).statusCode, 401);
+    assert.equal((await app.inject({ method: "GET", url: "/checkin/api/scopes", headers: { cookie } })).statusCode, 401);
+    assert.equal((await app.inject({ method: "POST", url: "/checkin/api/login", payload: { username: "admin", password: "admin-dev-password" } })).statusCode, 401);
     assert.equal((await app.inject({ method: "POST", url: "/admin/api/login", payload: { username: "check", password: "check-dev-password" } })).statusCode, 401);
   });
 });
@@ -62,7 +62,7 @@ describe("scanner/admin separation", () => {
 describe("check-in days", () => {
   it("always offers the festival window days even without events on them", async () => {
     await admin("PUT", "/admin/api/settings", { fest_start: "2026-10-26", fest_end: "2026-10-30" });
-    const r = (await check("GET", "/check/api/scopes")).json();
+    const r = (await check("GET", "/checkin/api/scopes")).json();
     for (const d of ["2026-10-26", "2026-10-27", "2026-10-30"]) assert.ok(r.days.includes(d), d);
   });
 });
@@ -172,11 +172,11 @@ describe("attendee flow", () => {
     assert.equal((await put(jpeg)).statusCode, 409, "only once");
     assert.equal((await db.query("SELECT 1 FROM user_photos WHERE user_id=$1", [u!.id])).length, 1);
     assert.equal((await me()).json().profile.hasPhoto, true);
-    const v = (await check("POST", "/check/api/scan", { payload: passPayload(Buffer.from(u!.pass_secret), u!.pass_code), scope: "day:2026-10-19" })).json();
+    const v = (await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(u!.pass_secret), u!.pass_code), scope: "day:2026-10-19" })).json();
     assert.equal(v.who.hasPhoto, true);
-    const img = await app.inject({ url: `/check/api/photo?ticket=${encodeURIComponent(v.ticket)}`, headers: { cookie: ccookie } });
+    const img = await app.inject({ url: `/checkin/api/photo?ticket=${encodeURIComponent(v.ticket)}`, headers: { cookie: ccookie } });
     assert.equal(img.statusCode, 200); assert.equal(img.rawPayload[0], 0xff); assert.ok(!img.rawPayload.includes("GPSLEAK"), "EXIF/location data is stripped before storage");
-    assert.equal((await app.inject({ url: `/check/api/photo?ticket=${encodeURIComponent(v.ticket)}` })).statusCode, 401, "needs the scanner login");
+    assert.equal((await app.inject({ url: `/checkin/api/photo?ticket=${encodeURIComponent(v.ticket)}` })).statusCode, 401, "needs the scanner login");
     assert.equal((await admin("GET", `/admin/api/users/${u!.id}/photo`)).statusCode, 200);
     await admin("DELETE", `/admin/api/users/${u!.id}/photo`);
     assert.equal((await me()).json().profile.hasPhoto, false);
@@ -225,9 +225,9 @@ describe("attendee flow", () => {
     const reg = async () => (await app.inject({ url: "/v1/events", headers: h })).json().events.find((e: any) => e.id === e3).registered;
     assert.equal(await reg(), false);
     const [u] = await db.query("SELECT pass_code, pass_secret FROM users WHERE email='alex@example.org'");
-    const v = (await check("POST", "/check/api/scan", { payload: passPayload(Buffer.from(u!.pass_secret), u!.pass_code), scope: `event:${e3}` })).json();
+    const v = (await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(u!.pass_secret), u!.pass_code), scope: `event:${e3}` })).json();
     assert.equal(v.result, "verify");
-    assert.equal((await check("POST", "/check/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
+    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
     assert.equal(await reg(), true);
   });
   it("tickets: user creates, admin replies, user sees reply", async () => {
@@ -293,17 +293,17 @@ describe("rotating QR check-in", () => {
     const secret = Buffer.from(u!.pass_secret); const scope = "day:2026-10-16";
     const live = passPayload(secret, u!.pass_code);
     // 1) scan only verifies; nothing is recorded until the volunteer confirms
-    const v = (await check("POST", "/check/api/scan", { payload: live, scope })).json();
+    const v = (await check("POST", "/checkin/api/scan", { payload: live, scope })).json();
     assert.equal(v.result, "verify"); assert.equal(v.who.hasPhoto, true);
     assert.equal((await admin("GET", `/admin/api/attendance?scope=${scope}`)).json().rows.length, 0);
     // 2) reject records nothing; confirm records once
-    assert.equal((await check("POST", "/check/api/confirm", { ticket: v.ticket, decision: "reject" })).json().result, "rejected");
-    assert.equal((await check("POST", "/check/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
-    assert.equal((await check("POST", "/check/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "duplicate");
-    assert.equal((await check("POST", "/check/api/scan", { payload: live, scope })).json().result, "duplicate");
-    assert.equal((await check("POST", "/check/api/confirm", { ticket: "garbage", decision: "confirm" })).statusCode, 400);
-    assert.equal((await check("POST", "/check/api/scan", { payload: passPayload(secret, u!.pass_code, Date.now() - 5 * 60_000), scope: "day:2026-10-17" })).json().result, "expired");
-    assert.equal((await check("POST", "/check/api/scan", { payload: passPayload(Buffer.alloc(32, 1), u!.pass_code), scope: "day:2026-10-17" })).json().result, "invalid");
+    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "reject" })).json().result, "rejected");
+    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
+    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "duplicate");
+    assert.equal((await check("POST", "/checkin/api/scan", { payload: live, scope })).json().result, "duplicate");
+    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: "garbage", decision: "confirm" })).statusCode, 400);
+    assert.equal((await check("POST", "/checkin/api/scan", { payload: passPayload(secret, u!.pass_code, Date.now() - 5 * 60_000), scope: "day:2026-10-17" })).json().result, "expired");
+    assert.equal((await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.alloc(32, 1), u!.pass_code), scope: "day:2026-10-17" })).json().result, "invalid");
   });
   it("admin sees attendance recorded by the scanner", async () => {
     const r = (await admin("GET", "/admin/api/attendance?scope=day:2026-10-16")).json();
@@ -312,7 +312,7 @@ describe("rotating QR check-in", () => {
   it("old device secret stops working after re-login (device binding)", async () => {
     const [u] = await db.query("SELECT pass_code FROM users WHERE email='alex@example.org'");
     const stale = passPayload(Buffer.alloc(32, 7), u!.pass_code);
-    assert.equal((await check("POST", "/check/api/scan", { payload: stale, scope: "day:2026-10-18" })).json().result, "invalid");
+    assert.equal((await check("POST", "/checkin/api/scan", { payload: stale, scope: "day:2026-10-18" })).json().result, "invalid");
   });
 });
 
@@ -323,29 +323,29 @@ describe("web app: device gate and browser sessions", () => {
   const get = (url: string, ua: string, extra: Record<string, string> = {}) => app.inject({ url, headers: { "user-agent": ua, ...extra } });
 
   it("iPhone gets the app; Android and desktop only ever get the popup (pages, scripts, fonts, manifest, even missing files)", async () => {
-    for (const path of ["/user", "/user/", "/user/hub", "/user/pass", "/user/support"]) {
+    for (const path of ["/attendee", "/attendee/", "/attendee/hub", "/attendee/pass", "/attendee/support"]) {
       const r = await get(path, IOS); assert.equal(r.statusCode, 200, path); assert.match(r.headers["content-type"] as string, /html/);
     }
-    for (const path of ["/user", "/user/hub", "/user/js/main.js", "/user/css/user.css", "/user/manifest.webmanifest", "/user/nothing.png"]) {
+    for (const path of ["/attendee", "/attendee/hub", "/attendee/js/main.js", "/attendee/css/attendee.css", "/attendee/manifest.webmanifest", "/attendee/nothing.png"]) {
       const a = await get(path, ANDROID); assert.equal(a.statusCode, 403, "android " + path); assert.match(a.body, /isn’t available on Android/); assert.match(a.body, /href="\/\?from=user/);
       const d = await get(path, DESKTOP); assert.equal(d.statusCode, 403, "desktop " + path); assert.match(d.body, /Open this on your iPhone/);
       assert.equal(a.headers["cache-control"], "no-store");
     }
-    assert.ok(!(await get("/user/hub", ANDROID)).body.includes("<script"), "the popup has no script to tamper with");
+    assert.ok(!(await get("/attendee/hub", ANDROID)).body.includes("<script"), "the popup has no script to tamper with");
     // spoof attempts: a Chromium client hint that contradicts an iPhone user-agent, or an Android hint on a desktop UA
-    assert.equal((await get("/user/hub", IOS, { "sec-ch-ua-platform": '"Windows"' })).statusCode, 403);
-    assert.equal((await get("/user/hub", DESKTOP, { "sec-ch-ua-platform": '"Android"' })).statusCode, 403);
-    assert.match((await get("/user/hub", DESKTOP, { "sec-ch-ua-platform": '"Android"' })).body, /isn’t available on Android/);
+    assert.equal((await get("/attendee/hub", IOS, { "sec-ch-ua-platform": '"Windows"' })).statusCode, 403);
+    assert.equal((await get("/attendee/hub", DESKTOP, { "sec-ch-ua-platform": '"Android"' })).statusCode, 403);
+    assert.match((await get("/attendee/hub", DESKTOP, { "sec-ch-ua-platform": '"Android"' })).body, /isn’t available on Android/);
   });
 
   it("the landing page, downloads and old links work for everyone", async () => {
-    for (const ua of [IOS, ANDROID, DESKTOP]) { const r = await get("/", ua); assert.equal(r.statusCode, 200); assert.match(r.body, /Download the app \(APK\)/); assert.match(r.body, /href="\/user"/); }
+    for (const ua of [IOS, ANDROID, DESKTOP]) { const r = await get("/", ua); assert.equal(r.statusCode, 200); assert.match(r.body, /Download the app \(APK\)/); assert.match(r.body, /href="\/attendee"/); }
     assert.equal((await get("/downloads/qff-2026.apk", ANDROID)).headers["content-type"], "application/vnd.android.package-archive");
     const old = await get("/download/qiskit-fallfest-2026.apk", ANDROID); assert.equal(old.statusCode, 301); assert.equal(old.headers.location, "/downloads/qff-2026.apk");
     assert.equal((await get("/download", ANDROID)).headers.location, "/");
-    assert.match((await get("/robots.txt", DESKTOP)).body, /Disallow: \/user/);
-    assert.equal((await get("/admin/", DESKTOP)).statusCode, 200); assert.equal((await get("/check/", DESKTOP)).statusCode, 200);
-    assert.match(String((await get("/user/hub", IOS)).headers["x-robots-tag"]), /noindex/);
+    assert.match((await get("/robots.txt", DESKTOP)).body, /Disallow: \/attendee/);
+    assert.equal((await get("/admin", DESKTOP)).statusCode, 200); assert.equal((await get("/checkin", DESKTOP)).statusCode, 200);
+    assert.match(String((await get("/attendee/hub", IOS)).headers["x-robots-tag"]), /noindex/);
   });
 
   it("browser sessions: refresh token only in an HttpOnly cookie, pass secret never sent, rotation + replay detection, real logout", async () => {
@@ -389,7 +389,7 @@ describe("web app: device gate and browser sessions", () => {
     assert.equal(codes.codes.length, 11); assert.equal(codes.stepSeconds, 30);
     const [u] = await db.query("SELECT pass_secret, pass_code FROM users WHERE email=$1", [em]);
     assert.equal(codes.codes[1].payload, passPayload(Buffer.from(u!.pass_secret), u!.pass_code), "codes[1] is the current 30-second window");
-    const sc = (await check("POST", "/check/api/scan", { payload: codes.codes[1].payload, scope: "day:2026-10-29" })).json();
+    const sc = (await check("POST", "/checkin/api/scan", { payload: codes.codes[1].payload, scope: "day:2026-10-29" })).json();
     assert.equal(sc.result, "verify", "a code from the web app scans at the door");
     const lo = await app.inject({ method: "POST", url: "/v1/auth/web-logout", headers: W({ cookie: `qff_rt=${rt3}` }), payload: {} });
     assert.equal(lo.statusCode, 200); assert.match(String(lo.headers["set-cookie"]), /qff_rt=;/);
@@ -402,19 +402,20 @@ describe("web push endpoints", () => {
   it("only accepts the browser vendors' push services (no arbitrary hosts the server could be made to call)", async () => {
     const { isPushServiceUrl } = await import("../src/routes/attendee.ts");
     for (const ok of ["https://web.push.apple.com/Qabc", "https://fcm.googleapis.com/fcm/send/x", "https://updates.push.services.mozilla.com/wpush/v2/x", "https://wns2-par02p.notify.windows.com/w/?token=x"]) assert.equal(isPushServiceUrl(ok), true, ok);
-    for (const bad of ["https://127.0.0.1/x", "https://evil.example/x", "https://web.push.apple.com.evil.example/x", "http://web.push.apple.com/x", "https://web.push.apple.com:8443/x", "https://user@web.push.apple.com/x", "https://169.254.169.254/", "nonsense"]) assert.equal(isPushServiceUrl(bad), false, bad);
+    for (const bad of ["https://127.0.0.1/x", "https://evil.example/x", "https://web.push.apple.com.evil.example/x", "http://web.push.apple.com/x", "https://web.push.apple.com:8443/x", "https://attendee@web.push.apple.com/x", "https://169.254.169.254/", "nonsense"]) assert.equal(isPushServiceUrl(bad), false, bad);
   });
 });
 
 describe("addresses: one canonical URL per page, proper 404s", () => {
   const ios = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
   const get = (url: string, headers: Record<string, string> = {}) => app.inject({ method: "GET", url, headers: { "user-agent": ios, ...headers } });
-  it("duplicates redirect permanently to the canonical address", async () => {
-    for (const [from, to] of [["/admin", "/admin/"], ["/check", "/check/"], ["/scan", "/check/"], ["/index.html", "/"], ["/admin/index.html", "/admin/"], ["/check/index.html", "/check/"], ["/user/index.html", "/user"], ["/user/hub/", "/user/hub"], ["/user/pass/", "/user/pass"], ["/user/support/", "/user/support"], ["/download", "/"], ["/favicon.ico", "/shared/qiskit.svg"]] as const) {
+  it("duplicates and older addresses redirect permanently to the canonical one", async () => {
+    for (const [from, to] of [["/admin/", "/admin"], ["/checkin/", "/checkin"], ["/check", "/checkin"], ["/check/", "/checkin"], ["/scan", "/checkin"], ["/index.html", "/"], ["/admin/index.html", "/admin"], ["/checkin/index.html", "/checkin"],
+      ["/user", "/attendee"], ["/user/hub", "/attendee/hub"], ["/user/pass", "/attendee/pass"], ["/user/support", "/attendee/support"], ["/attendee/index.html", "/attendee"], ["/attendee/hub/", "/attendee/hub"], ["/attendee/pass/", "/attendee/pass"], ["/attendee/support/", "/attendee/support"], ["/download", "/"], ["/favicon.ico", "/shared/qiskit.svg"]] as const) {
       const r = await get(from); assert.equal(r.statusCode, 301, from); assert.equal(r.headers.location, to, from);
     }
-    assert.equal((await get("/user/anything")).statusCode, 302); assert.equal((await get("/user/anything")).headers.location, "/user");
-    for (const ok of ["/", "/admin/", "/check/", "/user", "/user/hub", "/user/pass", "/user/support"]) assert.equal((await get(ok)).statusCode, 200, ok);
+    assert.equal((await get("/attendee/anything")).statusCode, 302); assert.equal((await get("/attendee/anything")).headers.location, "/attendee");
+    for (const ok of ["/", "/admin", "/checkin", "/attendee", "/attendee/hub", "/attendee/pass", "/attendee/support", "/admin/admin.js", "/checkin/checkin.js", "/checkin/vendor/jsQR.js", "/admin/qiskit.svg"]) assert.equal((await get(ok)).statusCode, 200, ok);
   });
   it("unknown addresses: a branded page for browsers, JSON for API clients", async () => {
     const page = await get("/no-such-page", { accept: "text/html,application/xhtml+xml" });

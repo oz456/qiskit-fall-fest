@@ -1,6 +1,6 @@
 # Admin guide (for the organising team)
 
-Admin: `/admin/`. Door scanner: `/check/` (a different login, give only this one to door volunteers). Both work on phones: the admin menu scrolls sideways along the top, lists become cards, and dialogs open as bottom sheets. Logins are in `~/.qff/CREDENTIALS.txt` on the setup machine.
+Admin: `/admin`. Door scanner: `/checkin/` (a different login, give only this one to door volunteers). Both work on phones: the admin menu scrolls sideways along the top, lists become cards, and dialogs open as bottom sheets. Logins are in `~/.qff/CREDENTIALS.txt` on the setup machine.
 
 ## Events
 - **New event**: title, track, start/end (multi-day: set the end on a later day), location, speaker, description.
@@ -17,7 +17,7 @@ Admin: `/admin/`. Door scanner: `/check/` (a different login, give only this one
 - **Import CSV**: the window shows the exact format for *today's* events and a **Download template** button. Columns: `email,name,college`, then one column per event, headed by the event's exact title. Put `1` (or yes) under an event for "registered", `0` or empty for "not". Existing emails are not duplicated but a 1 still registers them; a 0 never removes a registration (untick it in the attendee's panel).
 - An attendee also appears as *registered* for an event once the scanner has confirmed them at that event.
 
-## Door scanner (`/check`)
+## Door scanner (`/checkin`)
 1. Pick what you're scanning for: *Venue entry* for a day (once per person per day) or a specific event.
 2. Point the camera at the attendee's live QR (or paste a code under "Enter a code manually").
 3. The sheet shows the selfie, name and college. **Compare the face**, then **Confirm entry** or **Reject**.

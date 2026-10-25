@@ -55,7 +55,7 @@ function showLogin() {
     e.preventDefault(); err.textContent = "";
     try { const r = await api("POST", "/login", { username: u.value, password: p.value }); csrf = r.csrf; await boot(); } catch (x) { err.textContent = x.message; }
   } }, h("label", {}, "Username"), u, h("label", {}, "Password"), p, err, h("div", { class: "row" }, h("button", { class: "btn grow" }, "Sign in")));
-  $app.append(h("div", { class: "login" }, h("div", { class: "brand" }, h("img", { src: "qiskit.svg", alt: "" }), "Fall Fest Admin"), h("div", { class: "card" }, form)));
+  $app.append(h("div", { class: "login" }, h("div", { class: "brand" }, h("img", { src: "/admin/qiskit.svg", alt: "" }), "Fall Fest Admin"), h("div", { class: "card" }, form)));
 }
 let main;
 function route() {
@@ -69,7 +69,7 @@ async function boot() {
   csrf = me.csrf; TZ = me.tz; clear($app);
   main = h("main");
   $app.append(h("div", { class: "shell" },
-    h("nav", {}, h("div", { class: "brand" }, h("img", { src: "qiskit.svg", alt: "" }), h("span", {}, "Fall Fest")),
+    h("nav", {}, h("div", { class: "brand" }, h("img", { src: "/admin/qiskit.svg", alt: "" }), h("span", {}, "Fall Fest")),
       PAGES.map(([id, label]) => h("a", { href: "#" + id, "data-p": id }, label)),
       h("div", { class: "grow" }),
       h("a", { href: "#activity", "data-p": "activity" }, "Activity"),

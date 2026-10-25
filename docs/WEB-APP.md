@@ -1,31 +1,31 @@
-# iPhone web app (`/user`) and the domain
+# iPhone web app (`/attendee`) and the domain
 
 Plan: no Google Play / App Store accounts. **Android** installs the APK from the landing page. **iPhone** uses the web app until the native app is published. Everything is served by the one Cloud Run service on `app.qffsrmap2026.com`.
 
 | Path | What |
 |---|---|
 | `/` | Landing page: APK download (+ SHA-256, install steps) and the iPhone card with the web-app button |
-| `/user` | Web app sign-in; `/user/hub`, `/user/pass`, `/user/support` are the three tabs (same screens as the mobile apps) |
-| `/admin`, `/check` | Admin portal, door scanner (unchanged) |
+| `/attendee` | Web app sign-in; `/attendee/hub`, `/attendee/pass`, `/attendee/support` are the three tabs (same screens as the mobile apps) |
+| `/admin`, `/checkin` | Admin portal, door check-in scanner (`/check` and `/scan` redirect to `/checkin`) |
 | `/downloads/qff-2026.apk` | The APK. Old `/download*` links redirect here |
 
 ### Address rules
-- One canonical address per page: `/`, `/admin/`, `/check/`, `/user`, `/user/hub`, `/user/pass`, `/user/support`. Variants (`/admin`, `/check`, `/scan`, `/index.html`, `/user/hub/`, `/user/index.html`, `/download`) redirect permanently (301); any other `/user/...` goes to `/user`.
-- Unknown addresses: a branded "Page not found" page for browsers, `{"error":"not_found","message":"Not found."}` JSON for API clients and anything under `/v1`, `/admin/api`, `/check/api`.
-- APIs: `/v1/...` attendee API (shared by Android, iPhone and web; versioned, existing apps depend on it), `/admin/api/...` and `/check/api/...` staff APIs. Health probe: `/ping`.
+- One canonical address per page, no trailing slash: `/`, `/admin`, `/checkin`, `/attendee`, `/attendee/hub`, `/attendee/pass`, `/attendee/support`. Older and duplicate addresses redirect permanently (301): `/admin/`, `/checkin/`, `/check`, `/scan`, `/index.html`, `/user`, `/user/hub|pass|support`, `/attendee/hub/`, `/attendee/index.html`, `/download`. Any other `/attendee/...` goes to `/attendee`.
+- Unknown addresses: a branded "Page not found" page for browsers, `{"error":"not_found","message":"Not found."}` JSON for API clients and anything under `/v1`, `/admin/api`, `/checkin/api`.
+- APIs: `/v1/...` attendee API (shared by Android, iPhone and web; versioned, existing apps depend on it), `/admin/api/...` and `/checkin/api/...` staff APIs. Health probe: `/ping`.
 - `/downloads/qff-2026.apk` is served as an attachment; the matching `.sha256` sits next to it.
 
-## Who may use `/user`
-**Only iPhones** (`USER_APP_PLATFORMS`, default `ios`). The check runs in three places:
-1. **Server, on every `/user/**` request** (page, scripts, fonts, manifest, even missing files): Android/desktop get a small HTML popup, no app code at all, with a button to `/`.
+## Who may use `/attendee`
+**Only iPhones** (`WEB_APP_PLATFORMS`, default `ios`). The check runs in three places:
+1. **Server, on every `/attendee/**` request** (page, scripts, fonts, manifest, even missing files): Android/desktop get a small HTML popup, no app code at all, with a button to `/`.
 2. **Server, on every API call from the web app** (`x-qff-client: web`): 403 `platform_not_supported`.
 3. **Browser**: the page re-checks user-agent, `navigator.platform` and client hints and shows the same popup.
-The user-agent comes from the browser, so a technical user can fake it with developer tools; that is true of every web restriction. It stops all normal use. An iPhone in "Desktop website" mode or in a non-Safari browser that hides its iPhone identity is also blocked (fail closed). To open the web app to everyone for testing, set `USER_APP_PLATFORMS=ios,android,desktop`.
+The user-agent comes from the browser, so a technical user can fake it with developer tools; that is true of every web restriction. It stops all normal use. An iPhone in "Desktop website" mode or in a non-Safari browser that hides its iPhone identity is also blocked (fail closed). To open the web app to everyone for testing, set `WEB_APP_PLATFORMS=ios,android,desktop`.
 
 ## Sign-in and security
 - Same email + 6-digit code flow as the apps. The 15-minute access token lives only in page memory. The refresh token is an `HttpOnly; Secure; SameSite=Strict` cookie (`qff_rt`, path `/v1/auth`) that scripts can't read; it rotates on use and a replayed token revokes the session. Sign-out revokes it server-side (`POST /v1/auth/web-logout`).
 - The pass secret never reaches the browser: the server computes the rotating QR payloads (`GET /v1/pass/codes`, current + next ~5 minutes) and the page just draws them.
-- State-changing browser calls must carry an allowed `Origin`. No inline scripts/styles are allowed (CSP). `/user`, `/admin`, `/check`, `/v1` are `noindex`.
+- State-changing browser calls must carry an allowed `Origin`. No inline scripts/styles are allowed (CSP). `/attendee`, `/admin`, `/checkin`, `/v1` are `noindex`.
 - The native Android/iPhone API behaviour is unchanged.
 
 ## Notifications on iPhone

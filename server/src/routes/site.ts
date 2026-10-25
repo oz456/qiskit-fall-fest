@@ -1,5 +1,5 @@
 // Everything the browser loads: the landing page at /, the APK under /downloads, shared fonts/logo, the three sites
-// (/admin, /check, /user) and the redirects for older addresses. Only /user is gated by device (iPhone/iPad only).
+// (/admin, /checkin, /attendee) and the redirects for older addresses. Only /attendee is gated by device (iPhone/iPad only).
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import fstatic from "@fastify/static";
@@ -12,12 +12,15 @@ export async function siteRoutes(app: FastifyInstance) {
   const noCache = (res: any) => res.header("Cache-Control", "no-cache");
   const longCache = (res: any) => res.header("Cache-Control", "public, max-age=86400");
 
-  // ---- staff sites ----
-  await app.register(fstatic, { root: join(pub, "admin"), prefix: "/admin/", index: ["index.html"], decorateReply: true, setHeaders: noCache });
-  await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "check"), prefix: "/check/", index: ["index.html"], decorateReply: false, setHeaders: noCache }); });
-  // one canonical address per page: /admin/, /check/, /user, /  (the others redirect permanently)
-  for (const [from, to] of [["/admin", "/admin/"], ["/admin/index.html", "/admin/"], ["/check", "/check/"], ["/check/index.html", "/check/"], ["/scan", "/check/"], ["/scan/", "/check/"], ["/index.html", "/"], ["/favicon.ico", "/shared/qiskit.svg"]] as const)
+  // ---- staff sites: /admin and /checkin (one address each, no trailing slash; assets live below the same prefix) ----
+  await app.register(fstatic, { root: join(pub, "admin"), prefix: "/admin/", index: false, decorateReply: true, setHeaders: noCache });
+  await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "checkin"), prefix: "/checkin/", index: false, decorateReply: false, setHeaders: noCache }); });
+  app.get("/admin", async (_req, reply) => reply.header("Cache-Control", "no-cache").sendFile("index.html", join(pub, "admin")));
+  app.get("/checkin", async (_req, reply) => reply.header("Cache-Control", "no-cache").sendFile("index.html", join(pub, "checkin")));
+  // duplicates and older addresses redirect permanently to the canonical one
+  for (const [from, to] of [["/admin/", "/admin"], ["/admin/index.html", "/admin"], ["/checkin/", "/checkin"], ["/checkin/index.html", "/checkin"], ["/check", "/checkin"], ["/check/", "/checkin"], ["/scan", "/checkin"], ["/scan/", "/checkin"], ["/index.html", "/"], ["/favicon.ico", "/shared/qiskit.svg"], ["/user", "/attendee"], ["/user/", "/attendee"]] as const)
     app.get(from, async (_req, reply) => reply.redirect(to, 301));
+  for (const tab of ["hub", "pass", "support"]) app.get(`/user/${tab}`, async (_req, reply) => reply.redirect(`/attendee/${tab}`, 301));
 
   // ---- shared assets and downloads ----
   await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "shared"), prefix: "/shared/", decorateReply: false, setHeaders: longCache }); });
@@ -28,8 +31,8 @@ export async function siteRoutes(app: FastifyInstance) {
   app.get("/download/qiskit-fallfest-2026.apk", async (_req, reply) => reply.redirect("/downloads/qff-2026.apk", 301));
   app.get("/download/qiskit-fallfest-2026.apk.sha256", async (_req, reply) => reply.redirect("/downloads/qff-2026.apk.sha256", 301));
 
-  // ---- the attendee web app: iPhone/iPad only ----
-  const userRoot = join(pub, "user");
+  // ---- the attendee web app (/attendee): iPhone/iPad only ----
+  const attendeeRoot = join(pub, "attendee");
   await app.register(async (s) => {
     s.addHook("onRequest", async (req, reply) => {
       reply.header("Vary", "User-Agent, Sec-CH-UA-Platform");
@@ -38,14 +41,14 @@ export async function siteRoutes(app: FastifyInstance) {
       // Android / desktop: the page, its scripts, fonts and manifest are ALL refused; they only ever get the popup.
       return reply.code(403).header("Cache-Control", "no-store").type("text/html; charset=utf-8").send(gatePage(p === "ios" ? "desktop" : p));
     });
-    await s.register(fstatic, { root: userRoot, prefix: "/", index: false, decorateReply: false, setHeaders: (res: any, path: string) => (/\.(ttf|png|svg)$/.test(path) ? longCache(res) : noCache(res)) });
-    const shell = async (_req: any, reply: any) => reply.sendFile("index.html", userRoot);
+    await s.register(fstatic, { root: attendeeRoot, prefix: "/", index: false, decorateReply: false, setHeaders: (res: any, path: string) => (/\.(ttf|png|svg)$/.test(path) ? longCache(res) : noCache(res)) });
+    const shell = async (_req: any, reply: any) => reply.sendFile("index.html", attendeeRoot);
     s.get("/", shell);
-    // the app's own screens all load the same shell; /user/hub/ and /user/index.html collapse to one address; anything else under /user goes to the app's front door
-    for (const tab of ["hub", "pass", "support"]) { s.get(`/${tab}`, shell); s.get(`/${tab}/`, async (_req, reply) => reply.redirect(`/user/${tab}`, 301)); }
-    s.get("/index.html", async (_req, reply) => reply.redirect("/user", 301));
-    s.setNotFoundHandler((req, reply) => (req.method === "GET" && !/\.[a-z0-9]+$/i.test(req.url.split("?")[0]!) ? reply.redirect("/user", 302) : reply.code(404).send({ error: "not_found", message: "Not found." })));
-  }, { prefix: "/user" });
+    // the app's own screens all load the same shell; /attendee/hub/ and /attendee/index.html collapse to one address; anything else under /attendee goes to the app's front door
+    for (const tab of ["hub", "pass", "support"]) { s.get(`/${tab}`, shell); s.get(`/${tab}/`, async (_req, reply) => reply.redirect(`/attendee/${tab}`, 301)); }
+    s.get("/index.html", async (_req, reply) => reply.redirect("/attendee", 301));
+    s.setNotFoundHandler((req, reply) => (req.method === "GET" && !/\.[a-z0-9]+$/i.test(req.url.split("?")[0]!) ? reply.redirect("/attendee", 302) : reply.code(404).send({ error: "not_found", message: "Not found." })));
+  }, { prefix: "/attendee" });
 
   // ---- landing page at / (last, so it never shadows the sites above) ----
   await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "landing"), prefix: "/", index: ["index.html"], decorateReply: false, setHeaders: noCache }); });

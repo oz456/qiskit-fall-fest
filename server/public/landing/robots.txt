@@ -1,6 +1,6 @@
 User-agent: *
 Disallow: /admin
-Disallow: /check
-Disallow: /user
+Disallow: /checkin
+Disallow: /attendee
 Disallow: /v1
 Allow: /

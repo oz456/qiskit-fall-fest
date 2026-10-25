@@ -45,7 +45,7 @@ describe("browser smoke (admin + scanner)", { skip: chromeBin ? false : "no Chro
   };
 
   it("admin: signing in shows the portal with no script errors, and every page opens", async () => {
-    await login("/admin/", "admin", "admin-dev-password");
+    await login("/admin", "admin", "admin-dev-password");
     assert.ok(await until(`!!document.querySelector('nav')`), "the portal appears right after login (no refresh needed)");
     assert.equal(await ev(`document.querySelector('.err')?.textContent || ''`), "", "no error text on the login form");
     for (const page of ["events", "people", "announce", "support", "attendance", "content", "activity"]) {
@@ -62,7 +62,7 @@ describe("browser smoke (admin + scanner)", { skip: chromeBin ? false : "no Chro
     const d = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
     await db.query("INSERT INTO checkins (user_id, scope) VALUES ($1,$2)", [u!.id, `day:${d}`]);
     await db.query("INSERT INTO settings (key,value) VALUES ('fest_start',$1),('fest_end',$1) ON CONFLICT (key) DO UPDATE SET value=$1", [d]); // gives the scanner today as an entry day
-    await login("/check/", "check", "check-dev-password");
+    await login("/checkin", "check", "check-dev-password");
     assert.ok(await until(`!!document.querySelector('.scopebar select')`), "the scan screen appears right after login");
     assert.ok(await until(`document.querySelector('.recent')?.textContent.includes('Ui Tester')`), "the Latest list shows real names (not [object HTMLDivElement])");
     assert.deepEqual(errors.filter((e) => !/getUserMedia|Permission|NotAllowed|NotFound|Requested device/i.test(e)), [], "no JavaScript errors on the scanner (camera permission errors are expected headless)");

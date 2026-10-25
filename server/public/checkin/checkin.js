@@ -10,7 +10,7 @@ const h = (tag, attrs, ...kids) => {
 };
 const clear = (n) => { while (n.firstChild) n.removeChild(n.firstChild); };
 async function api(method, url, body) {
-  const res = await fetch("/check/api" + url, { method, credentials: "same-origin",
+  const res = await fetch("/checkin/api" + url, { method, credentials: "same-origin",
     headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...(method !== "GET" ? { "x-csrf-token": csrf } : {}) }, body: body ? JSON.stringify(body) : undefined });
   if (res.status === 401 && !url.startsWith("/login")) { stopCam(); showLogin(); throw new Error("Signed out"); }
   const data = await res.json().catch(() => ({}));
@@ -34,7 +34,7 @@ function beep(kind) {
 function showLogin() {
   clear($app);
   const err = h("div", { class: "err" }); const u = h("input", { autocomplete: "username", autocapitalize: "none", required: true }); const p = h("input", { type: "password", autocomplete: "current-password", required: true });
-  $app.append(h("div", { class: "wrap login" }, h("div", { class: "top" }, h("img", { src: "qiskit.svg", alt: "" }), h("b", {}, "Fall Fest · Check-in")),
+  $app.append(h("div", { class: "wrap login" }, h("div", { class: "top" }, h("img", { src: "/checkin/qiskit.svg", alt: "" }), h("b", {}, "Fall Fest · Check-in")),
     h("form", { class: "card", onsubmit: async (e) => { e.preventDefault(); err.textContent = ""; try { const r = await api("POST", "/login", { username: u.value, password: p.value }); csrf = r.csrf; await boot(); } catch (x) { err.textContent = x.message; } } },
       h("label", {}, "Scanner username"), u, h("label", {}, "Password"), p, err, h("button", { class: "btn" }, "Sign in"))));
 }
@@ -74,7 +74,7 @@ async function boot() {
     const bad = !r.who || ["invalid", "expired", "blocked"].includes(r.result);
     const tone = bad ? "bad" : r.result === "duplicate" ? "warn" : "go";
     const photo = !bad && r.who.hasPhoto
-      ? h("img", { class: "photo", alt: "", src: "/check/api/photo?ticket=" + encodeURIComponent(r.ticket), onerror: (e) => { e.target.replaceWith(h("div", { class: "photo none bad" }, "PHOTO", h("br"), "UNREADABLE")); flash("Selfie could not be loaded. Check the person’s ID.", "warn"); } })
+      ? h("img", { class: "photo", alt: "", src: "/checkin/api/photo?ticket=" + encodeURIComponent(r.ticket), onerror: (e) => { e.target.replaceWith(h("div", { class: "photo none bad" }, "PHOTO", h("br"), "UNREADABLE")); flash("Selfie could not be loaded. Check the person’s ID.", "warn"); } })
       : h("div", { class: "photo none" }, bad ? "!" : initials(r.who.name));
     const title = r.result === "verify" ? "" : { duplicate: "Already checked in", expired: "Stale QR", blocked: "Pass blocked", invalid: "Invalid pass" }[r.result] || "Error";
     const body = [photo];
@@ -123,7 +123,7 @@ async function boot() {
   }
 
   $app.append(h("div", { class: "wrap" },
-    h("div", { class: "top" }, h("img", { src: "qiskit.svg", alt: "" }), h("b", {}, "Check-in"), h("button", { class: "link right", onclick: async () => { stopCam(); await api("POST", "/logout"); showLogin(); } }, "Sign out")),
+    h("div", { class: "top" }, h("img", { src: "/checkin/qiskit.svg", alt: "" }), h("b", {}, "Check-in"), h("button", { class: "link right", onclick: async () => { stopCam(); await api("POST", "/logout"); showLogin(); } }, "Sign out")),
     h("div", { class: "scopebar" }, scope, h("div", { class: "tally" }, count, totalEl)),
     h("div", { class: "cam" }, video, h("div", { class: "corners" }), h("div", { class: "hint" }, "Point at the live pass QR"), startWrap),
     h("details", { class: "manual" }, h("summary", {}, "Enter a code manually"), manual),
