@@ -1,11 +1,10 @@
-// Hub: greeting, hero (live / up next / countdown), day strip, All|Saved filter, event list.
+// Hub: greeting, hero (live / up next / countdown), day strip, event list.
 import { atom } from "../atom.js";
 import { S, addDays, coversDay, dayNum, daysWithEvents, festDays, fmtDayHead, fmtTime, greetDate, greeting, initials, loadAll, markAnnouncementsSeen, monthShort, rangeLabel, statusOf, subscribe, timeLabelOn, toggleSaved, unreadAnnouncements, weekdayShort } from "../store.js";
 import { TRACK_ICON, bubble, h, icon, pulse, toast } from "../ui.js";
 import { lockup, partnerLine } from "./signin.js";
 
 let picked = null;        // null = every day
-let filter = "all";       // "all" | "saved"
 
 export function eventRow(e, { day = null, trailing = true, open }) {
   const st = statusOf(e);
@@ -30,10 +29,9 @@ export function hubView({ open, openAnnouncements, openProfile }) {
   const heroBody = h("div", { style: { display: "contents" } });
   heroBox.append(heroBody);
   const stripBox = h("div", {});
-  const segBox = h("div", {});
   const listBox = h("div", { class: "list" });
   const foot = partnerLine();
-  root.append(h("div", { class: "top" }, lockup(), bell, avatar), offline, greet, heroBox, stripBox, segBox, listBox, foot);
+  root.append(h("div", { class: "top" }, lockup(), bell, avatar), offline, greet, heroBox, stripBox, listBox, foot);
   requestAnimationFrame(() => atom(canvas, { color: "#f2e7d7", electron: "#eb732f", period: 9, line: 1.3 }));
   let railScroll = 0;
 
@@ -80,16 +78,12 @@ export function hubView({ open, openAnnouncements, openProfile }) {
     restore(); requestAnimationFrame(restore);
   }
 
-  function seg() {
-    segBox.replaceChildren(h("div", { class: "seg", role: "tablist" }, ...[["all", "All"], ["saved", "Saved"]].map(([k, t]) => h("button", { type: "button", role: "tab", "aria-selected": String(filter === k), class: filter === k ? "on" : "", onclick: () => { filter = k; update(); } }, t))));
-  }
-
   function list() {
     listBox.replaceChildren();
-    const shown = S.events.filter((e) => (picked == null || coversDay(e, picked)) && (filter !== "saved" || e.saved))
+    const shown = S.events.filter((e) => (picked == null || coversDay(e, picked)))
       .sort((a, b) => ((picked && a.multi && a.startDay < picked) ? 0 : 1) - ((picked && b.multi && b.startDay < picked) ? 0 : 1) || a.startMs - b.startMs);
     if (!S.events.length) { listBox.append(h("div", { class: "empty" }, bubble("calendar", 64, true), h("div", { class: "title" }, S.loading ? "Loading schedule…" : "Schedule coming soon"), h("div", { class: "small muted" }, "Pull down to refresh."))); return; }
-    if (!shown.length) { listBox.append(h("div", { class: "empty" }, bubble(filter === "saved" ? "bookmark" : "calendar", 64, true), h("div", { class: "title" }, filter === "saved" ? "Nothing saved yet" : "No events here"), h("div", { class: "small muted" }, filter === "saved" ? "Tap the bookmark on any event to save it." : "Try a different day or filter."))); return; }
+    if (!shown.length) { listBox.append(h("div", { class: "empty" }, bubble("calendar", 64, true), h("div", { class: "title" }, "No events here"), h("div", { class: "small muted" }, "Try a different day."))); return; }
     let last = null;
     for (const e of shown) {
       if (picked == null && e.startDay !== last) { listBox.append(h("div", { class: "label dayhead" }, fmtDayHead(e.startDay).toUpperCase())); last = e.startDay; }
@@ -102,7 +96,7 @@ export function hubView({ open, openAnnouncements, openProfile }) {
     avatar.textContent = initials(S.profile?.name);
     offline.replaceChildren(S.offline ? h("div", { class: "offline" }, icon("cloudOff"), "You’re offline. Showing the last saved schedule.") : "");
     greet.replaceChildren(h("div", { class: "h1" }, greeting()), h("div", { class: "body muted" }, greetDate() + (S.settings.venue ? ` · ${S.settings.venue}` : "")));
-    hero(); strip(); seg(); list();
+    hero(); strip(); list();
   }
   const un = subscribe(update); update();
   return { el: root, refresh: loadAll, destroy: un };

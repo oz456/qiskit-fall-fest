@@ -46,7 +46,6 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-private enum class Filter(val label: String) { All("All"), Ongoing("Ongoing"), Upcoming("Upcoming"), Saved("Saved") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,10 +61,9 @@ fun HubScreen(app: AppState, onOpen: (Event) -> Unit, onNotifications: () -> Uni
     val withEvents = remember(eventDays) { eventDays.toSet() }
     var picked by remember { mutableStateOf<LocalDate?>(null) } // null = every day
     val day = picked
-    var filter by remember { mutableStateOf(Filter.All) }
     val hf = LocalHapticFeedback.current
 
-    val shown = events.filter { e -> (day == null || e.coversDay(day)) && (filter != Filter.Saved || e.saved) }
+    val shown = events.filter { e -> (day == null || e.coversDay(day)) }
         .sortedWith(compareBy({ if (day != null && e0(it, day)) 0 else 1 }, { it.start }))
     // With "All days" the list is grouped under a small date header.
     val entries: List<Any> = if (day != null) shown else buildList { var last: LocalDate? = null; shown.forEach { e -> if (e.startDay != last) { add(e.startDay); last = e.startDay }; add(e) } }
@@ -104,22 +102,9 @@ fun HubScreen(app: AppState, onOpen: (Event) -> Unit, onNotifications: () -> Uni
                 item { Hero(app, live, next, onOpen); Spacer(Modifier.height(26.dp)) }
                 item {
                     if (days.isNotEmpty()) { DayStrip(days, day, withEvents) { picked = it; hf.performHapticFeedback(HapticFeedbackType.SegmentTick) }; Spacer(Modifier.height(14.dp)) }
-                    Row(Modifier.padding(horizontal = 24.dp).fillMaxWidth().clip(CircleShape).background(P.surfaceAlt).padding(4.dp)) {
-                        listOf(Filter.All, Filter.Saved).forEach { f ->
-                            val sel = filter == f
-                            val bg by animateColorAsState(if (sel) P.primary else Color.Transparent, label = "f")
-                            Row(
-                                Modifier.weight(1f).clip(CircleShape).clickable { filter = f; hf.performHapticFeedback(HapticFeedbackType.SegmentTick) }.background(bg).padding(vertical = 10.dp),
-                                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(f.label, style = T.bodyM.copy(fontSize = 13.sp), color = if (sel) P.onPrimary else P.muted)
-                                if (f == Filter.Ongoing && live != null) { Spacer(Modifier.width(2.dp)); PulseDot(P.accent, 5.dp) }
-                            }
-                        }
-                    }
                     Spacer(Modifier.height(18.dp))
                 }
-                if (shown.isEmpty()) item { EmptyState(if (filter == Filter.Saved) "Nothing saved yet" else "No events here", if (filter == Filter.Saved) "Tap the bookmark on any event to save it." else "Try a different day or filter.", if (filter == Filter.Saved) Icons.Outlined.BookmarkBorder else Icons.Outlined.EventAvailable) }
+                if (shown.isEmpty()) item { EmptyState("No events here", "Try a different day.", Icons.Outlined.EventAvailable) }
                 items(entries, key = { if (it is Event) it.id else "h$it" }) { x ->
                     if (x is Event) EventRow(x, app, day, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen)
                     else DayHeader(x as LocalDate)

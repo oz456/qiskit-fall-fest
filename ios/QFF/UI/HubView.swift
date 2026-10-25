@@ -5,14 +5,11 @@ private enum HubEntry: Identifiable {
     var id: String { switch self { case .header(let d): return "h\(d.timeIntervalSince1970)"; case .event(let e): return e.id } }
 }
 
-private enum HubFilter: String, CaseIterable { case all = "All", ongoing = "Ongoing", upcoming = "Upcoming", saved = "Saved" }
 
 struct HubView: View {
     @EnvironmentObject var app: AppState
     @EnvironmentObject var router: Router
     @State private var picked: Date?
-    @State private var filter: HubFilter = .all
-    @Namespace private var filterNS
 
     /// The whole festival window (admin setting) plus every day an event touches, so no day is ever hidden.
     private var days: [Date] {
@@ -29,7 +26,7 @@ struct HubView: View {
     }
     private var day: Date? { picked } // nil = every day
     private var shown: [Event] {
-        app.events.filter { e in (day.map(e.covers) ?? true) && (filter != .saved || e.saved) }.sorted { a, b in
+        app.events.filter { e in (day.map(e.covers) ?? true) }.sorted { a, b in
             let ra = (day.map { a.isMultiDay && a.startDay < $0 } ?? false) ? 0 : 1
             let rb = (day.map { b.isMultiDay && b.startDay < $0 } ?? false) ? 0 : 1
             return ra != rb ? ra < rb : a.startsAt < b.startsAt
@@ -56,11 +53,8 @@ struct HubView: View {
                 } else {
                     Hero(live: live, next: next).padding(.horizontal, 24).padding(.bottom, 26)
                     if !days.isEmpty { DayStrip(days: days, withEvents: daysWithEvents, selected: day) { picked = $0; Haptics.select() }.padding(.bottom, 14) }
-                    filterBar.padding(.horizontal, 24).padding(.bottom, 18)
                     if shown.isEmpty {
-                        EmptyHub(title: filter == .saved ? "Nothing saved yet" : "No events here",
-                                 sub: filter == .saved ? "Tap the bookmark on any event to save it." : "Try a different day or filter.",
-                                 symbol: filter == .saved ? "bookmark" : "calendar")
+                        EmptyHub(title: "No events here", sub: "Try a different day.", symbol: "calendar")
                     }
                     ForEach(entries) { entry in
                         switch entry {
@@ -119,23 +113,6 @@ struct HubView: View {
         .padding(.horizontal, 24).padding(.top, 4).padding(.bottom, 18)
     }
 
-    private var filterBar: some View {
-        HStack(spacing: 0) {
-            ForEach([HubFilter.all, .saved], id: \.self) { f in
-                Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { filter = f }; Haptics.select() } label: {
-                    HStack(spacing: 2) {
-                        Text(f.rawValue).font(Fonts.body(13, 500, style: .footnote))
-                        if f == .ongoing && live != nil { PulseDot(color: P.accent, size: 5) }
-                    }
-                    .foregroundStyle(filter == f ? P.onPrimary : P.muted)
-                    .frame(maxWidth: .infinity, minHeight: 40)
-                    .background { if filter == f { Capsule().fill(P.primary).matchedGeometryEffect(id: "pill", in: filterNS) } }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(4).background(P.surfaceAlt, in: Capsule())
-    }
 }
 
 private struct EmptyHub: View {
