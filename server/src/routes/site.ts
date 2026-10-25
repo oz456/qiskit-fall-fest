@@ -1,9 +1,11 @@
 // Everything the browser loads: the landing page at /, the APK under /downloads, shared fonts/logo, the three sites
 // (/admin, /checkin, /attendee) and the redirects for older addresses. Only /attendee is gated by device (iPhone/iPad only).
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import fstatic from "@fastify/static";
 import type { FastifyInstance } from "fastify";
+import { config } from "../config.ts";
 import { detectPlatform, gatePage, webAppAllowed } from "../lib/platform.ts";
 
 export async function siteRoutes(app: FastifyInstance) {
@@ -36,7 +38,9 @@ export async function siteRoutes(app: FastifyInstance) {
       return reply.code(403).header("Cache-Control", "no-store").type("text/html; charset=utf-8").send(gatePage(p === "ios" ? "desktop" : p));
     });
     await s.register(fstatic, { root: attendeeRoot, prefix: "/", index: false, decorateReply: false, setHeaders: (res: any, path: string) => (/\.(ttf|png|svg)$/.test(path) ? longCache(res) : noCache(res)) });
-    const shell = async (_req: any, reply: any) => reply.sendFile("index.html", attendeeRoot);
+    // when desktop browsers are allowed (WEB_APP_PLATFORMS), the shell says so, so the page may show itself in a phone-sized frame; otherwise it keeps blocking them
+    const shellHtml = readFileSync(join(attendeeRoot, "index.html"), "utf8");
+    const shell = async (_req: any, reply: any) => reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(config.webAppPlatforms.includes("desktop") ? shellHtml.replace("<body>", '<body data-desktop="1">') : shellHtml);
     s.get("/", shell);
     // the app's own screens all load the same shell; /attendee/hub/ and /attendee/index.html collapse to one address; anything else under /attendee goes to the app's front door
     for (const tab of ["hub", "pass", "support"]) { s.get(`/${tab}`, shell); s.get(`/${tab}/`, async (_req, reply) => reply.redirect(`/attendee/${tab}`, 301)); }

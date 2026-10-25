@@ -48,12 +48,26 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     assert.ok(await b.until(`!!document.querySelector('.dialog')`)); assert.equal(await b.ev(`!!document.querySelector('.signin')`), false);
   });
 
+  it("when desktop is allowed, a laptop sees the app inside a phone-sized frame and can sign in there; Android stays blocked", async () => {
+    const was = config.webAppPlatforms; config.webAppPlatforms = ["ios", "desktop"];
+    try {
+      await b.device("desktop"); await b.goto(base + "/attendee");
+      assert.ok(await b.until(`!!document.querySelector('.devphone iframe')`));
+      const r = await b.ev(`fetch('/attendee').then(r=>r.text())`); assert.match(r, /data-desktop="1"/);
+      await b.ev(`navigator.serviceWorker.getRegistrations().then((r) => Promise.all(r.map((x) => x.unregister()))).then(() => caches.keys()).then((k) => Promise.all(k.map((x) => caches.delete(x)))).then(() => 1)`);
+      await b.device("android"); await b.goto(base + "/attendee/hub");
+      assert.ok(await b.until(`!!document.querySelector('.dialog')`));
+    } finally { config.webAppPlatforms = was; }
+  });
+
   it("iPhone: landing page shows the web-app button, then sign in -> selfie -> hub -> QR that scans at the door -> support -> sign out", async () => {
     await b.device("ios"); await b.goto(base + "/");
     assert.ok(await b.until(`!!document.querySelector('a.webapp')`)); assert.match(await b.ev(`document.querySelector('#ios').textContent`), /isn’t on the App Store yet/);
     await b.tap("a.webapp"); assert.ok(await b.until(`location.pathname === '/attendee' && !!document.querySelector('.signin')`));
     assert.match(await b.ev(`document.querySelector('.hero-title').textContent`), /Qiskit\s*Fall Fest\s*SRMAP 2026/i);
 
+    // the atom drawing must never sit on top of the email field (it once swallowed taps and hid the text)
+    assert.equal(await b.ev(`(() => { const r = document.querySelector('.field input').getBoundingClientRect(); return !!document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest('.field'); })()`), true, "nothing covers the email field");
     // unknown email -> the server's plain message
     await b.type("input[type=email]", "nobody@example.org"); await b.tap(".form .btn");
     assert.ok(await b.until(`!!document.querySelector('.err')`)); assert.match(await b.ev(`document.querySelector('.err').textContent`), /isn't registered yet/);

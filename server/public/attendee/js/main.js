@@ -1,7 +1,7 @@
 // QFF 2026 web app: boot, device gate, session, router, tab bar. Routes: /attendee (sign in), /attendee/hub, /attendee/pass, /attendee/support.
 import { ApiError, api, hooks, restoreSession } from "./api.js";
 import * as push from "./push.js";
-import { detectPlatform, showGate } from "./platform.js";
+import { detectPlatform, showDesktopFrame, showGate } from "./platform.js";
 import { S, emit, loadAll, newReplies, resetState, subscribe } from "./store.js";
 import { clear, closeAllSheets, closeTopSheet, h, icon, pullToRefresh, toast } from "./ui.js";
 import { hubView } from "./views/hub.js";
@@ -16,7 +16,10 @@ const TABS = [["hub", "Hub", "home"], ["pass", "My Pass", "ticket"], ["support",
 let signedIn = false, view = null, viewKey = "", tabbar = null;
 
 const platform = detectPlatform();
-if (platform !== "ios") { showGate(platform, h, document.getElementById("layer")); }
+// desktop browsers only get this far when the server allows them (WEB_APP_PLATFORMS has "desktop"): they see the app in a phone-sized frame
+const desktopOk = document.body.dataset.desktop === "1";
+if (platform === "desktop" && desktopOk && window.top === window) showDesktopFrame(h);
+else if (platform !== "ios" && !(platform === "desktop" && desktopOk)) { showGate(platform, h, document.getElementById("layer")); }
 else boot();
 
 hooks.onBlocked = () => showGate("desktop", h, document.getElementById("layer"));

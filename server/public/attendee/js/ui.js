@@ -146,3 +146,13 @@ export function pullToRefresh(onRefresh) {
     ind.style.opacity = "0"; ind.style.transform = "";
   });
 }
+
+// ---- iPhone keyboard: keep sheets above it, hide the floating bars, bring the field into view ----
+if (window.visualViewport) {
+  const vv = window.visualViewport, root = document.documentElement;
+  const sync = () => { const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop); root.style.setProperty("--kb", kb + "px"); root.style.setProperty("--vvh", vv.height + "px"); };
+  vv.addEventListener("resize", sync); vv.addEventListener("scroll", sync); sync();
+}
+const typing = (el) => el && (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && !["button", "checkbox", "radio"].includes(el.type)));
+document.addEventListener("focusin", (e) => { if (typing(e.target)) { document.body.classList.add("kb"); setTimeout(() => e.target.scrollIntoView?.({ block: "center", behavior: "smooth" }), 300); } });
+document.addEventListener("focusout", () => setTimeout(() => { if (!typing(document.activeElement)) document.body.classList.remove("kb"); }, 50));

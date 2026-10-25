@@ -40,7 +40,7 @@ export async function buildApp(db: Db) {
       useDefaults: false,
       directives: {
         defaultSrc: ["'none'"], scriptSrc: ["'self'"], styleSrc: ["'self'"], imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'"], fontSrc: ["'self'"], mediaSrc: ["'self'", "blob:"], workerSrc: ["'self'"], manifestSrc: ["'self'"], formAction: ["'self'"], frameAncestors: ["'none'"], baseUri: ["'none'"],
+        connectSrc: ["'self'"], fontSrc: ["'self'"], mediaSrc: ["'self'", "blob:"], workerSrc: ["'self'"], manifestSrc: ["'self'"], formAction: ["'self'"], frameAncestors: ["'self'"], frameSrc: ["'self'"], baseUri: ["'none'"],
       },
     },
     strictTransportSecurity: { maxAge: 63072000, includeSubDomains: true, preload: false },

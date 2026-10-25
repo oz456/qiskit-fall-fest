@@ -11,6 +11,13 @@ export function detectPlatform() {
   return "desktop";
 }
 
+/** Laptop/PC preview: the page shows itself inside a phone-sized frame (an iframe), so the whole app behaves as on a phone. */
+export function showDesktopFrame(h) {
+  document.body.replaceChildren(h("div", { class: "devpage" },
+    h("div", { class: "devphone" }, h("iframe", { src: "/attendee", title: "QFF 2026 app", allow: "camera" })),
+    h("div", { class: "note" }, "Preview on a computer. On the day, use your phone.")));
+}
+
 const COPY = {
   android: ["The web app isn’t available on Android", "Android has its own QFF 2026 app: install it from our downloads page. It has your pass, the schedule, support and instant notifications.", "Get the Android app"],
   desktop: ["Open this on your iPhone", "The attendee web app is made for iPhone. On Android, install the QFF 2026 app from our downloads page.", "Go to downloads"],

@@ -20,7 +20,7 @@ Plan: no Google Play / App Store accounts. **Android** installs the APK from the
 1. **Server, on every `/attendee/**` request** (page, scripts, fonts, manifest, even missing files): Android/desktop get a small HTML popup, no app code at all, with a button to `/`.
 2. **Server, on every API call from the web app** (`x-qff-client: web`): 403 `platform_not_supported`.
 3. **Browser**: the page re-checks user-agent, `navigator.platform` and client hints and shows the same popup.
-The user-agent comes from the browser, so a technical user can fake it with developer tools; that is true of every web restriction. It stops all normal use. An iPhone in "Desktop website" mode or in a non-Safari browser that hides its iPhone identity is also blocked (fail closed). To open the web app to everyone for testing, set `WEB_APP_PLATFORMS=ios,android,desktop`.
+The user-agent comes from the browser, so a technical user can fake it with developer tools; that is true of every web restriction. It stops all normal use. An iPhone in "Desktop website" mode or in a non-Safari browser that hides its iPhone identity is also blocked (fail closed). To open the web app to everyone for testing, set `WEB_APP_PLATFORMS=ios,android,desktop`. With `desktop` allowed, a laptop/PC browser shows the app inside a phone-sized frame (an iframe of `/attendee`, same origin).
 
 ## Sign-in and security
 - Same email + 6-digit code flow as the apps. The 15-minute access token lives only in page memory. The refresh token is an `HttpOnly; Secure; SameSite=Strict` cookie (`qff_rt`, path `/v1/auth`) that scripts can't read; it rotates on use and a replayed token revokes the session. Sign-out revokes it server-side (`POST /v1/auth/web-logout`).
