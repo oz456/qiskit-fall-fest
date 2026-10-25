@@ -10,7 +10,7 @@ export async function siteRoutes(app: FastifyInstance) {
   const pub = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "public");
   /** HTML and scripts always revalidate (cheap 304s), so a new deploy reaches phones at once; big static files are cached. */
   const noCache = (res: any) => res.header("Cache-Control", "no-cache");
-  const longCache = (res: any) => res.header("Cache-Control", "public, max-age=86400");
+  const longCache = (res: any) => res.header("Cache-Control", "public, max-age=604800");
 
   // ---- staff sites: /admin and /checkin (one address each, no trailing slash; assets live below the same prefix) ----
   await app.register(fstatic, { root: join(pub, "admin"), prefix: "/admin/", index: false, decorateReply: true, setHeaders: noCache });

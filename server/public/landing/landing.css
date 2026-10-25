@@ -1,5 +1,5 @@
 :root{--bg:#f2e7d7;--surface:#fbf6ec;--ink:#161818;--muted:#6f5e54;--line:#e0d1bb;--pri:#7e1322;--onpri:#fff;--sun:#eb732f}
-@font-face{font-family:Anton;src:url(/shared/fonts/anton.ttf) format("truetype");font-display:swap}
+@font-face{font-family:Anton;src:url(/shared/fonts/anton.ttf) format("truetype");font-display:block}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:520px;margin:0 auto;padding:max(28px,env(safe-area-inset-top)) 18px 40px}

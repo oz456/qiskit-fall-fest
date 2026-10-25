@@ -1,7 +1,7 @@
 /* QFF 2026 web app: same design language as the Android and iPhone apps (poster palette, Anton display type, glass tab bar). */
-@font-face{font-family:Anton;src:url(/shared/fonts/anton.ttf) format("truetype");font-display:swap}
-@font-face{font-family:Manrope;src:url(/shared/fonts/manrope.ttf) format("truetype");font-weight:200 800;font-display:swap}
-@font-face{font-family:"DM Sans";src:url(/shared/fonts/dmsans.ttf) format("truetype");font-weight:100 1000;font-display:swap}
+@font-face{font-family:Anton;src:url(/shared/fonts/anton.ttf) format("truetype");font-display:block}
+@font-face{font-family:Manrope;src:url(/shared/fonts/manrope.ttf) format("truetype");font-weight:200 800;font-display:block}
+@font-face{font-family:"DM Sans";src:url(/shared/fonts/dmsans.ttf) format("truetype");font-weight:100 1000;font-display:block}
 
 :root{
   --bg:#f2e7d7;--surface:#fbf6ec;--alt:#e9dcc6;--ink:#161818;--muted:#6f5e54;--line:#e0d1bb;
