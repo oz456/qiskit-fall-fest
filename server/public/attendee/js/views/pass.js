@@ -7,7 +7,7 @@ import { bubble, button, h, icon, posterTitle, sectionLabel, toast } from "../ui
 import { eventRow } from "./hub.js";
 
 const STEP = 30, QR_IDLE_MS = 120_000;
-let listTab = "saved";   // My Pass shows one list at a time: "saved" (left) or "attended" (right)
+let attendedOpen = false;   // the Attended list is folded away until its heading is tapped
 let codes = [], skew = 0;
 async function fetchCodes() {
   const r = await api.passCodes();
@@ -45,13 +45,14 @@ export function passView({ open }) {
       return h("div", { class: "card press row", role: id ? "button" : null, tabindex: id ? "0" : null, onclick: () => id && S.events.some((e) => e.id === id) && open(id) },
         bubble("check", 50, true), h("div", { class: "meta" }, h("div", { class: "name" }, n.title), h("div", { class: "where" }, `Checked in · ${n.time}`)));
     };
-    const savedBox = reg.length ? h("div", { class: "list" }, reg.map((e) => eventRow(e, { trailing: true, open })))
-      : h("div", { class: "empty", style: { padding: "36px 40px" } }, h("p", { class: "body muted" }, "Events you save appear here. Tap the bookmark on any event to save it."));
-    const attendedBox = att.length ? h("div", { class: "list" }, att.map(attRow))
-      : h("div", { class: "empty", style: { padding: "36px 40px" } }, h("p", { class: "body muted" }, "Events you attend appear here after the team scans your pass at the door."));
-    const seg = h("div", { class: "seg", role: "tablist" }, ...[["saved", `Saved (${reg.length})`], ["attended", `Attended (${att.length})`]].map(([k, t]) =>
-      h("button", { type: "button", role: "tab", "aria-selected": String(listTab === k), class: listTab === k ? "on" : "", onclick: () => { listTab = k; update(); } }, t)));
-    listBox.replaceChildren(h("div", { style: { height: "26px" } }), seg, listTab === "saved" ? savedBox : attendedBox);
+    const savedBox = reg.length ? [sectionLabel("Saved events"), h("div", { class: "list" }, reg.map((e) => eventRow(e, { trailing: true, open })))]
+      : [h("div", { class: "empty", style: { padding: "36px 40px" } }, h("p", { class: "body muted" }, "Events you save appear here. Tap the bookmark on any event to save it."))];
+    // attended events sit below, folded away: only the heading and an arrow show until it is tapped
+    const head = h("button", { class: "fold" + (attendedOpen ? " open" : ""), type: "button", "aria-expanded": String(attendedOpen), onclick: () => { attendedOpen = !attendedOpen; update(); } },
+      h("span", { class: "label" }, `Attended events (${att.length})`), icon("chevR"));
+    const attendedBox = !attendedOpen ? null : att.length ? h("div", { class: "list" }, att.map(attRow))
+      : h("div", { class: "empty", style: { padding: "24px 40px" } }, h("p", { class: "body muted" }, "Events you attend appear here after the team scans your pass at the door."));
+    listBox.replaceChildren(...savedBox, head, attendedBox);
   }
   const un = subscribe(update); update();
   const poll = setInterval(() => { if (!document.hidden) pollCheckins(); }, 4000); // a door scan shows up within seconds

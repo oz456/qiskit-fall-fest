@@ -118,10 +118,11 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     assert.match(await b.ev(`document.querySelector('.dialog').textContent`), /Campus entry/);
     assert.equal(await b.ev(`!!document.querySelector('.qrfull')`), false, "the QR closes when the scan is done");
     await b.tap(".dialog .btn"); assert.ok(await b.until(`!document.querySelector('.dialog')`));
-    assert.match(await b.ev(`document.querySelector('.seg').textContent`), /Saved \(1\).*Attended \(1\)/, "two tabs: Saved on the left, Attended on the right");
-    await b.tap(".seg button:last-child"); assert.match(await b.ev(`document.querySelector('.screen').textContent`), /Campus entry[\s\S]*Checked in/, "the attended tab lists it");
-    assert.doesNotMatch(await b.ev(`document.querySelector('.list').textContent`), /Inauguration/, "saved events are on the other tab");
-    await b.tap(".seg button:first-child"); assert.match(await b.ev(`document.querySelector('.list').textContent`), /Inauguration/);
+    assert.match(await b.ev(`document.querySelector('.list').textContent`), /Inauguration/, "saved events are always visible");
+    assert.match(await b.ev(`document.querySelector('.fold').textContent`), /Attended events \(1\)/);
+    assert.equal(await b.ev(`document.querySelectorAll('.list').length`), 1, "attended list is folded away at first");
+    await b.tap(".fold"); assert.match(await b.ev(`document.querySelector('.screen').textContent`), /Campus entry[\s\S]*Checked in/, "the arrow opens the attended list");
+    await b.tap(".fold"); assert.equal(await b.ev(`document.querySelectorAll('.list').length`), 1, "and folds it again");
 
     // support: ticket, reply, thread, red dot
     await b.tap(".tab[aria-label='Support']"); assert.ok(await b.until(`location.pathname === '/attendee/support' && !!document.querySelector('.support-opts')`));

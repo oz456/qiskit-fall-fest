@@ -7,24 +7,10 @@ struct PassView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var captured = UIScreen.main.isCaptured
     @State private var fullQR = false
-    @State private var showSaved = true // My Pass shows one list at a time: Saved (left) or Attended (right)
+    @State private var attendedOpen = false // the Attended list is folded away until its heading is tapped
 
     private var saved: [Event] { app.events.filter(\.saved) }
     private var attended: [(scope: String, at: Date)] { app.checkins.map { (scope: $0.key, at: $0.value) }.sorted { $0.at > $1.at } }
-    private var passTabs: some View {
-        HStack(spacing: 0) {
-            ForEach([(true, "Saved (\(saved.count))"), (false, "Attended (\(attended.count))")], id: \.0) { isSaved, label in
-                Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showSaved = isSaved }; Haptics.select() } label: {
-                    Text(label).font(Fonts.body(13, 500, style: .footnote))
-                        .foregroundStyle(showSaved == isSaved ? P.onPrimary : P.muted)
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                        .background { if showSaved == isSaved { Capsule().fill(P.primary) } }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(4).background(P.surfaceAlt, in: Capsule())
-    }
     private var hidden: Bool { captured || scenePhase != .active }
 
     var body: some View {
@@ -44,35 +30,45 @@ struct PassView: View {
                     .font(T.small).foregroundStyle(P.muted).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                     .padding(.horizontal, 24).padding(.top, 14)
 
-                passTabs.padding(.horizontal, 24).padding(.top, 26).padding(.bottom, 12)
-                if showSaved {
                 if !saved.isEmpty {
+                    SectionLabel(text: "SAVED EVENTS").padding(.horizontal, 24).padding(.top, 32).padding(.bottom, 8)
                     ForEach(saved) { e in EventRow(event: e, day: nil, trailing: true).padding(.horizontal, 24).padding(.vertical, 6) }
                 } else {
                     Text("Events you save appear here. Tap the bookmark on any event to save it.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity).padding(.horizontal, 40).padding(.vertical, 36)
                 }
-                } else {
-                if attended.isEmpty {
-                    Text("Events you attend appear here after the team scans your pass at the door.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity).padding(.horizontal, 40).padding(.vertical, 24)
-                } else {
-                    ForEach(attended, id: \.scope) { a in
-                        let n = app.checkinLabel(a.scope, a.at)
-                        Card {
-                            HStack(spacing: 14) {
-                                IconBubble(symbol: "checkmark.circle", size: 50, tint: P.mintInk, bg: P.mint)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(n.title).font(T.title).foregroundStyle(P.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                                    Text("Checked in · \(n.time)").font(T.small).foregroundStyle(P.muted).lineLimit(1)
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .padding(18)
-                        }
-                        .padding(.horizontal, 24).padding(.vertical, 6)
+
+                // attended events sit below, folded away: only the heading and an arrow show until it is tapped
+                Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { attendedOpen.toggle() }; Haptics.select() } label: {
+                    HStack {
+                        SectionLabel(text: "ATTENDED EVENTS (\(attended.count))")
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(P.muted).rotationEffect(.degrees(attendedOpen ? 90 : 0))
                     }
+                    .padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 10).contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                if attendedOpen {
+                    if attended.isEmpty {
+                        Text("Events you attend appear here after the team scans your pass at the door.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity).padding(.horizontal, 40).padding(.vertical, 24)
+                    } else {
+                        ForEach(attended, id: \.scope) { a in
+                            let n = app.checkinLabel(a.scope, a.at)
+                            Card {
+                                HStack(spacing: 14) {
+                                    IconBubble(symbol: "checkmark.circle", size: 50, tint: P.mintInk, bg: P.mint)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(n.title).font(T.title).foregroundStyle(P.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                                        Text("Checked in · \(n.time)").font(T.small).foregroundStyle(P.muted).lineLimit(1)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(18)
+                            }
+                            .padding(.horizontal, 24).padding(.vertical, 6)
+                        }
+                    }
                 }
             }
             .padding(.bottom, 24)

@@ -62,7 +62,7 @@ private fun rememberLivePass(app: AppState): Pair<String?, Float> {
 @Composable
 fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
     var qrOpen by remember { mutableStateOf(false) }
-    var showSaved by rememberSaveable { mutableStateOf(true) } // My Pass shows one list at a time: Saved (left) or Attended (right)
+    var attendedOpen by rememberSaveable { mutableStateOf(false) } // the Attended list is folded away until its heading is tapped
     SecureWindow((LocalContext.current as? Activity)?.window)
     val saved = app.events.filter { it.saved }
     val attended = app.checkins.entries.sortedByDescending { it.value }.map { app.checkinLabel(it.key, it.value) to it.key.removePrefix("event:").takeIf { k -> it.key.startsWith("event:") } }
@@ -81,24 +81,21 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
             Spacer(Modifier.height(14.dp))
             Text("QR appears when you tap. It refreshes every 30 seconds.", style = T.small, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
         }
+        if (saved.isNotEmpty()) {
+            item { SectionLabel("SAVED EVENTS", Modifier.padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 8.dp)) }
+            items(saved, key = { it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen) }
+        } else item {
+            Text("Events you save appear here. Tap the bookmark on any event to save it.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 36.dp))
+        }
+        // attended events sit below, folded away: only the heading and an arrow show until it is tapped
         item {
-            Row(Modifier.padding(horizontal = 24.dp).padding(top = 26.dp, bottom = 12.dp).fillMaxWidth().clip(CircleShape).background(P.surfaceAlt).padding(4.dp)) {
-                listOf(true to "Saved (${saved.size})", false to "Attended (${attended.size})").forEach { (isSaved, label) ->
-                    val sel = showSaved == isSaved
-                    val bg by animateColorAsState(if (sel) P.primary else Color.Transparent, label = "tab")
-                    Row(Modifier.weight(1f).clip(CircleShape).clickable { showSaved = isSaved }.background(bg).padding(vertical = 10.dp), horizontalArrangement = Arrangement.Center) {
-                        Text(label, style = T.bodyM.copy(fontSize = 13.sp), color = if (sel) P.onPrimary else P.muted)
-                    }
-                }
+            val rot by animateFloatAsState(if (attendedOpen) 90f else 0f, label = "fold")
+            Row(Modifier.fillMaxWidth().clickable { attendedOpen = !attendedOpen }.padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                SectionLabel("ATTENDED EVENTS (${attended.size})", Modifier.weight(1f))
+                Icon(Icons.Outlined.ChevronRight, if (attendedOpen) "Hide" else "Show", tint = P.muted, modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = rot })
             }
         }
-        if (showSaved) {
-            if (saved.isNotEmpty()) {
-                items(saved, key = { it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen) }
-            } else item {
-                Text("Events you save appear here. Tap the bookmark on any event to save it.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 36.dp))
-            }
-        } else {
+        if (attendedOpen) {
             if (attended.isEmpty()) item {
                 Text("Events you attend appear here after the team scans your pass at the door.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 24.dp))
             } else items(attended, key = { it.first.title + it.first.time }) { (n, id) ->
