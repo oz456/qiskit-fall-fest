@@ -8,7 +8,7 @@ import type { Db } from "../db.ts";
 import { sha256, safeEqual } from "../lib/crypto.ts";
 import { reconcile, upsertPeople } from "../lib/website-sync.ts";
 
-const Person = z.object({ email: z.string().max(200), name: z.string().max(200).optional().default(""), institution: z.string().max(300).nullish(), isActive: z.boolean().optional(), role: z.string().max(40).optional() });
+const Person = z.object({ email: z.string().max(200), name: z.string().max(200).optional().default(""), institution: z.string().max(300).nullish(), isActive: z.boolean().optional(), role: z.string().max(40).optional(), passTier: z.enum(["general", "flagship"]).nullish() });
 
 export function integrationRoutes(app: FastifyInstance, db: Db) {
   const authorised = (header: string | undefined) => {

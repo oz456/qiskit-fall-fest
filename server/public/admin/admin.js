@@ -132,32 +132,39 @@ async function people(m) {
   const app = sel("App", [["", "App: any"], ["yes", "Signed in to the app"], ["no", "Never signed in"]]);
   const status = sel("Status", [["", "Status: any"], ["active", "Active"], ["blocked", "Blocked"]]);
   const checked = sel("Check-in", [["", "Check-in: any"], ["yes", "Checked in at least once"], ["no", "Never checked in"]]);
-  const source = sel("Source", [["", "Source: any"], ["website", "From the website"], ["admin", "Added by admin"], ["import", "CSV import"]]);
+  const source = sel("Source", [["", "Source: any"], ["website", "From the website"], ["srm", "SRM sign-in"], ["admin", "Added by admin"], ["import", "CSV import"]]);
+  const passSel = sel("Festival pass", [["", "Festival pass: any"], ["general", "₹99 pass holders"], ["flagship", "₹499 pass holders"], ["none", "No ₹99/₹499 pass"]]);
   const sort = sel("Sort", [["newest", "Sort: newest first"], ["name", "Sort: name A–Z"], ["checkins", "Sort: most check-ins"]]);
   const count = h("p", { class: "muted", style: "margin:10px 0 0;font-weight:600" });
   const PAGE = 200; let shown = [];
   const out = h("div", { class: "card" });
   const syncBox = h("div", { class: "card" });
-  m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), syncBox, h("div", { class: "row", style: "flex-wrap:wrap;gap:10px" }, q, kind, selfie, app, status, checked, source, sort, h("button", { class: "btn ghost sm", onclick: () => { for (const x of [q, kind, selfie, app, status, checked, source]) x.value = ""; sort.value = "newest"; load(true); } }, "Clear filters")), count, out);
+  m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), syncBox, h("div", { class: "row", style: "flex-wrap:wrap;gap:10px" }, q, kind, selfie, app, status, checked, source, passSel, sort, h("button", { class: "btn ghost sm", onclick: () => { for (const x of [q, kind, selfie, app, status, checked, source]) x.value = ""; sort.value = "newest"; load(true); } }, "Clear filters")), count, out);
   const KIND = { student: "SRM student", faculty: "SRM faculty", unclear: "SRM", external: "Outside SRM" };
   async function drawSync() {
-    const s = await api("GET", "/sync"); clear(syncBox);
+    const s = await api("GET", "/sync"), access = await api("GET", "/access-summary"); clear(syncBox);
     const last = s.runs.find((r) => r.status !== "running"), when = (iso) => new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     syncBox.append(h("h3", {}, "Website sync"),
       h("p", { class: "muted small" }, s.configured ? `People who register on ${s.websiteUrl.replace(/^https?:\/\//, "")} appear here automatically (${s.fromWebsite} so far, ${s.total} in total). Checked every 10 minutes and whenever someone registers.` : "Not connected: the sync key is not set on the server."),
+      access && h("p", { class: "small" }, `${access.total.toLocaleString()} in the app: ${access.srm.toLocaleString()} with an SRM email · ${access.general.toLocaleString()} with the ₹99 pass · ${access.flagship.toLocaleString()} with the ₹499 pass · ${access.signedIn.toLocaleString()} signed in · ${access.outsideWithoutPass.toLocaleString()} outside SRM without a pass`),
       last && h("p", { class: "small" }, `Last run ${when(last.at)} · ${last.status === "ok" ? `saw ${last.seen}, added ${last.created}, updated ${last.updated}` : "failed: " + (last.error || "")}`),
       h("div", { class: "row" },
-        h("button", { class: "btn ghost", disabled: !s.configured, onclick: guard(async () => { const r = await api("POST", "/sync/run"); toast(r.message); await drawSync(); await load(); }) }, "Sync now")));
+        h("button", { class: "btn ghost", disabled: !s.configured, onclick: guard(async () => { const r = await api("POST", "/sync/run"); toast(r.message); await drawSync(); await load(); }) }, "Sync now"),
+        h("button", { class: "btn ghost", onclick: guard(async () => {
+          const d = await api("POST", "/cleanup-nonpass", { dryRun: true }); if (!d.ok) return toast(d.message);
+          if (!d.wouldRemove) return toast("Nobody to remove.");
+          confirmDo(`Remove ${d.wouldRemove} outside people who have no ₹99/₹499 pass and never signed in? Anyone who signed in, took a selfie or checked in stays.`, async () => { const r = await api("POST", "/cleanup-nonpass", { dryRun: false }); toast(`Removed ${r.removed}`); await drawSync(); await load(); });
+        }) }, "Remove people without a pass")));
   }
   async function load(reset = true) {
     if (reset) shown = [];
     const qs = new URLSearchParams({ q: q.value, sort: sort.value, limit: PAGE, offset: shown.length });
-    for (const [k, el] of Object.entries({ kind, selfie, app, status, checkedin: checked, source })) if (el.value) qs.set(k, el.value);
+    for (const [k, el] of Object.entries({ kind, selfie, app, status, checkedin: checked, source, pass: passSel })) if (el.value) qs.set(k, el.value);
     const r = await api("GET", "/users?" + qs); shown = shown.concat(r.rows); clear(out);
     const filtered = r.total !== r.all;
     count.textContent = `${r.total.toLocaleString()} ${r.total === 1 ? "attendee" : "attendees"}` + (filtered ? ` match these filters (of ${r.all.toLocaleString()} in total)` : " in total");
     out.append(h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Status", ""].map((x) => h("th", {}, x))),
-      shown.map((u) => h("tr", { class: "click", onclick: guard(() => openUser(u)) }, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, [u.college, KIND[u.kind]].filter(Boolean).join(" · "))), h("td", {}, u.email), h("td", {}, u.passCode),
+      shown.map((u) => h("tr", { class: "click", onclick: guard(() => openUser(u)) }, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, [u.college, KIND[u.kind]].filter(Boolean).join(" · "))), h("td", {}, u.email), h("td", {}, u.passCode, u.passTier ? h("div", { class: "muted small" }, u.passTier === "flagship" ? "₹499 pass" : "₹99 pass") : null),
         h("td", {}, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), h("div", { class: "muted small", style: "margin-top:4px" }, [u.hasApp ? "Signed in" : "Not signed in", u.hasPhoto ? "Selfie ✓" : "No selfie"].join(" · "))),
         h("td", { class: "chev" }, "›")))));
     if (!shown.length) out.append(h("p", { class: "muted" }, "No attendees found."));

@@ -91,22 +91,47 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const f = z.object({
         q: z.string().max(100).optional(), kind: z.enum(["student", "faculty", "unclear", "external"]).optional(),
         selfie: z.enum(["yes", "no"]).optional(), app: z.enum(["yes", "no"]).optional(), status: z.enum(["active", "blocked"]).optional(),
-        checkedin: z.enum(["yes", "no"]).optional(), source: z.enum(["admin", "import", "website"]).optional(),
+        checkedin: z.enum(["yes", "no"]).optional(), source: z.enum(["admin", "import", "website", "srm"]).optional(), pass: z.enum(["general", "flagship", "none"]).optional(),
         sort: z.enum(["newest", "name", "checkins"]).default("newest"), limit: z.coerce.number().int().min(1).max(500).default(200), offset: z.coerce.number().int().min(0).max(100000).default(0),
       }).parse(req.query);
       const like = f.q ? `%${f.q.replace(/[%_\\]/g, "\\$&").toLowerCase()}%` : "%";
       const HAS_APP = "EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL)", HAS_PHOTO = "EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id)", HAS_CHECKIN = "EXISTS(SELECT 1 FROM checkins c WHERE c.user_id=u.id)";
       const yn = (v: string | undefined, expr: string) => (v === "yes" ? `AND ${expr}` : v === "no" ? `AND NOT ${expr}` : "");
-      const where = `(lower(u.email) LIKE $1 OR lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1) AND ($2::text IS NULL OR u.kind=$2) AND ($3::text IS NULL OR u.status=$3) AND ($4::text IS NULL OR u.source=$4)
+      const where = `(lower(u.email) LIKE $1 OR lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1) AND ($2::text IS NULL OR u.kind=$2) AND ($3::text IS NULL OR u.status=$3) AND ($4::text IS NULL OR u.source=$4) AND ($5::text IS NULL OR ($5='none' AND u.pass_tier IS NULL) OR u.pass_tier=$5)
         ${yn(f.selfie, HAS_PHOTO)} ${yn(f.app, HAS_APP)} ${yn(f.checkedin, HAS_CHECKIN)}`;
-      const args = [like, f.kind ?? null, f.status ?? null, f.source ?? null];
+      const args = [like, f.kind ?? null, f.status ?? null, f.source ?? null, f.pass ?? null];
       const order = f.sort === "name" ? "lower(u.name), u.email" : f.sort === "checkins" ? "checkins DESC, u.created_at DESC" : "u.created_at DESC";
       const [t] = await db.query(`SELECT count(*)::int AS n FROM users u WHERE ${where}`, args);
       const [all] = await db.query("SELECT count(*)::int AS n FROM users");
-      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,
+      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,
         ${HAS_APP} AS has_app, ${HAS_PHOTO} AS has_photo, (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins
         FROM users u WHERE ${where} ORDER BY ${order} LIMIT ${f.limit} OFFSET ${f.offset}`, args);
-      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins })) };
+      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins })) };
+    });
+    // Who is in the app, by how they got in: SRM address, ₹99 pass, ₹499 pass, or neither. Signed in = has a live session.
+    api.get("/admin/api/access-summary", async () => {
+      const [r] = await db.query(`SELECT count(*)::int AS total,
+        count(*) FILTER (WHERE EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL))::int AS signed_in,
+        count(*) FILTER (WHERE lower(u.email) LIKE '%@srmap.edu.in')::int AS srm,
+        count(*) FILTER (WHERE u.pass_tier='general')::int AS general, count(*) FILTER (WHERE u.pass_tier='flagship')::int AS flagship,
+        count(*) FILTER (WHERE lower(u.email) NOT LIKE '%@srmap.edu.in' AND u.pass_tier IS NULL)::int AS outside_without_pass
+        FROM users u`);
+      const [sync] = await db.query("SELECT value FROM settings WHERE key='passes_synced_at'");
+      return { total: r!.total, signedIn: r!.signed_in, srm: r!.srm, general: r!.general, flagship: r!.flagship, outsideWithoutPass: r!.outside_without_pass, passesSyncedAt: sync?.value ?? null };
+    });
+    // Removes outside people (not @srmap.edu.in) who hold no verified ₹99/₹499 pass AND never signed in, never did a selfie and never checked in.
+    // Anyone who signed in, took a selfie, checked in, was added by hand or has a pass is never touched. Refuses to run before the pass list has been synced.
+    api.post("/admin/api/cleanup-nonpass", async (req) => {
+      const { dryRun } = z.object({ dryRun: z.boolean().default(true) }).parse(req.body ?? {});
+      const [sync] = await db.query("SELECT value FROM settings WHERE key='passes_synced_at'");
+      if (!sync || Date.now() - Date.parse(sync.value) > 24 * 3600_000) return { ok: false, message: "The pass list has not been synced from the website in the last 24 hours, so nobody can be judged yet. Run Sync now first." };
+      const WHERE = `u.source IN ('website','import') AND lower(u.email) NOT LIKE '%@srmap.edu.in' AND u.pass_tier IS NULL
+        AND NOT EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id) AND NOT EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id) AND NOT EXISTS(SELECT 1 FROM checkins c WHERE c.user_id=u.id)`;
+      const [c] = await db.query(`SELECT count(*)::int AS n FROM users u WHERE ${WHERE}`);
+      if (dryRun) return { ok: true, dryRun: true, wouldRemove: c!.n };
+      await db.query(`DELETE FROM users u WHERE ${WHERE}`);
+      await audit(db, req, "users.cleanup_nonpass", "user", undefined, { removed: c!.n });
+      return { ok: true, dryRun: false, removed: c!.n };
     });
     api.get("/admin/api/users/:id/photo", async (req, reply) => {
       const { id } = Id.parse(req.params);

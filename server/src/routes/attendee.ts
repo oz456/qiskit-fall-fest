@@ -9,6 +9,7 @@ import { otpMail, sendMail } from "../lib/mail.ts";
 import { sanitizeJpeg, savePhoto } from "../lib/photos.ts";
 import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
+import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
 import { randomBytes } from "node:crypto";
 
 const ACCESS_TTL = 15 * 60;
@@ -47,8 +48,9 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     const [user] = await db.query("SELECT id, status FROM users WHERE lower(email)=$1", [email]);
     // The attendee list is closed (people register on the website and are synced in), so say plainly when an email isn't on it (otherwise people just wait for a mail that never comes).
     // The route is rate-limited per IP, which bounds how fast the list could be probed.
-    if (!user) return reply.code(404).send({ error: "not_registered", message: "This email isn't registered yet. Register on the Fall Fest website first (www.qffsrmap2026.com/learning); it appears here within a few minutes. Use the same email you registered with." });
-    if (user.status !== "active") return reply.code(403).send({ error: "account_inactive", message: "This account isn't active. Please contact the organisers." });
+    // every @srmap.edu.in address may sign in (the account is made when the code is verified, so typing random addresses leaves nothing behind)
+    if (!user && !isSrmEmail(email)) return reply.code(404).send({ error: "not_registered", message: "This email isn't registered yet. Register on the Fall Fest website first (www.qffsrmap2026.com/learning); it appears here within a few minutes. Use the same email you registered with." });
+    if (user && user.status !== "active") return reply.code(403).send({ error: "account_inactive", message: "This account isn't active. Please contact the organisers." });
     const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '10 minutes'", [email]);
     if (n >= 3) return reply.code(429).send({ error: "too_many_codes", message: "You've requested several codes already. Use the latest one in your inbox (check spam), or try again in 10 minutes." });
     // Budgets that don't depend on the caller's IP: per attendee per day, and for the whole system per hour (keeps the mail quota for real use).
@@ -80,7 +82,12 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     const guess = otpHash(b.email, b.code);
     const otp = live.find((r) => r.code_hash === guess);
     if (!otp) return bad();
-    const [user] = await db.query("SELECT * FROM users WHERE lower(email)=$1 AND status='active'", [b.email]);
+    let [user] = await db.query("SELECT * FROM users WHERE lower(email)=$1 AND status='active'", [b.email]);
+    if (!user && isSrmEmail(b.email) && !(await db.query("SELECT 1 FROM users WHERE lower(email)=$1", [b.email]))[0]) {
+      // first sign-in of an SRM address: the code proved they own the mailbox, so make the account (real name arrives with the next website sync)
+      await allocate(db, b.email, nameFromEmail(b.email), "SRM University-AP", classifyEmail(b.email), "srm", true);
+      [user] = await db.query("SELECT * FROM users WHERE lower(email)=$1 AND status='active'", [b.email]);
+    }
     if (!user) return bad();
 
     const refresh = randomToken(32);

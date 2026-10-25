@@ -430,7 +430,7 @@ describe("website sync: people registered on the main website become attendees h
     config.website.secret = undefined; assert.equal((await push([{ email: "x@example.org", name: "X" }])).statusCode, 401, "no key configured = closed"); config.website.secret = KEY;
   });
   it("adds people once, keeps names and admin decisions, labels them, skips non-participants", async () => {
-    const a = (await push([{ email: "Ravi_K@srmap.edu.in", name: "Ravi Kumar", institution: "SRM AP" }, { email: "prof.rao@srmap.edu.in", name: "Prof Rao" }, { email: "ext@example.org", name: "Ext Person", institution: "IIT" },
+    const a = (await push([{ email: "Ravi_K@srmap.edu.in", name: "Ravi Kumar", institution: "SRM AP" }, { email: "prof.rao@srmap.edu.in", name: "Prof Rao" }, { email: "ext@example.org", passTier: "general", name: "Ext Person", institution: "IIT" },
       { email: "mentor@example.org", name: "A Mentor", role: "mentor" }, { email: "gone@example.org", name: "Gone", isActive: false }, { email: "not-an-email", name: "Bad" }])).json();
     assert.deepEqual([a.created, a.skipped, a.failed], [3, 3, 0]);
     const rows = (await admin("GET", "/admin/api/users")).json().rows; const by = (e: string) => rows.find((u: any) => u.email === e);
@@ -462,16 +462,21 @@ describe("website sync: people registered on the main website become attendees h
   it("an email that isn't registered yet gets a pointer to the website; after the sync it can log in", async () => {
     const r = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "late.comer@example.org" } });
     assert.equal(r.statusCode, 404); assert.match(r.json().message, /Register on the Fall Fest website first/);
-    await push([{ email: "late.comer@example.org", name: "Late Comer" }]);
+    assert.equal((await push([{ email: "late.comer@example.org", name: "Late Comer" }])).json().skipped, 1, "an outside email with no pass is not let in");
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "late.comer@example.org" } })).statusCode, 404);
+    await push([{ email: "late.comer@example.org", name: "Late Comer", passTier: "general" }]);
     assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "late.comer@example.org" } })).statusCode, 200);
   });
   it("pulls the website's export (several pages) on a schedule or from the admin button, and logs it", async () => {
     const pages = [{ people: [{ email: "p1@example.org", name: "P One" }, { email: "p2_x@srmap.edu.in", name: "P Two" }], nextCursor: "c2" }, { people: [{ email: "p3@example.org", name: "P Three" }], nextCursor: null }];
-    let seenAuth = ""; const srv = createServer((req, res) => { seenAuth = String(req.headers.authorization); const cur = new URL(req.url!, "http://x").searchParams.get("cursor"); res.setHeader("content-type", "application/json"); res.end(JSON.stringify(pages[cur ? 1 : 0])); });
+    const passes = { people: [{ email: "p1@example.org", name: "P One", tier: "flagship" }], nextCursor: null };
+    let seenAuth = ""; const srv = createServer((req, res) => { seenAuth = String(req.headers.authorization); const cur = new URL(req.url!, "http://x").searchParams.get("cursor"); res.setHeader("content-type", "application/json"); res.end(JSON.stringify(req.url!.includes("/passes") ? passes : pages[cur ? 1 : 0])); });
     await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r)); const was = config.website.baseUrl; config.website.baseUrl = `http://127.0.0.1:${(srv.address() as any).port}`;
     try {
       const run = (await admin("POST", "/admin/api/sync/run")).json(); assert.equal(run.ok, true); assert.equal(seenAuth, `Bearer ${KEY}`);
-      assert.deepEqual([run.counts.seen, run.counts.created], [3, 3]);
+      assert.deepEqual([run.counts.seen, run.counts.created], [3, 2], "p3 has no pass and is outside SRM, so only p1 (pass) and p2 (SRM) come in");
+      const rows = (await admin("GET", "/admin/api/users?q=p")).json().rows; assert.equal(rows.find((u: any) => u.email === "p1@example.org").passTier, "flagship"); assert.equal(rows.find((u: any) => u.email === "p3@example.org"), undefined);
+      assert.ok((await db.query("SELECT 1 FROM settings WHERE key='passes_synced_at'"))[0], "the pass list is marked as synced");
       const sch = (await app.inject({ method: "POST", url: "/integrations/website/reconcile", headers: auth })).json(); assert.equal(sch.ok, true); assert.equal(sch.counts.created, 0, "second run adds nothing");
       const st = (await admin("GET", "/admin/api/sync")).json(); assert.equal(st.configured, true); assert.ok(st.runs.some((r: any) => r.trigger === "scheduler" && r.status === "ok"));
       await db.query("INSERT INTO sync_runs (trigger) VALUES ('admin')"); // a run in progress blocks a second one
@@ -479,6 +484,44 @@ describe("website sync: people registered on the main website become attendees h
       srv.close(); srv.closeAllConnections();
       const down = (await admin("POST", "/admin/api/sync/run")).json(); assert.equal(down.ok, false); assert.match(down.message, /Sync failed/);
     } finally { config.website.baseUrl = was; srv.close(); }
+  });
+});
+
+describe("who may sign in: every @srmap.edu.in address, plus outside people with a verified pass", () => {
+  const hash = (em: string, c: string) => hmac(config.otpPepper, `${em}|${c}`).toString("hex");
+  it("an SRM address gets a code and an account on first sign-in, named from the email", async () => {
+    const em = "new_student@srmap.edu.in";
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", remoteAddress: "10.77.0.1", payload: { email: em } })).statusCode, 200);
+    assert.equal((await db.query("SELECT 1 FROM users WHERE email=$1", [em])).length, 0, "no account until the code is proven");
+    await db.query("DELETE FROM otp_codes WHERE email=$1", [em]); await db.query("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3)", [em, hash(em, "135790"), new Date(Date.now() + 600_000)]);
+    const v = await app.inject({ method: "POST", url: "/v1/auth/verify", remoteAddress: "10.77.0.2", payload: { email: em, code: "135790", deviceId: "srm-device-1" } });
+    assert.equal(v.statusCode, 200); assert.equal(v.json().profile.name, "New Student");
+    const [u] = await db.query("SELECT kind, source, name_derived FROM users WHERE email=$1", [em]); assert.deepEqual([u!.kind, u!.source, u!.name_derived], ["student", "srm", true]);
+  });
+  it("the website's real name replaces a guessed one, but never a name set by hand", async () => {
+    config.website.secret = "sync-test-secret-0123456789";
+    const push = (people: unknown[]) => app.inject({ method: "POST", url: "/integrations/website/attendees", headers: { authorization: "Bearer sync-test-secret-0123456789" }, payload: { people } });
+    await push([{ email: "new_student@srmap.edu.in", name: "Newton Student" }]);
+    assert.equal((await db.query("SELECT name FROM users WHERE email='new_student@srmap.edu.in'"))[0]!.name, "Newton Student");
+    await push([{ email: "new_student@srmap.edu.in", name: "Someone Else" }]);
+    assert.equal((await db.query("SELECT name FROM users WHERE email='new_student@srmap.edu.in'"))[0]!.name, "Newton Student", "only a guessed name is replaced");
+  });
+  it("an outside email with no pass is refused; the cleanup removes only never-signed-in outsiders without a pass", async () => {
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", remoteAddress: "10.77.0.3", payload: { email: "nobody.outside@gmail.com" } })).statusCode, 404);
+    await db.query("UPDATE users SET pass_tier='general' WHERE pass_tier IS NULL"); // shield everyone created by earlier tests: only the three people below are under test
+    const mk = async (email: string, extra = "") => (await db.query(`INSERT INTO users (email,name,pass_code,pass_secret,source,kind${extra ? ",pass_tier" : ""}) VALUES ($1,'X',$2,$3,'website','external'${extra ? ",'general'" : ""}) RETURNING id`, [email, "QFF-" + Math.floor(Math.random() * 90000 + 10000), Buffer.alloc(32, 1)]))[0]!.id as string;
+    const stale = await mk("stale.outsider@gmail.com"), keptPass = await mk("paid.outsider@gmail.com", "pass"), keptSelfie = await mk("selfie.outsider@gmail.com");
+    await db.query("INSERT INTO user_photos (user_id, object_key, size_bytes, sha256) VALUES ($1,'k',1,'x')", [keptSelfie]);
+    await db.query("DELETE FROM settings WHERE key='passes_synced_at'");
+    assert.equal((await admin("POST", "/admin/api/cleanup-nonpass", { dryRun: true })).json().ok, false, "refuses before the pass list is synced");
+    await db.query("INSERT INTO settings (key,value) VALUES ('passes_synced_at',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [new Date().toISOString()]);
+    const dry = (await admin("POST", "/admin/api/cleanup-nonpass", { dryRun: true })).json(); assert.equal(dry.ok, true); assert.ok(dry.wouldRemove >= 1);
+    assert.equal((await db.query("SELECT 1 FROM users WHERE id=$1", [stale])).length, 1, "a dry run removes nothing");
+    await admin("POST", "/admin/api/cleanup-nonpass", { dryRun: false });
+    assert.equal((await db.query("SELECT 1 FROM users WHERE id=$1", [stale])).length, 0, "stale outsider removed");
+    assert.equal((await db.query("SELECT 1 FROM users WHERE id=$1", [keptPass])).length, 1, "pass holder kept");
+    assert.equal((await db.query("SELECT 1 FROM users WHERE id=$1", [keptSelfie])).length, 1, "someone with a selfie is kept");
+    assert.equal((await db.query("SELECT 1 FROM users WHERE lower(email) LIKE '%@srmap.edu.in'")).length > 0, true, "SRM people are never removed");
   });
 });
 

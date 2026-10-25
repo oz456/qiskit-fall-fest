@@ -47,5 +47,6 @@ export class Browser {
     await this.cdp("Emulation.setUserAgentOverride", { userAgent: UA[kind], platform: navPlatform, userAgentMetadata: { platform: ch, platformVersion: "17.4", architecture: "", model: "", mobile, brands: [{ brand: "Not A;Brand", version: "99" }] } });
     await this.cdp("Emulation.setDeviceMetricsOverride", { width: mobile ? 390 : 1280, height: mobile ? 844 : 800, deviceScaleFactor: 2, mobile });
     await this.cdp("Emulation.setTouchEmulationEnabled", { enabled: mobile, maxTouchPoints: 5 });
+    await this.cdp("Emulation.setFocusEmulationEnabled", { enabled: true }); // parallel test browsers must all count as visible and focused
   }
 }
