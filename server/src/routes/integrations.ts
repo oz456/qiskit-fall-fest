@@ -8,7 +8,7 @@ import type { Db } from "../db.ts";
 import { sha256, safeEqual } from "../lib/crypto.ts";
 import { reconcile, upsertPeople } from "../lib/website-sync.ts";
 
-const Person = z.object({ email: z.string().max(200), name: z.string().max(200).optional().default(""), institution: z.string().max(300).nullish(), isActive: z.boolean().optional(), role: z.string().max(40).optional(), flagshipPass: z.boolean().optional() });
+const Person = z.object({ email: z.string().max(200), name: z.string().max(200).optional().default(""), institution: z.string().max(300).nullish(), isActive: z.boolean().optional(), role: z.string().max(40).optional() });
 
 export function integrationRoutes(app: FastifyInstance, db: Db) {
   const authorised = (header: string | undefined) => {
@@ -20,8 +20,8 @@ export function integrationRoutes(app: FastifyInstance, db: Db) {
     api.post("/integrations/website/attendees", { config: { rateLimit: { max: 600, timeWindow: "1 minute" } } }, async (req) => {
       const { people } = z.object({ people: z.array(Person).min(1).max(500) }).parse(req.body);
       const r = await upsertPeople(db, people);
-      await db.query("INSERT INTO sync_runs (trigger,status,finished_at,seen,created,updated,skipped,registered,error) VALUES ('push','ok',now(),$1,$2,$3,$4,$5,$6)", [r.seen, r.created, r.updated, r.skipped, r.registered, r.failed.length ? r.failed.slice(0, 3).join("; ").slice(0, 500) : null]);
-      return { ok: true, created: r.created, updated: r.updated, skipped: r.skipped, registered: r.registered, failed: r.failed.length };
+      await db.query("INSERT INTO sync_runs (trigger,status,finished_at,seen,created,updated,skipped,error) VALUES ('push','ok',now(),$1,$2,$3,$4,$5)", [r.seen, r.created, r.updated, r.skipped, r.failed.length ? r.failed.slice(0, 3).join("; ").slice(0, 500) : null]);
+      return { ok: true, created: r.created, updated: r.updated, skipped: r.skipped, failed: r.failed.length };
     });
     api.post("/integrations/website/reconcile", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async () => reconcile(db, "scheduler"));
   });

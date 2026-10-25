@@ -84,26 +84,19 @@ function modal(title, body) {
   document.body.append(bg); return bg;
 }
 const field = (label, input) => h("div", { class: "field" }, h("label", {}, label), input);
-const eventPicker = (events, selected) => {
-  const boxes = events.map((e) => h("input", { type: "checkbox", value: e.id, checked: selected.has(e.id) }));
-  const view = h("div", { class: "picks" }, events.length ? events.map((e, i) => h("label", { class: "check pick" }, boxes[i], h("span", {}, h("b", {}, e.title), h("span", { class: "muted small" }, " · " + fmtRange(e.startsAt, e.endsAt))))) : h("div", { class: "muted" }, "No events yet."));
-  return { view, value: () => boxes.filter((b) => b.checked).map((b) => b.value) };
-};
-const confirmDo = (msg, fn) => { if (confirm(msg)) guard(fn)(); };
 
 // ---- pages ----
-const ACCESS = { open: "OPEN TO ALL", onspot: "ON-SPOT", prereg: "PRE-REG ONLY" };
 async function events(m) {
   const list = await api("GET", "/events");
   m.append(head("Events", h("button", { class: "btn", onclick: () => editEvent() }, "New event")));
-  m.append(h("div", { class: "card" }, h("table", {}, h("tr", {}, ["When", "Event", "Track", "Where", "Entry", "Enrolled · Saved", ""].map((x) => h("th", {}, x))),
+  m.append(h("div", { class: "card" }, h("table", {}, h("tr", {}, ["When", "Event", "Track", "Where", "Saved by", ""].map((x) => h("th", {}, x))),
     list.map((e) => h("tr", { class: "click", onclick: () => editEvent(e) },
       h("td", {}, fmtRange(e.startsAt, e.endsAt)), h("td", { class: "lead" }, h("b", {}, e.title), " ", !e.published && h("span", { class: "pill warn" }, "HIDDEN"), " ", fmt(e.startsAt, { dateStyle: "short" }) !== fmt(e.endsAt, { dateStyle: "short" }) && h("span", { class: "pill" }, "MULTI-DAY")),
-      h("td", {}, e.track), h("td", {}, e.location), h("td", {}, h("span", { class: "pill" + (e.access === "prereg" ? " warn" : "") }, ACCESS[e.access] || "OPEN")), h("td", {}, `${e.registered}${e.capacity ? " / " + e.capacity : ""} · ${e.saved}`), h("td", { class: "chev" }, "›"))))));
+      h("td", {}, e.track), h("td", {}, e.location), h("td", {}, String(e.saved)), h("td", { class: "chev" }, "›"))))));
   if (!list.length) m.append(h("p", { class: "muted" }, "No events yet."));
 }
 function editEvent(e) {
-  const v = e || { title: "", description: "", track: "Main", location: "", speaker: "", startsAt: null, endsAt: null, capacity: null, access: "open", published: true };
+  const v = e || { title: "", description: "", track: "Main", location: "", speaker: "", startsAt: null, endsAt: null, published: true };
   const f = {
     title: h("input", { value: v.title, maxlength: 120, required: true }),
     track: h("select", {}, ["Main", "Workshop", "Talk", "Hackathon", "Social", "Competition"].map((t) => h("option", { value: t, selected: t === v.track }, t))),
@@ -111,14 +104,12 @@ function editEvent(e) {
     end: h("input", { type: "datetime-local", value: v.endsAt ? isoToLocal(v.endsAt) : "", required: true }),
     location: h("input", { value: v.location, maxlength: 120 }), speaker: h("input", { value: v.speaker, maxlength: 120 }),
     desc: h("textarea", { maxlength: 2000 }, v.description),
-    cap: h("input", { type: "number", min: 1, value: v.capacity ?? "", placeholder: "Unlimited" }),
-    access: h("select", {}, [["open", "Open to all — anyone can walk in"], ["onspot", "On-spot registration at the venue"], ["prereg", "Pre-registration required (you enrol people)"]].map(([k, t]) => h("option", { value: k, selected: k === v.access }, t))),
     pub: h("input", { type: "checkbox", checked: v.published }),
   };
   const body = h("form", { onsubmit: guard(async (ev) => {
     ev.preventDefault();
     const payload = { title: f.title.value, track: f.track.value, location: f.location.value, speaker: f.speaker.value, description: f.desc.value,
-      startsAt: localToIso(f.start.value), endsAt: localToIso(f.end.value), capacity: f.cap.value ? Number(f.cap.value) : null, access: f.access.value, published: f.pub.checked };
+      startsAt: localToIso(f.start.value), endsAt: localToIso(f.end.value), published: f.pub.checked };
     if (new Date(payload.endsAt) <= new Date(payload.startsAt)) throw new Error("End must be after start");
     await api(e ? "PUT" : "POST", "/events" + (e ? "/" + e.id : ""), payload);
     bg.remove(); toast("Saved"); route();
@@ -127,29 +118,9 @@ function editEvent(e) {
     h("div", { class: "grid g2" }, field("Starts (" + TZ + ")", f.start), field("Ends (" + TZ + ")", f.end)),
     h("p", { class: "muted small" }, "For a multi-day event (e.g. a hackathon), set the end on a later day. It will appear on every day it spans."),
     field("Speaker / host", f.speaker), field("Description", f.desc),
-    field("Entry", f.access), h("div", { class: "grid g2" }, field("Capacity (optional)", f.cap), h("div", {}, h("label", {}, "Options"), h("label", { class: "check" }, f.pub, "Visible in the app"))),
-    e && h("div", { class: "card" }, h("h3", {}, `Enrolled attendees: ${e.registered}`), h("p", { class: "muted small" }, "People who paid or were approved for this event. Only they see “Enrolled” in their app; the door scanner flags anyone else at pre-registration events."), h("button", { type: "button", class: "btn ghost sm", onclick: () => enrollment(e) }, "Manage enrolled attendees…")),
-    h("div", { class: "row" }, h("button", { class: "btn" }, "Save"), e && h("button", { type: "button", class: "btn danger right", onclick: () => confirmDo("Delete this event? Saved/registered links are removed too.", async () => { await api("DELETE", "/events/" + e.id); bg.remove(); route(); }) }, "Delete")));
+    h("div", {}, h("label", {}, "Options"), h("label", { class: "check" }, f.pub, "Visible in the app")),
+    h("div", { class: "row" }, h("button", { class: "btn" }, "Save"), e && h("button", { type: "button", class: "btn danger right", onclick: () => confirmDo("Delete this event? Saved links are removed too.", async () => { await api("DELETE", "/events/" + e.id); bg.remove(); route(); }) }, "Delete")));
   const bg = modal(e ? "Edit event" : "New event", body);
-}
-
-async function enrollment(e) {
-  const box = h("div", {});
-  const ta = h("textarea", { placeholder: "Paste emails — one per line, or separated by commas/spaces", rows: 4 });
-  const draw = async () => {
-    const list = await api("GET", `/events/${e.id}/registrations`);
-    box.replaceChildren(h("p", { class: "muted small" }, `${list.length} enrolled`),
-      ...list.map((u) => h("div", { class: "row item" }, h("div", { class: "grow" }, h("b", {}, u.name), " ", h("span", { class: "muted small" }, u.email)),
-        h("button", { class: "btn danger sm", onclick: guard(async () => { await api("DELETE", `/events/${e.id}/registrations/${u.id}`); await draw(); }) }, "Remove"))));
-  };
-  const body = h("div", {}, field("Add attendees by email", ta),
-    h("div", { class: "row" }, h("button", { class: "btn sm", onclick: guard(async () => {
-      const emails = ta.value.split(/[\s,;]+/).filter(Boolean);
-      if (!emails.length) return;
-      const r = await api("POST", `/events/${e.id}/registrations`, { emails });
-      ta.value = ""; toast(`Enrolled ${r.added}` + (r.notFound.length ? ` · not found: ${r.notFound.join(", ")}` : "")); await draw();
-    }) }, "Enrol")), box);
-  modal(`Enrolled — ${e.title}`, body); await draw();
 }
 
 async function people(m) {
@@ -160,13 +131,12 @@ async function people(m) {
   m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), syncBox, h("div", { class: "row" }, q, kind), out);
   const KIND = { student: "SRM student", faculty: "SRM faculty", unclear: "SRM", external: "Outside SRM" };
   async function drawSync() {
-    const [s, events] = await Promise.all([api("GET", "/sync"), api("GET", "/events")]); clear(syncBox);
+    const s = await api("GET", "/sync"); clear(syncBox);
     const last = s.runs.find((r) => r.status !== "running"), when = (iso) => new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-    const pick = h("select", { onchange: guard(async () => { const r = await api("PUT", "/sync/flagship-event", { eventId: pick.value }); toast(r.ok === false ? r.message : "Saved"); }) }, h("option", { value: "" }, "Not set"), events.map((e) => h("option", { value: e.id, selected: e.id === s.flagshipEventId }, e.title)));
     syncBox.append(h("h3", {}, "Website sync"),
       h("p", { class: "muted small" }, s.configured ? `People who register on ${s.websiteUrl.replace(/^https?:\/\//, "")} appear here automatically (${s.fromWebsite} so far, ${s.total} in total). Checked every 10 minutes and whenever someone registers.` : "Not connected: the sync key is not set on the server."),
       last && h("p", { class: "small" }, `Last run ${when(last.at)} · ${last.status === "ok" ? `saw ${last.seen}, added ${last.created}, updated ${last.updated}` : "failed: " + (last.error || "")}`),
-      h("div", { class: "row", style: "align-items:flex-end;gap:12px;flex-wrap:wrap" }, h("div", { class: "grow" }, h("label", {}, "Rs 499 flagship pass holders are registered for"), pick),
+      h("div", { class: "row" },
         h("button", { class: "btn ghost", disabled: !s.configured, onclick: guard(async () => { const r = await api("POST", "/sync/run"); toast(r.message); await drawSync(); await load(); }) }, "Sync now")));
   }
   async function load() {
@@ -179,8 +149,6 @@ async function people(m) {
   }
   await Promise.all([drawSync(), load()]);
   async function openUser(u) {
-    const events = await api("GET", "/events");
-    const picker = eventPicker(events, new Set(u.enrolledIds || []));
     const act = (label, cls, fn) => h("button", { class: "btn sm " + cls, onclick: fn }, label);
     const done = (msg) => { bg.remove(); toast(msg); load(); };
     const body = h("div", {},
@@ -188,8 +156,6 @@ async function people(m) {
         u.hasPhoto ? h("img", { class: "avatar", alt: "", src: `/admin/api/users/${u.id}/photo` }) : h("div", { class: "avatar none" }, u.name.split(/\s+/).slice(0, 2).map((x) => x[0]).join("").toUpperCase()),
         h("div", { class: "grow" }, h("h2", { style: "margin:0 0 4px" }, u.name), h("div", { class: "muted" }, u.email), h("div", { class: "muted" }, [u.passCode, u.college].filter(Boolean).join(" · ")),
           h("div", { style: "margin-top:10px" }, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), " ", h("span", { class: "pill" }, u.hasApp ? "SIGNED IN" : "NOT SIGNED IN"), " ", u.checkins ? h("span", { class: "pill" }, `${u.checkins} CHECK-IN${u.checkins > 1 ? "S" : ""}`) : null))),
-      h("div", { class: "card", style: "margin-top:20px;box-shadow:none" }, h("h3", {}, "Registered events"), h("p", { class: "muted small" }, "Tick the events this person has paid for or been approved for. They appear under My Pass in the app."), picker.view,
-        h("div", { class: "row", style: "margin-top:12px" }, h("button", { class: "btn sm", onclick: guard(async () => { await api("PUT", `/users/${u.id}/registrations`, { eventIds: picker.value() }); done("Registrations saved"); }) }, "Save registrations"))),
       h("div", { class: "row" },
         act(u.status === "active" ? "Block" : "Unblock", "ghost", guard(async () => { await api("PATCH", "/users/" + u.id, { status: u.status === "active" ? "blocked" : "active" }); done("Updated"); })),
         act("Reset device", "ghost", () => confirmDo("Sign " + u.name + " out of their phone so they can log in on a new one?", async () => { await api("POST", `/users/${u.id}/reset-device`); done("Device reset"); })),
@@ -198,32 +164,25 @@ async function people(m) {
     const bg = modal("Attendee", body);
   }
   async function addUser() {
-    const events = await api("GET", "/events"); const picker = eventPicker(events, new Set());
     const n = h("input", { required: true, maxlength: 100 }), e = h("input", { type: "email", required: true }), c = h("input", { maxlength: 150 });
-    const bg = modal("Add attendee", h("form", { onsubmit: guard(async (ev) => { ev.preventDefault(); await api("POST", "/users", { email: e.value, name: n.value, college: c.value || null, eventIds: picker.value() }); bg.remove(); toast("Added"); load(); }) },
-      field("Name", n), field("Email", e), field("College / organisation", c), field("Registered for", picker.view), h("div", { class: "row" }, h("button", { class: "btn" }, "Add"))));
+    const bg = modal("Add attendee", h("form", { onsubmit: guard(async (ev) => { ev.preventDefault(); await api("POST", "/users", { email: e.value, name: n.value, college: c.value || null }); bg.remove(); toast("Added"); load(); }) },
+      field("Name", n), field("Email", e), field("College / organisation", c), h("div", { class: "row" }, h("button", { class: "btn" }, "Add"))));
   }
   async function importCsv() {
-    const events = await api("GET", "/events");
-    const q = (t) => '"' + String(t).replace(/"/g, '""') + '"';
     const ta = h("textarea", { placeholder: "email,name,college\nalex@example.org,Alex Morgan,SRM University AP", rows: 7 });
     const file = h("input", { type: "file", accept: ".csv,text/csv", onchange: async () => { if (file.files[0]) ta.value = await file.files[0].text(); } });
     const template = () => {
-      const head = ["email", "name", "college", ...events.map((e) => q(e.title))].join(",");
-      const row = ["jane@example.org", "Jane Doe", "SRM University AP", ...events.map((_, i) => (i === 0 ? 1 : 0))].join(",");
-      const a = h("a", { href: URL.createObjectURL(new Blob([head + "\n" + row + "\n"], { type: "text/csv" })), download: "attendees-template.csv" }); a.click();
+      const a = h("a", { href: URL.createObjectURL(new Blob(["email,name,college\njane@example.org,Jane Doe,SRM University AP\n"], { type: "text/csv" })), download: "attendees-template.csv" }); a.click();
     };
     const guide = h("div", { class: "guide" },
       h("b", {}, "How to format the CSV"),
-      h("p", {}, "The first row is a header. Columns, in this order: ", h("code", {}, "email"), ", ", h("code", {}, "name"), ", ", h("code", {}, "college"), events.length ? ", then one column per event:" : "."),
-      events.length ? h("ol", {}, events.map((e) => h("li", {}, h("code", {}, e.title), " ", h("span", { class: "muted small" }, fmtRange(e.startsAt, e.endsAt))))) : h("p", { class: "muted" }, "No events yet. Create events first if you want to mark registrations."),
-      events.length && h("p", {}, "Under each event put ", h("code", {}, "1"), " if the person is registered for it, ", h("code", {}, "0"), " (or leave it empty) if not. Each event column's header must be the event's exact title, so use the template button to get them right."),
-      h("p", { class: "muted small" }, "Existing emails are not duplicated, but a 1 still registers them. A 0 never removes a registration; untick it in the attendee’s panel instead."),
+      h("p", {}, "The first row is a header. Columns, in this order: ", h("code", {}, "email"), ", ", h("code", {}, "name"), ", ", h("code", {}, "college"), "."),
+      h("p", { class: "muted small" }, "Emails that already exist are skipped, not duplicated. People who register on the website are added automatically; use this only for anyone who isn’t on the website."),
       h("button", { type: "button", class: "btn ghost sm", onclick: template }, "Download template CSV"));
     const bg = modal("Import attendees", h("div", {}, guide, field("CSV file", file), field("…or paste it here", ta),
       h("div", { class: "row" }, h("button", { class: "btn", onclick: guard(async () => {
         const r = await api("POST", "/users/import", { csv: ta.value }); bg.remove();
-        toast(`Added ${r.added}, skipped ${r.skipped}, registrations ${r.enrolled}` + (r.invalid.length ? `, invalid ${r.invalid.length}` : "") + (r.ignoredColumns.length ? `. Ignored columns: ${r.ignoredColumns.join(", ")}` : "")); load();
+        toast(`Added ${r.added}, skipped ${r.skipped}` + (r.invalid.length ? `, invalid ${r.invalid.length}` : "")); load();
       }) }, "Import"))));
   }
 }

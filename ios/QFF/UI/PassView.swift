@@ -8,8 +8,7 @@ struct PassView: View {
     @State private var captured = UIScreen.main.isCaptured
     @State private var fullQR = false
 
-    /// Registered = enrolled by the organisers, or attendance already scanned at that event (the server folds both into `registered`).
-    private var enrolled: [Event] { app.events.filter(\.registered) }
+    private var saved: [Event] { app.events.filter(\.saved) }
     private var hidden: Bool { captured || scenePhase != .active }
 
     var body: some View {
@@ -29,11 +28,11 @@ struct PassView: View {
                     .font(T.small).foregroundStyle(P.muted).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                     .padding(.horizontal, 24).padding(.top, 14)
 
-                if !enrolled.isEmpty {
-                    SectionLabel(text: "REGISTERED EVENTS").padding(.horizontal, 24).padding(.top, 32).padding(.bottom, 8)
-                    ForEach(enrolled) { e in EventRow(event: e, day: nil, trailing: false).padding(.horizontal, 24).padding(.vertical, 6) }
+                if !saved.isEmpty {
+                    SectionLabel(text: "SAVED EVENTS").padding(.horizontal, 24).padding(.top, 32).padding(.bottom, 8)
+                    ForEach(saved) { e in EventRow(event: e, day: nil, trailing: true).padding(.horizontal, 24).padding(.vertical, 6) }
                 } else {
-                    Text("Events you’re registered for appear here.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
+                    Text("Events you save appear here. Tap the bookmark on any event to save it.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity).padding(.horizontal, 40).padding(.vertical, 48)
                 }
             }

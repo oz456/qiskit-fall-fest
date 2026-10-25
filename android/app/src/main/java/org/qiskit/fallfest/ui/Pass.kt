@@ -61,8 +61,7 @@ private fun rememberLivePass(app: AppState): Pair<String?, Float> {
 fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
     var qrOpen by remember { mutableStateOf(false) }
     SecureWindow((LocalContext.current as? Activity)?.window)
-    // Registered = enrolled by the organisers, or attendance already scanned at that event (the server folds both into `registered`).
-    val enrolled = app.events.filter { it.registered }
+    val saved = app.events.filter { it.saved }
     val (payload, progress) = rememberLivePass(app)
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 130.dp)) {
@@ -77,11 +76,11 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
             Spacer(Modifier.height(14.dp))
             Text("QR appears when you tap. It refreshes every 30 seconds.", style = T.small, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
         }
-        if (enrolled.isNotEmpty()) {
-            item { SectionLabel("REGISTERED EVENTS", Modifier.padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 8.dp)) }
-            items(enrolled, key = { it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen, trailing = false) }
+        if (saved.isNotEmpty()) {
+            item { SectionLabel("SAVED EVENTS", Modifier.padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 8.dp)) }
+            items(saved, key = { it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen) }
         } else item {
-            Text("Events you’re registered for appear here.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 48.dp))
+            Text("Events you save appear here. Tap the bookmark on any event to save it.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 48.dp))
         }
     }
     // a forgotten QR must not stay on screen: close it after 2 minutes

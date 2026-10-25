@@ -13,8 +13,7 @@ The main website (`www.qffsrmap2026.com`, repo `qiskitfallfest-srmap/QisKit-Fall
 - Only website role `participant` becomes an attendee (admin / mentor / tester are skipped).
 - SRM addresses are labelled for admin: `name_surname@srmap.edu.in` = student, `name.surname@srmap.edu.in` = faculty, other SRM addresses = unclear, everything else = outside SRM. A label only; it never grants or blocks access.
 - Switched off on the website → blocked here, but only for people who came from the website. People an admin created or blocked are never changed by the sync.
-- **Rs 499 flagship pass**: the website export marks holders of a *verified* flagship pass; the app registers them for the event chosen in Admin → Attendees → Website sync ("Rs 499 flagship pass holders are registered for"). Pass-holders are never un-registered automatically.
-- Scanning never blocks someone for not being registered for an event: they get a warning, the volunteer decides, and a confirmed entry is recorded and listed in Attendance.
+- There is no event registration in the app: anyone with a pass can be scanned in at any event, and the Rs 99 / Rs 499 passes are not tracked here.
 - `/checkin` has "No QR? Find the person" (name, pass code or email) for dead phones. It goes through the same face check and is written to the activity log.
 
 ## Setup

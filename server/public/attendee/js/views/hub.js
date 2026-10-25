@@ -13,8 +13,7 @@ export function eventRow(e, { day = null, trailing = true, open }) {
     bubble(TRACK_ICON[e.track] || "rocket", 50, st === "live"),
     h("div", { class: "meta" },
       h("div", { class: "when" }, day ? timeLabelOn(e, day) : fmtTime(e.startMs),
-        st === "live" ? [pulse(), h("span", { class: "live" }, "LIVE")] : st === "done" ? h("span", { class: "ended" }, "ENDED") : null,
-        e.registered ? h("span", { style: { color: "var(--pri)", display: "inline-flex" }, title: "Registered", "aria-label": "Registered" }, icon("ticket", "")) : null),
+        st === "live" ? [pulse(), h("span", { class: "live" }, "LIVE")] : st === "done" ? h("span", { class: "ended" }, "ENDED") : null,),
       h("div", { class: "name" }, e.title),
       h("div", { class: "where" }, e.location + (e.multi ? ` · ${e.durationDays} days` : ""))),
     trailing ? h("button", { class: "save" + (e.saved ? " on" : ""), type: "button", "aria-label": e.saved ? "Unsave" : "Save", onclick: (ev) => { ev.stopPropagation(); toggleSaved(e, toast); ev.currentTarget.classList.add("pop"); } }, icon("bookmark")) : null);

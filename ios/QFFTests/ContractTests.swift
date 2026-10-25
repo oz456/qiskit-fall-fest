@@ -16,11 +16,7 @@ final class ContractTests: XCTestCase {
         let r = try decode(EventsResponse.self, "events")
         XCTAssertGreaterThanOrEqual(r.events.count, 2)
         let e = try XCTUnwrap(r.events.first { $0.track == .Hackathon })
-        XCTAssertTrue(e.registered)
         XCTAssertTrue(e.saved)
-        XCTAssertEqual(e.capacity, 50)
-        XCTAssertEqual(e.spotsLeft, 49)
-        XCTAssertTrue(e.registrationRequired)
         // 28 Oct 18:00 IST → 29 Oct 18:00 IST is a two-day event
         XCTAssertTrue(e.isMultiDay)
         XCTAssertEqual(e.durationDays, 2)

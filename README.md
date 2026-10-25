@@ -13,11 +13,11 @@ qff/
 ```
 
 ## How it fits together
-- **Attendees** are pre-registered by the organisers (admin → Attendees → add, or import a CSV). They sign in with their email and a 6-digit code (Gmail SMTP, used **only** for login codes). An email that isn't on the list gets a clear "not on the attendee list" message.
+- **Attendees** are added automatically when they register on the main website (or by the organisers: admin → Attendees → add, or import a CSV). They sign in with their email and a 6-digit code (Gmail SMTP, used **only** for login codes). An email that isn't on the list gets a clear "not on the attendee list" message.
 - **First sign-in = one mandatory selfie** (front camera, can't be changed later, only an admin can reset it). The app is blocked until it exists. It is stored in a private Google Cloud Storage bucket; only the door scanner and admin can see it.
 - **Pass**: a QR that rotates every 30 s, signed with a per-attendee secret held only by the signed-in phone (one phone per account). It stays hidden until tapped.
 - **Door scanner** (`/checkin`, its own login): scanning *verifies* the pass and shows the attendee's selfie, name and college; the volunteer taps **Confirm entry** or **Reject**. Attendance is recorded on confirm (once per person per day/event).
-- **Events** have an entry type: open to all, on-spot registration, or pre-registration (admin-managed). **Registered** = ticked by an admin (checkboxes or CSV) or already scanned at that event. The Hub shows All / Saved, My Pass shows registered events.
+- **Events** have no registration or capacity: everyone sees every event, taps the bookmark to **save** it, and My Pass lists the saved events. Anyone with a pass can be scanned in at any event.
 - **Support**: tickets with a chat-style thread, pull-to-refresh, and a red dot/badge on the Support tab when the team replies.
 - **Notifications**: instant push notifications for exactly two things: a new announcement (to everyone) and a reply to your support ticket (to you). The app asks once, right after sign-in and selfie. Android uses Firebase Cloud Messaging; iPhone uses Apple's push service (needs the Apple Developer account, see docs/IOS.md). Nothing is emailed except login codes.
 - **Admin portal** (`/admin`, its own login): events, attendees (photo, registrations, reset device/selfie), announcements (instant push + in-app list), support inbox, attendance, content/FAQs, activity log.

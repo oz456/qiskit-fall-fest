@@ -312,7 +312,6 @@ struct EventRow: View {
                                 Text(day.map { event.timeLabel(on: $0) } ?? Fmt.time.string(from: event.startsAt)).font(T.small).foregroundStyle(P.muted)
                                 if status == .live { PulseDot(color: P.accent, size: 5); Text("LIVE").font(Fonts.body(10, 700, style: .caption2)).tracking(0.8).foregroundStyle(P.accent) }
                                 else if status == .done { Text("ENDED").font(Fonts.body(10, 700, style: .caption2)).tracking(0.8).foregroundStyle(P.muted) }
-                                if event.registered { Image(systemName: "ticket").font(.system(size: 12, weight: .semibold)).foregroundStyle(P.primary).accessibilityLabel("Registered") }
                             }
                             Text(event.title).font(T.title).foregroundStyle(P.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                             Text(event.location + (event.isMultiDay ? " · \(event.durationDays) days" : "")).font(T.small).foregroundStyle(P.muted).lineLimit(1)

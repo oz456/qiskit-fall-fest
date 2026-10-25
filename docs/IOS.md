@@ -3,7 +3,7 @@
 Native SwiftUI app in `ios/` (iOS 16+, iPhone). Same design system, features and backend as the Android app:
 email-code sign-in, Hub (multi-day events, day chips, filters, hero), event sheet, My Pass (live 30-second QR, tilt card,
 full-screen QR with brightness boost), Support (mentor / grievance / tickets with replies / FAQs), announcements, offline cache,
-mandatory first-sign-in selfie (AVFoundation front camera), registered-events My Pass, chat-style support threads with a tab badge for new replies, light-only poster theme with frosted-glass surfaces, Dynamic Type, VoiceOver labels, haptics, Keychain storage for the refresh token and pass secret.
+mandatory first-sign-in selfie (AVFoundation front camera), saved-events My Pass, chat-style support threads with a tab badge for new replies, light-only poster theme with frosted-glass surfaces, Dynamic Type, VoiceOver labels, haptics, Keychain storage for the refresh token and pass secret.
 
 ## How it is built (no Mac needed)
 Xcode is not available on Linux, so **GitHub Actions builds it on a macOS runner** (`.github/workflows/ios.yml`, runs on every push touching `ios/`):

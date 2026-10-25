@@ -23,8 +23,7 @@ enum class Status { Live, Upcoming, Done }
 
 data class Event(
     val id: String, val title: String, val description: String, val track: Track, val location: String, val speaker: String,
-    val start: ZonedDateTime, val end: ZonedDateTime, val capacity: Int?, val registrationRequired: Boolean,
-    val spotsLeft: Int?, val saved: Boolean, val registered: Boolean, val access: String = "open",
+    val start: ZonedDateTime, val end: ZonedDateTime, val saved: Boolean,
 ) {
     val startDay: LocalDate get() = start.toLocalDate()
     val endDay: LocalDate get() = end.toLocalDate()
@@ -43,7 +42,7 @@ data class Event(
         else start.format(DM_T) + " → " + end.format(DM_T)
     val dayLabel: String get() = if (!isMultiDay) start.format(DATE_LONG) else start.format(DM) + " – " + end.format(DM) + " · $durationDays days"
 
-    fun withUser(saved: Boolean = this.saved, registered: Boolean = this.registered, spots: Int? = spotsLeft) = copy(saved = saved, registered = registered, spotsLeft = spots)
+    fun withUser(saved: Boolean = this.saved) = copy(saved = saved)
 
     companion object {
         private val T12 = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
@@ -53,8 +52,7 @@ data class Event(
         fun parse(o: JSONObject) = Event(
             o.str("id"), o.str("title"), o.str("description"), Track.of(o.str("track")), o.str("location"), o.str("speaker"),
             Instant.parse(o.str("startsAt")).atZone(IST), Instant.parse(o.str("endsAt")).atZone(IST),
-            o.intOrNull("capacity"), o.optBoolean("registrationRequired"), o.intOrNull("spotsLeft"), o.optBoolean("saved"), o.optBoolean("registered"),
-            o.optString("access", if (o.optBoolean("registrationRequired")) "prereg" else "open"),
+            o.optBoolean("saved"),
         )
     }
 }

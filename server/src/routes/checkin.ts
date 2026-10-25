@@ -58,21 +58,13 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
       return verdict(u, b.scope);
     });
 
-    // Shared by the QR scan and the manual lookup. Registration never blocks anyone: a person who isn't registered for the event is
-    // shown with a warning and the volunteer decides; the check-in is recorded on confirm like any other.
+    // Shared by the QR scan and the manual lookup. There is no event registration: anyone with a pass can be checked in to any event.
     async function verdict(u: any, scope: string, manual = false) {
       const who = { name: u.name, college: u.college, passCode: u.pass_code, hasPhoto: u.has_photo };
       const ticket = signJwt({ aud: "check-ticket", uid: u.id, scope }, config.sessionSecret, 120);
       const [prev] = await db.query("SELECT scanned_at FROM checkins WHERE user_id=$1 AND scope=$2", [u.id, scope]);
       if (prev) return { result: "duplicate", message: "Already checked in.", at: new Date(prev.scanned_at).toISOString(), who, ticket };
       const warnings: string[] = [];
-      if (scope.startsWith("event:")) {
-        const [e] = await db.query("SELECT access FROM events WHERE id=$1", [scope.slice(6)]);
-        if (e?.access === "prereg") {
-          const [reg] = await db.query("SELECT 1 FROM user_events WHERE user_id=$1 AND event_id=$2 AND kind='registered'", [u.id, scope.slice(6)]);
-          if (!reg) warnings.push("Not on the registered list for this event. You can still let them in.");
-        }
-      }
       if (manual) warnings.push("Found by search, no QR was scanned. Compare the face with the selfie carefully.");
       if (!u.has_photo) warnings.push("No selfie on file yet.");
       return { result: "verify", message: "Check the face, then confirm.", warning: warnings.join(" ") || undefined, who, ticket };

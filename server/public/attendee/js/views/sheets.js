@@ -5,14 +5,6 @@ import { TRACK_ICON, TRACK_LABEL, bubble, button, confirmDialog, h, icon, openSh
 import * as push from "../push.js";
 
 // ---- event ----
-function accessCard(e) {
-  const seats = e.capacity != null ? (e.spotsLeft === 0 ? " · Full" : e.spotsLeft != null ? ` · ${e.spotsLeft} of ${e.capacity} seats left` : "") : "";
-  const [ic, title, sub, good] = e.registered ? ["checkCircle", "You’re enrolled", "Your entry is confirmed. Show your pass at the door.", true]
-    : e.access === "prereg" ? ["lock", "Pre-registration required", "Only enrolled attendees can enter. If you paid and don’t see “Enrolled”, contact Support.", false]
-    : e.access === "onspot" ? ["user", "On-spot registration", "Register at the venue desk when you arrive.", false]
-    : ["lockOpen", "Open to everyone", "No registration needed. Just walk in.", false];
-  return h("div", { class: "card access" }, bubble(ic, 44, good), h("div", {}, h("div", { class: "title" }, title + seats), h("p", {}, sub)));
-}
 const icsEscape = (s) => String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n?|\n/g, "\\n");
 const icsTime = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 function downloadIcs(e) {
@@ -35,7 +27,6 @@ export function openEventSheet(id) {
           h("div", { class: "info" }, icon("calendar"), dayLabel(e)), h("div", { class: "info" }, icon("clock"), rangeLabel(e) + " IST"),
           e.location ? h("div", { class: "info" }, icon("pin"), e.location) : null, e.speaker ? h("div", { class: "info" }, icon("user"), e.speaker) : null),
         e.description ? h("p", { class: "body muted", style: { whiteSpace: "pre-wrap" } }, e.description) : null,
-        accessCard(e),
         h("div", { class: "twin" }, button(e.saved ? "Saved" : "Save it", { icon: e.saved ? "check" : "plus", onclick: () => toggleSaved(e, toast) }),
           h("button", { class: "round", type: "button", "aria-label": "Add to calendar", onclick: () => downloadIcs(e) }, icon("calendarPlus"))));
     };

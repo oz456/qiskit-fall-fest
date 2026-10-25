@@ -17,11 +17,10 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
   before(async () => {
     db = await openDb(); await migrate(db); app = await buildApp(db);
     await app.listen({ port: 0, host: "127.0.0.1" }); base = `http://127.0.0.1:${(app.server.address() as any).port}`;
-    for (const [t, tr, s, e, acc] of [["Inauguration", "Main", iso("26", 10), iso("26", 11), "open"], ["Grand Finale", "Hackathon", iso("28", 18), iso("29", 18), "prereg"]] as const)
-      eventIds.push((await db.query("INSERT INTO events (title,description,track,location,starts_at,ends_at,access,registration_required) VALUES ($1,'Sample','" + tr + "','SRM University AP',$2,$3,$4,$5) RETURNING id", [t, s, e, acc, acc === "prereg"]))[0]!.id);
+    for (const [t, tr, s, e] of [["Inauguration", "Main", iso("26", 10), iso("26", 11)], ["Grand Finale", "Hackathon", iso("28", 18), iso("29", 18)]] as const)
+      eventIds.push((await db.query("INSERT INTO events (title,description,track,location,starts_at,ends_at) VALUES ($1,'Sample','" + tr + "','SRM University AP',$2,$3) RETURNING id", [t, s, e]))[0]!.id);
     await db.query("INSERT INTO settings (key,value) VALUES ('fest_start','2026-10-26'),('fest_end','2026-10-30') ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value");
     const [u] = await db.query("INSERT INTO users (email,name,college,pass_code,pass_secret) VALUES ('web@example.org','Web Tester','SRM AP','QFF-7777',$1) RETURNING id", [Buffer.alloc(32, 9)]);
-    await db.query("INSERT INTO user_events (user_id,event_id,kind) VALUES ($1,$2,'registered')", [u!.id, eventIds[1]]);
     b = await Browser.launch();
   });
   after(async () => { b?.close(); await app?.close(); });
@@ -80,12 +79,12 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     assert.match(await b.ev(`document.querySelector('.list').textContent`), /Inauguration/);
     await b.tap(".row .save"); assert.ok(await b.until(`document.querySelector('.row .save').classList.contains('on')`));
     assert.equal((await db.query("SELECT 1 FROM user_events WHERE kind='saved'")).length, 1, "saving reached the server");
-    await b.tap(".row.card"); assert.ok(await b.until(`!!document.querySelector('.sheet .access')`)); await b.ev(`history.back()`); assert.ok(await b.until(`!document.querySelector('.sheet')`));
+    await b.tap(".row.card"); assert.ok(await b.until(`!!document.querySelector('.sheet .infoCard')`)); await b.ev(`history.back()`); assert.ok(await b.until(`!document.querySelector('.sheet')`));
 
     // pass: hidden until tapped, then a rotating QR that really scans at the door
     await b.tap(".tab[aria-label='My Pass']"); assert.ok(await b.until(`location.pathname === '/attendee/pass' && !!document.querySelector('.pass')`));
     assert.equal(await b.ev(`!!document.querySelector('canvas.qr, .qrfull')`), false, "no QR until tapped");
-    assert.match(await b.ev(`document.querySelector('.list').textContent`), /Grand Finale/, "registered events are listed");
+    assert.match(await b.ev(`document.querySelector('.list').textContent`), /Inauguration/, "saved events are listed under My pass");
     await b.tap(".pass .btn"); assert.ok(await b.until(`!!document.querySelector('.qrfull canvas')`));
     await b.wait(600);
     const jsqr = readFileSync(new URL("../public/checkin/vendor/jsQR.js", import.meta.url), "utf8");

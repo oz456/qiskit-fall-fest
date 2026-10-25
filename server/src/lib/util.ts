@@ -21,6 +21,6 @@ export const newTicketCode = () => `QFF-${randomInt(1000, 10000)}`;
 export const eventOut = (r: Row, extra: Row = {}) => ({
   id: r.id, title: r.title, description: r.description, track: r.track, location: r.location, speaker: r.speaker,
   startsAt: new Date(r.starts_at).toISOString(), endsAt: new Date(r.ends_at).toISOString(),
-  capacity: r.capacity, access: r.access, registrationRequired: r.access === "prereg", published: r.published,
+  published: r.published,
   ...extra,
 });

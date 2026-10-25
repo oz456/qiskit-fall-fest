@@ -1,4 +1,4 @@
-// App state (same model as the Android/iPhone apps): schedule, announcements, tickets, saved events, "registered" and unread markers.
+// App state (same model as the Android/iPhone apps): schedule, announcements, tickets, saved events and unread markers.
 import { ApiError, api } from "./api.js";
 
 export const IST = "Asia/Kolkata";
@@ -47,7 +47,7 @@ export const greetDate = () => F.greetDate.format(S.now);
 
 function norm(e) {
   const startMs = Date.parse(e.startsAt), endMs = Date.parse(e.endsAt), startDay = istDay(startMs), endDay = istDay(endMs);
-  return { ...e, startMs, endMs, startDay, endDay, multi: endDay > startDay, durationDays: Math.round((dayMs(endDay) - dayMs(startDay)) / 86400000) + 1, access: e.access || (e.registrationRequired ? "prereg" : "open") };
+  return { ...e, startMs, endMs, startDay, endDay, multi: endDay > startDay, durationDays: Math.round((dayMs(endDay) - dayMs(startDay)) / 86400000) + 1 };
 }
 export const statusOf = (e) => (S.now < e.startMs ? "upcoming" : S.now < e.endMs ? "live" : "done");
 export const coversDay = (e, d) => d >= e.startDay && d <= e.endDay;

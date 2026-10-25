@@ -82,12 +82,7 @@ struct Event: Identifiable, Equatable, Decodable {
     let speaker: String
     let startsAt: Date
     let endsAt: Date
-    let capacity: Int?
-    let registrationRequired: Bool
-    var access: String?
-    var spotsLeft: Int?
     var saved: Bool
-    var registered: Bool
 
     var startDay: Date { istCalendar.startOfDay(for: startsAt) }
     var endDay: Date { istCalendar.startOfDay(for: endsAt) }

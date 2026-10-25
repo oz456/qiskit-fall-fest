@@ -27,7 +27,6 @@ struct EventSheet: View {
                         }
                     }
                     if !e.description.isEmpty { Text(e.description).font(T.body).foregroundStyle(P.muted) }
-                    accessCard(e)
                     HStack(spacing: 10) {
                         PrimaryButton(title: e.saved ? "SAVED" : "SAVE IT", systemImage: e.saved ? "checkmark" : "plus") { app.toggleSaved(e) }
                         if let ics {
@@ -45,28 +44,6 @@ struct EventSheet: View {
             .task(id: e.id) { ics = CalendarFile.write(for: e) }
         } else {
             Color.clear.onAppear { dismiss() }
-        }
-    }
-
-    /// How you get in: open to all, on-spot registration, or admin-managed pre-registration (enrolled = paid / approved).
-    private func accessCard(_ e: Event) -> some View {
-        let symbol: String, title: String, sub: String, good: Bool
-        if e.registered { (symbol, title, sub, good) = ("checkmark.circle", "You’re enrolled", "Your entry is confirmed. Show your pass at the door.", true) }
-        else if e.access == "prereg" { (symbol, title, sub, good) = ("lock", "Pre-registration required", "Only enrolled attendees can enter. If you paid and don’t see “Enrolled”, contact Support.", false) }
-        else if e.access == "onspot" { (symbol, title, sub, good) = ("person.badge.plus", "On-spot registration", "Register at the venue desk when you arrive.", false) }
-        else { (symbol, title, sub, good) = ("lock.open", "Open to everyone", "No registration needed. Just walk in.", false) }
-        var seats = ""
-        if e.capacity != nil { if e.spotsLeft == 0 { seats = " · Full" } else if let left = e.spotsLeft { seats = " · \(left) of \(e.capacity ?? 0) seats left" } }
-        return Card(radius: 20) {
-            HStack(alignment: .top, spacing: 14) {
-                IconBubble(symbol: symbol, size: 44, tint: good ? P.mintInk : P.muted, bg: good ? P.mint : P.surfaceAlt)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title + seats).font(T.title).foregroundStyle(P.ink)
-                    Text(sub).font(T.small).foregroundStyle(P.muted)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(16)
         }
     }
 

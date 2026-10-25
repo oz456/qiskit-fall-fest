@@ -8,19 +8,17 @@ extension AppState {
         s.startClock()
         let now = Date()
         func iso(_ d: Date) -> String { ISO8601DateFormatter().string(from: d) }
-        func ev(_ id: String, _ title: String, _ track: String, _ loc: String, _ start: TimeInterval, _ end: TimeInterval, desc: String, saved: Bool = false, reg: Bool = false, regReq: Bool = false, onspot: Bool = false, cap: Int? = nil, left: Int? = nil) -> [String: Any] {
-            var d: [String: Any] = ["id": id, "title": title, "description": desc, "track": track, "location": loc, "speaker": "SRM University AP",
-                    "startsAt": iso(now.addingTimeInterval(start)), "endsAt": iso(now.addingTimeInterval(end)), "registrationRequired": regReq, "access": regReq ? "prereg" : (onspot ? "onspot" : "open"), "saved": saved, "registered": reg]
-            d["capacity"] = cap.map { $0 as Any } ?? NSNull()
-            d["spotsLeft"] = left.map { $0 as Any } ?? NSNull()
+        func ev(_ id: String, _ title: String, _ track: String, _ loc: String, _ start: TimeInterval, _ end: TimeInterval, desc: String, saved: Bool = false) -> [String: Any] {
+            let d: [String: Any] = ["id": id, "title": title, "description": desc, "track": track, "location": loc, "speaker": "SRM University AP",
+                    "startsAt": iso(now.addingTimeInterval(start)), "endsAt": iso(now.addingTimeInterval(end)), "saved": saved]
             return d
         }
         let h: TimeInterval = 3600, day: TimeInterval = 86400
         let events: [[String: Any]] = [
-            ev("e1", "Project Q – Grand Finale (24-hour Hackathon)", "Hackathon", "SRM University AP, Amaravati", -20 * h, 28 * h, desc: "24 hours of continuous, on-campus building for the confirmed teams. Teams build, refine and present live to the judging panel.", saved: true, reg: true, regReq: true),
-            ev("e2", "Quantum Algorithms Workshop", "Workshop", "Workshop Room C", -0.5 * h, 1.5 * h, desc: "VQE and QAOA with Qiskit primitives.", saved: true, regReq: true, cap: 60, left: 12),
+            ev("e1", "Project Q – Grand Finale (24-hour Hackathon)", "Hackathon", "SRM University AP, Amaravati", -20 * h, 28 * h, desc: "24 hours of continuous, on-campus building for the confirmed teams. Teams build, refine and present live to the judging panel.", saved: true),
+            ev("e2", "Quantum Algorithms Workshop", "Workshop", "Workshop Room C", -0.5 * h, 1.5 * h, desc: "VQE and QAOA with Qiskit primitives.", saved: true),
             ev("e3", "Hardware Quantum Tech Expo", "Talk", "Future Stage", 3 * h, 4 * h, desc: "Hands-on with real quantum hardware demos."),
-            ev("e4", "Quantum Quiz & Social", "Social", "Sky Garden", 5 * h, 6 * h, desc: "Team quiz, snacks and a relaxed evening.", onspot: true),
+            ev("e4", "Quantum Quiz & Social", "Social", "Sky Garden", 5 * h, 6 * h, desc: "Team quiz, snacks and a relaxed evening."),
             ev("e5", "Winner Announcement", "Main", "Main Stage", 2 * day + 2 * h, 2 * day + 3 * h, desc: "Final results, cash prizes and certificates."),
         ]
         let faqs: [[String: String]] = [

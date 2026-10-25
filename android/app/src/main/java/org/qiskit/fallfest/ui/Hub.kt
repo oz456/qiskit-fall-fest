@@ -262,7 +262,7 @@ fun StatusBadge(status: Status, checkedIn: Boolean = false) = when {
     else -> Pill("UPCOMING", P.surfaceAlt, P.muted)
 }
 
-/** One event. No pills (they overflowed): time, a LIVE dot, a small tick when registered, and plain text for the rest. */
+/** One event. No pills (they overflowed): time, a LIVE dot, and plain text for the rest. */
 @Composable
 fun EventRow(e: Event, app: AppState, day: LocalDate?, modifier: Modifier = Modifier, onOpen: (Event) -> Unit, trailing: Boolean = true) {
     val status = app.statusOf(e); val hf = LocalHapticFeedback.current
@@ -276,7 +276,6 @@ fun EventRow(e: Event, app: AppState, day: LocalDate?, modifier: Modifier = Modi
                         status == Status.Live -> { PulseDot(P.accent, 5.dp); Text("LIVE", style = T.label.copy(fontSize = 10.sp), color = P.accent) }
                         status == Status.Done -> Text("ENDED", style = T.label.copy(fontSize = 10.sp), color = P.muted)
                     }
-                    if (e.registered) Icon(Icons.Outlined.ConfirmationNumber, "Registered", tint = P.primary, modifier = Modifier.size(15.dp))
                 }
                 Text(e.title, style = T.title, color = P.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("${e.location}${if (e.isMultiDay) " · ${e.durationDays} days" else ""}", style = T.small, color = P.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -310,7 +309,6 @@ fun EventSheet(id: String, app: AppState, onDismiss: () -> Unit) {
                 if (e.speaker.isNotBlank()) InfoRow(Icons.Outlined.Person, e.speaker)
             }
             if (e.description.isNotBlank()) Text(e.description, style = T.body, color = P.muted)
-            AccessCard(e)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
                     PrimaryButton(if (e.saved) "SAVED" else "SAVE IT", icon = { Icon(if (e.saved) Icons.Outlined.Check else Icons.Outlined.Add, null, tint = P.onPrimary, modifier = Modifier.size(20.dp)) }) { app.toggleSaved(e); hf.performHapticFeedback(HapticFeedbackType.ContextClick) }
@@ -324,26 +322,6 @@ fun EventSheet(id: String, app: AppState, onDismiss: () -> Unit) {
         }
     }
 }
-
-/** How you get in: open to all, on-spot registration, or admin-managed pre-registration (enrolled = paid / approved). */
-@Composable
-private fun AccessCard(e: Event) {
-    val a = when {
-        e.registered -> Access(Icons.Outlined.CheckCircle, "You’re enrolled", "Your entry is confirmed. Show your pass at the door.", true)
-        e.access == "prereg" -> Access(Icons.Outlined.Lock, "Pre-registration required", "Only enrolled attendees can enter. If you paid and don’t see “Enrolled”, contact Support.", false)
-        e.access == "onspot" -> Access(Icons.Outlined.HowToReg, "On-spot registration", "Register at the venue desk when you arrive.", false)
-        else -> Access(Icons.Outlined.LockOpen, "Open to everyone", "No registration needed. Just walk in.", false)
-    }
-    val seats = if (e.capacity != null) (if (e.spotsLeft == 0) " · Full" else if (e.spotsLeft != null) " · ${e.spotsLeft} of ${e.capacity} seats left" else "") else ""
-    Card(Modifier.fillMaxWidth(), RoundedCornerShape(20.dp)) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            IconBubble(a.icon, 44.dp, if (a.good) P.mintInk else P.muted, if (a.good) P.mint else P.surfaceAlt)
-            Column { Text(a.title + seats, style = T.title, color = P.ink); Text(a.sub, style = T.small, color = P.muted) }
-        }
-    }
-}
-
-private class Access(val icon: androidx.compose.ui.graphics.vector.ImageVector, val title: String, val sub: String, val good: Boolean)
 
 @Composable
 private fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {

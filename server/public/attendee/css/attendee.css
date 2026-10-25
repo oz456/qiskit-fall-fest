@@ -160,8 +160,6 @@ h1,h2,h3,p{margin:0}
 .sheet .in{overflow-y:auto;padding:6px 24px calc(28px + var(--sab));display:flex;flex-direction:column;gap:16px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .infoCard{display:flex;flex-direction:column}
 .info{display:flex;align-items:center;gap:14px;padding:14px 18px;font-weight:500;font-size:15px}.info + .info{border-top:1px solid var(--line)}.info .icon{color:var(--muted);width:20px;height:20px}
-.access{display:flex;gap:14px;align-items:flex-start;padding:16px}.access .bubble{width:44px;height:44px}
-.access p{color:var(--muted);font-size:13px;line-height:18px;margin-top:2px}
 .twin{display:flex;gap:10px;align-items:center}.twin .round{width:58px;height:58px;flex:none;border-radius:50%;background:var(--alt);border:1px solid var(--line);display:grid;place-items:center}
 .ann{display:flex;gap:14px;padding:16px;align-items:flex-start}.ann .bubble{width:44px;height:44px}
 .faq{width:100%;text-align:left;display:flex;align-items:center;gap:12px;padding:16px 4px;border-bottom:1px solid var(--line)}

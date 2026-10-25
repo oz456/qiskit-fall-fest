@@ -1,4 +1,4 @@
-// My Pass: tilt card, "tap to show QR" (hidden until tapped), full-screen rotating QR, registered events.
+// My Pass: tilt card, "tap to show QR" (hidden until tapped), full-screen rotating QR, saved events.
 import { api } from "../api.js";
 import { atom } from "../atom.js";
 import { drawQR } from "../qr.js";
@@ -37,8 +37,8 @@ export function passView({ open }) {
       h("div", { class: "secure" }, icon("checkCircle"), "Secure Pass", h("span", { class: "pill cream" }, "ACTIVE")),
       h("div", { class: "att" }, "ATTENDEE"), h("div", { class: "nm" }, p.name || ""), h("div", { class: "id" }, `ID: ${p.passCode || ""}`), p.college ? h("div", { class: "col" }, p.college) : null,
       h("button", { class: "btn", type: "button", onclick: showQR }, icon("qr"), "Tap to show QR"));
-    const reg = S.events.filter((e) => e.registered);
-    listBox.replaceChildren(...(reg.length ? [sectionLabel("Registered events"), h("div", { class: "list" }, reg.map((e) => eventRow(e, { trailing: false, open })))] : [h("div", { class: "empty", style: { padding: "48px 40px" } }, h("p", { class: "body muted" }, "Events you’re registered for appear here."))]));
+    const reg = S.events.filter((e) => e.saved);
+    listBox.replaceChildren(...(reg.length ? [sectionLabel("Saved events"), h("div", { class: "list" }, reg.map((e) => eventRow(e, { trailing: true, open })))] : [h("div", { class: "empty", style: { padding: "48px 40px" } }, h("p", { class: "body muted" }, "Events you save appear here. Tap the bookmark on any event to save it."))]));
   }
   const un = subscribe(update); update();
   return { el: root, refresh: loadAll, destroy: un };

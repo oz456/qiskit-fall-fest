@@ -5,7 +5,7 @@ import { z } from "zod";
 import { config } from "../config.ts";
 import type { Db, Queryable } from "../db.ts";
 import { staffAuth } from "../lib/staff.ts";
-import { FLAGSHIP_SETTING, reconcile } from "../lib/website-sync.ts";
+import { reconcile } from "../lib/website-sync.ts";
 import { mailRemaining } from "../lib/mail.ts";
 import { getPhoto, removePhoto } from "../lib/photos.ts";
 import { devicesForAll, devicesForUser, pushInBackground } from "../lib/push.ts";
@@ -40,17 +40,6 @@ async function createUser(q: Queryable, email: string, name: string, college: st
   throw new Error("could not allocate pass code");
 }
 
-/** Enrolment = the 'registered' rows of user_events. `replace` makes the set exactly `eventIds`; `add` only adds. Unknown ids are ignored. */
-async function setEnrollments(q: Queryable, userId: string, eventIds: string[], mode: "replace" | "add"): Promise<number> {
-  const valid = (await q.query("SELECT id FROM events WHERE id = ANY($1::uuid[])", [eventIds])).map((e) => e.id as string);
-  if (mode === "replace") await q.query("DELETE FROM user_events WHERE user_id=$1 AND kind='registered' AND NOT (event_id = ANY($2::uuid[]))", [userId, valid]);
-  let added = 0;
-  for (const id of valid) added += (await q.query("INSERT INTO user_events (user_id,event_id,kind) VALUES ($1,$2,'registered') ON CONFLICT DO NOTHING RETURNING 1", [userId, id])).length;
-  return added;
-}
-const EventIds = z.array(z.string().uuid()).max(200);
-const TRUTHY = new Set(["1", "y", "yes", "true", "x", "✓", "registered"]);
-
 export function adminRoutes(app: FastifyInstance, db: Db) {
   const { guard, common } = staffAuth(app, db, { name: "admin", user: config.adminUser, password: config.adminPassword, hash: config.adminPasswordHash, ttlSec: 8 * 3600 });
 
@@ -72,51 +61,23 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
 
     // ---- events ----
     api.get("/admin/api/events", async () => {
-      const rows = await db.query(`SELECT e.*, (SELECT count(*)::int FROM user_events r WHERE r.event_id=e.id AND r.kind='registered') AS registered,
+      const rows = await db.query(`SELECT e.*,
         (SELECT count(*)::int FROM user_events r WHERE r.event_id=e.id AND r.kind='saved') AS saved FROM events e ORDER BY starts_at, title`);
-      return rows.map((r) => eventOut(r, { registered: r.registered, saved: r.saved }));
+      return rows.map((r) => eventOut(r, { saved: r.saved }));
     });
     api.post("/admin/api/events", async (req, reply) => {
       const b = EventInput.parse(req.body);
-      const [r] = await db.query("INSERT INTO events (title,description,track,location,speaker,starts_at,ends_at,capacity,access,registration_required,published) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9='prereg',$10) RETURNING id",
-        [b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.capacity, b.access, b.published]);
+      const [r] = await db.query("INSERT INTO events (title,description,track,location,speaker,starts_at,ends_at,published) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id",
+        [b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.published]);
       await audit(db, req, "event.create", "event", r!.id, { title: b.title });
       return reply.code(201).send({ id: r!.id });
     });
     api.put("/admin/api/events/:id", async (req, reply) => {
       const { id } = Id.parse(req.params); const b = EventInput.parse(req.body);
-      const r = await db.query("UPDATE events SET title=$2,description=$3,track=$4,location=$5,speaker=$6,starts_at=$7,ends_at=$8,capacity=$9,access=$10,registration_required=($10='prereg'),published=$11,updated_at=now() WHERE id=$1 RETURNING id",
-        [id, b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.capacity, b.access, b.published]);
+      const r = await db.query("UPDATE events SET title=$2,description=$3,track=$4,location=$5,speaker=$6,starts_at=$7,ends_at=$8,published=$9,updated_at=now() WHERE id=$1 RETURNING id",
+        [id, b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.published]);
       if (!r[0]) return reply.code(404).send({ error: "not_found" });
       await audit(db, req, "event.update", "event", id, { title: b.title });
-      return { ok: true };
-    });
-    // ---- enrollment: who has paid / been approved for an event (attendees cannot self-enrol) ----
-    api.get("/admin/api/events/:id/registrations", async (req) => {
-      const { id } = Id.parse(req.params);
-      return (await db.query(`SELECT u.id,u.name,u.email,u.pass_code,u.college FROM user_events r JOIN users u ON u.id=r.user_id
-        WHERE r.event_id=$1 AND r.kind='registered' ORDER BY u.name`, [id])).map((u) => ({ id: u.id, name: u.name, email: u.email, passCode: u.pass_code, college: u.college }));
-    });
-    api.post("/admin/api/events/:id/registrations", async (req, reply) => {
-      const { id } = Id.parse(req.params);
-      const { emails } = z.object({ emails: z.array(z.string().max(200)).min(1).max(2000) }).parse(req.body);
-      const [e] = await db.query("SELECT capacity FROM events WHERE id=$1", [id]);
-      if (!e) return reply.code(404).send({ error: "not_found" });
-      const wanted = [...new Set(emails.map((x) => x.trim().toLowerCase()).filter(Boolean))];
-      const users = await db.query("SELECT id,email FROM users WHERE lower(email) = ANY($1::text[])", [wanted]);
-      const found = new Set(users.map((u) => u.email.toLowerCase()));
-      let added = 0;
-      for (const u of users) {
-        const r = await db.query("INSERT INTO user_events (user_id,event_id,kind) VALUES ($1,$2,'registered') ON CONFLICT DO NOTHING RETURNING 1", [u.id, id]);
-        added += r.length;
-      }
-      await audit(db, req, "event.enroll", "event", id, { added });
-      return { added, notFound: wanted.filter((x) => !found.has(x)) };
-    });
-    api.delete("/admin/api/events/:id/registrations/:userId", async (req) => {
-      const { id, userId } = z.object({ id: z.string().uuid(), userId: z.string().uuid() }).parse(req.params);
-      await db.query("DELETE FROM user_events WHERE event_id=$1 AND user_id=$2 AND kind='registered'", [id, userId]);
-      await audit(db, req, "event.unenroll", "event", id, { userId });
       return { ok: true };
     });
     api.delete("/admin/api/events/:id", async (req) => {
@@ -131,11 +92,9 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const like = q ? `%${q.replace(/[%_\\]/g, "\\$&").toLowerCase()}%` : "%";
       const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,
         EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL) AS has_app, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id) AS has_photo,
-        (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins,
-        (SELECT coalesce(json_agg(e.title ORDER BY e.starts_at), '[]'::json) FROM user_events r JOIN events e ON e.id=r.event_id WHERE r.user_id=u.id AND r.kind='registered') AS enrolled,
-        (SELECT coalesce(json_agg(r.event_id), '[]'::json) FROM user_events r WHERE r.user_id=u.id AND r.kind='registered') AS enrolled_ids
+        (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins
         FROM users u WHERE (lower(u.email) LIKE $1 OR lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1) AND ($2::text IS NULL OR u.kind=$2) ORDER BY u.created_at DESC LIMIT 500`, [like, kind ?? null]);
-      return rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins, enrolled: u.enrolled, enrolledIds: u.enrolled_ids }));
+      return rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins }));
     });
     api.get("/admin/api/users/:id/photo", async (req, reply) => {
       const { id } = Id.parse(req.params);
@@ -150,47 +109,24 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       await audit(db, req, "user.photo_reset", "user", id); return { ok: true };
     });
     api.post("/admin/api/users", async (req, reply) => {
-      const b = UserInput.extend({ eventIds: EventIds.default([]) }).parse(req.body);
+      const b = UserInput.parse(req.body);
       const id = await createUser(db, b.email, b.name, b.college);
       if (!id) return reply.code(409).send({ error: "exists", message: "That email is already registered." });
-      if (b.eventIds.length) await setEnrollments(db, id, b.eventIds, "add");
       await audit(db, req, "user.create", "user", id); return reply.code(201).send({ id });
     });
-    // Replace which events this attendee is registered for (the checkboxes in the attendee panel).
-    api.put("/admin/api/users/:id/registrations", async (req, reply) => {
-      const { id } = Id.parse(req.params); const b = z.object({ eventIds: EventIds }).parse(req.body);
-      const [u] = await db.query("SELECT 1 FROM users WHERE id=$1", [id]);
-      if (!u) return reply.code(404).send({ error: "not_found" });
-      await setEnrollments(db, id, b.eventIds, "replace");
-      await audit(db, req, "user.enrollments", "user", id, { count: b.eventIds.length }); return { ok: true };
-    });
-    // CSV columns: email, name, college, then optionally ONE COLUMN PER EVENT (header = the event's exact title, cell 1/yes = registered).
+    // CSV columns: email, name, college.
     api.post("/admin/api/users/import", { bodyLimit: 1_000_000 }, async (req) => {
       const { csv } = z.object({ csv: z.string().max(900_000) }).parse(req.body);
-      const rows = parseCsv(csv); const out = { added: 0, skipped: 0, enrolled: 0, invalid: [] as string[], eventColumns: [] as string[], ignoredColumns: [] as string[] };
+      const rows = parseCsv(csv); const out = { added: 0, skipped: 0, invalid: [] as string[] };
       const head = rows[0]?.map((h) => h.trim().toLowerCase()) ?? [];
       const hasHead = head.includes("email");
       const col = (n: string, d: number) => (hasHead ? head.indexOf(n) : d);
-      // header cell -> event id (exact title, case-insensitive)
-      const evCols: { i: number; id: string }[] = [];
-      if (hasHead) {
-        const events = await db.query("SELECT id,title FROM events");
-        const byTitle = new Map(events.map((e) => [String(e.title).trim().toLowerCase(), e.id as string]));
-        head.forEach((h, i) => {
-          if (["email", "name", "college", ""].includes(h)) return;
-          const id = byTitle.get(h);
-          if (id) { evCols.push({ i, id }); out.eventColumns.push(rows[0]![i]!.trim()); } else out.ignoredColumns.push(rows[0]![i]!.trim());
-        });
-      }
       for (const r of rows.slice(hasHead ? 1 : 0).slice(0, 5000)) {
         const parsed = UserInput.safeParse({ email: r[col("email", 0)] ?? "", name: r[col("name", 1)] ?? "", college: (r[col("college", 2)] ?? "").trim() || null });
         if (!parsed.success) { out.invalid.push(String(r[col("email", 0)] ?? "(blank)").slice(0, 80)); continue; }
-        let uid = await createUser(db, parsed.data.email, parsed.data.name, parsed.data.college);
-        if (uid) out.added++; else { out.skipped++; uid = (await db.query("SELECT id FROM users WHERE lower(email)=$1", [parsed.data.email]))[0]?.id ?? null; }
-        const want = evCols.filter((c) => TRUTHY.has((r[c.i] ?? "").trim().toLowerCase())).map((c) => c.id);
-        if (uid && want.length) out.enrolled += await setEnrollments(db, uid, want, "add"); // 1 adds a registration; 0/blank never removes one
+        if (await createUser(db, parsed.data.email, parsed.data.name, parsed.data.college)) out.added++; else out.skipped++;
       }
-      await audit(db, req, "user.import", "user", undefined, { added: out.added, skipped: out.skipped, enrolled: out.enrolled });
+      await audit(db, req, "user.import", "user", undefined, { added: out.added, skipped: out.skipped });
       return out;
     });
     api.patch("/admin/api/users/:id", async (req) => {
@@ -285,19 +221,12 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
 
     // ---- website sync (people come from the main website; see lib/website-sync.ts) ----
     api.get("/admin/api/sync", async () => {
-      const runs = await db.query("SELECT id,started_at,finished_at,trigger,status,seen,created,updated,skipped,registered,error FROM sync_runs ORDER BY started_at DESC LIMIT 8");
-      const [fs] = await db.query("SELECT value FROM settings WHERE key=$1", [FLAGSHIP_SETTING]);
+      const runs = await db.query("SELECT id,started_at,finished_at,trigger,status,seen,created,updated,skipped,error FROM sync_runs ORDER BY started_at DESC LIMIT 8");
       const [c] = await db.query("SELECT count(*) FILTER (WHERE source='website')::int AS website, count(*)::int AS total FROM users");
-      return { configured: Boolean(config.website.secret), websiteUrl: config.website.baseUrl, flagshipEventId: fs?.value ?? "", fromWebsite: c!.website, total: c!.total,
-        runs: runs.map((r) => ({ at: new Date(r.started_at).toISOString(), trigger: r.trigger, status: r.status, seen: r.seen, created: r.created, updated: r.updated, skipped: r.skipped, registered: r.registered, error: r.error })) };
+      return { configured: Boolean(config.website.secret), websiteUrl: config.website.baseUrl, fromWebsite: c!.website, total: c!.total,
+        runs: runs.map((r) => ({ at: new Date(r.started_at).toISOString(), trigger: r.trigger, status: r.status, seen: r.seen, created: r.created, updated: r.updated, skipped: r.skipped, error: r.error })) };
     });
     api.post("/admin/api/sync/run", { config: { rateLimit: { max: 6, timeWindow: "1 minute" } } }, async (req) => { const r = await reconcile(db, "admin"); await audit(db, req, "sync.run", undefined, undefined, { ok: r.ok }); return r; });
-    api.put("/admin/api/sync/flagship-event", async (req) => {
-      const { eventId } = z.object({ eventId: z.union([z.string().uuid(), z.literal("")]) }).parse(req.body);
-      if (eventId && !(await db.query("SELECT 1 FROM events WHERE id=$1", [eventId]))[0]) return { ok: false, message: "Unknown event." };
-      if (eventId) await db.query("INSERT INTO settings (key,value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [FLAGSHIP_SETTING, eventId]); else await db.query("DELETE FROM settings WHERE key=$1", [FLAGSHIP_SETTING]);
-      await audit(db, req, "sync.flagship_event", "event", eventId || undefined); return { ok: true };
-    });
 
     // ---- attendance (read-only view of what the /check scanners recorded) ----
     api.get("/admin/api/attendance", async (req) => {

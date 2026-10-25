@@ -71,7 +71,7 @@ describe("check-in days", () => {
 
 describe("events: multi-day and validation", () => {
   it("creates a 3-day event and rejects end<start", async () => {
-    const ok = await admin("POST", "/admin/api/events", { title: "Hackathon", track: "Hackathon", startsAt: "2026-10-16T11:00:00+05:30", endsAt: "2026-10-18T14:00:00+05:30", capacity: 1, access: "prereg" });
+    const ok = await admin("POST", "/admin/api/events", { title: "Hackathon", track: "Hackathon", startsAt: "2026-10-16T11:00:00+05:30", endsAt: "2026-10-18T14:00:00+05:30" });
     assert.equal(ok.statusCode, 201);
     const bad = await admin("POST", "/admin/api/events", { title: "Bad", track: "Talk", startsAt: "2026-10-16T11:00:00+05:30", endsAt: "2026-10-16T10:00:00+05:30" });
     assert.equal(bad.statusCode, 400);
@@ -185,52 +185,24 @@ describe("attendee flow", () => {
     assert.equal((await put(jpeg)).statusCode, 200, "after a reset they can retake it");
     assert.equal((await app.inject({ url: "/v1/events", headers: { authorization: `Bearer ${tokens.accessToken}` } })).statusCode, 200);
   });
-  it("saving is the attendee's; enrolment is the admin's", async () => {
+  it("saving an event is the attendee's; there is no event registration", async () => {
     const h = { authorization: `Bearer ${tokens.accessToken}` };
     const ev = (await app.inject({ url: "/v1/events", headers: h })).json().events; eventId = ev[0].id;
-    assert.equal(ev[0].access, "prereg"); assert.equal(ev[0].registrationRequired, true);
+    for (const gone of ["registered", "registrationRequired", "access", "capacity", "spotsLeft"]) assert.equal(gone in ev[0], false, `${gone} is not part of an event any more`);
     assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/saved`, headers: h })).statusCode, 200);
     // regression: Android sends a body-less PUT as a web form; that used to be a 415 ("couldn't save")
     assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/saved`, headers: { ...h, "content-type": "application/x-www-form-urlencoded" } })).statusCode, 200);
     assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/saved`, headers: { ...h, "content-type": "application/octet-stream" }, payload: "hi" })).statusCode, 415);
-    // attendees cannot enrol themselves any more
     assert.equal((await app.inject({ method: "PUT", url: `/v1/events/${eventId}/registration`, headers: h })).statusCode, 404);
-    let e2 = (await app.inject({ url: "/v1/events", headers: h })).json().events[0];
-    assert.equal(e2.saved, true); assert.equal(e2.registered, false);
-    // the admin enrols by email; unknown emails are reported back
-    const en = await admin("POST", `/admin/api/events/${eventId}/registrations`, { emails: [email, "nobody@example.org"] });
-    assert.equal(en.statusCode, 200); assert.equal(en.json().added, 1); assert.deepEqual(en.json().notFound, ["nobody@example.org"]);
-    e2 = (await app.inject({ url: "/v1/events", headers: h })).json().events[0];
-    assert.equal(e2.registered, true); assert.equal(e2.spotsLeft, 0);
-    assert.equal((await admin("GET", `/admin/api/events/${eventId}/registrations`)).json().length, 1);
-    const who = (await admin("GET", "/admin/api/users?q=alex")).json()[0];
-    assert.equal(who.enrolled.length, 1);
+    assert.equal((await admin("POST", `/admin/api/events/${eventId}/registrations`, { emails: [email] })).statusCode, 404, "the admin has no enrolment either");
+    assert.equal((await app.inject({ url: "/v1/events", headers: h })).json().events[0].saved, true);
     await admin("POST", "/admin/api/users", { email: "sam@example.org", name: "Sam" });
   });
 
-  it("registration: checkboxes, CSV columns, and attendance counts as registered", async () => {
-    const h = { authorization: `Bearer ${tokens.accessToken}` };
-    // checkboxes: create with events, then replace the set
-    const created = (await admin("POST", "/admin/api/users", { email: "kim@example.org", name: "Kim", eventIds: [eventId] })).json();
-    const list = async () => (await admin("GET", "/admin/api/users?q=kim")).json()[0];
-    assert.deepEqual((await list()).enrolledIds, [eventId]);
-    assert.equal((await admin("PUT", `/admin/api/users/${created.id}/registrations`, { eventIds: [] })).statusCode, 200);
-    assert.deepEqual((await list()).enrolledIds, []);
-    // CSV: one column per event (header = exact title); 1 adds, 0 never removes; existing emails still get enrolled
-    const title = (await admin("GET", "/admin/api/events")).json().find((e: any) => e.id === eventId).title;
-    const csv = `email,name,college,"${title}",Not An Event\nlee@example.org,Lee,SRM,1,1\nkim@example.org,Kim,SRM,yes,0\nbad-email,Bad,,1,`;
+  it("CSV import adds people by email, name and college; repeats and bad rows are reported", async () => {
+    const csv = `email,name,college\nlee@example.org,Lee,SRM\nlee@example.org,Lee,SRM\nbad-email,Bad,`;
     const imp = (await admin("POST", "/admin/api/users/import", { csv })).json();
-    assert.equal(imp.added, 1); assert.equal(imp.skipped, 1); assert.equal(imp.enrolled, 2); assert.deepEqual(imp.eventColumns, [title]); assert.deepEqual(imp.ignoredColumns, ["Not An Event"]); assert.equal(imp.invalid.length, 1);
-    assert.deepEqual((await list()).enrolledIds, [eventId]);
-    // attendance at an event makes it show as registered for that person, even without enrolment
-    const e3 = (await admin("POST", "/admin/api/events", { title: "Open Talk", track: "Talk", startsAt: "2026-10-20T10:00:00+05:30", endsAt: "2026-10-20T11:00:00+05:30", access: "open" })).json().id;
-    const reg = async () => (await app.inject({ url: "/v1/events", headers: h })).json().events.find((e: any) => e.id === e3).registered;
-    assert.equal(await reg(), false);
-    const [u] = await db.query("SELECT pass_code, pass_secret FROM users WHERE email='alex@example.org'");
-    const v = (await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(u!.pass_secret), u!.pass_code), scope: `event:${e3}` })).json();
-    assert.equal(v.result, "verify");
-    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
-    assert.equal(await reg(), true);
+    assert.deepEqual([imp.added, imp.skipped, imp.invalid.length], [1, 1, 1]);
   });
   it("tickets: user creates, admin replies, user sees reply", async () => {
     const h = { authorization: `Bearer ${tokens.accessToken}` };
@@ -246,6 +218,7 @@ describe("attendee flow", () => {
     // registering a token needs a signed-in attendee; a second attendee (Kim) registers too
     assert.equal((await app.inject({ method: "PUT", url: "/v1/me/push-token", headers: h, payload: { token: tok, platform: "android" } })).statusCode, 200);
     assert.equal((await app.inject({ method: "PUT", url: "/v1/me/push-token", payload: { token: tok, platform: "android" } })).statusCode, 401);
+    await admin("POST", "/admin/api/users", { email: "kim@example.org", name: "Kim" });
     const kim = (await db.query("SELECT id FROM users WHERE email='kim@example.org'"))[0]!.id;
     await db.query("INSERT INTO push_tokens (token,user_id,platform) VALUES ($1,$2,'android')", [tok2, kim]);
     const summary = (await admin("GET", "/admin/api/push")).json(); assert.equal(summary.devices, 2);
@@ -265,7 +238,7 @@ describe("attendee flow", () => {
     // nothing else triggers a notification: saving an event, creating a ticket, scanning
     outbox.length = 0;
     await app.inject({ method: "PUT", url: `/v1/events/${eventId}/saved`, headers: h });
-    await admin("POST", "/admin/api/events", { title: "Silent", track: "Talk", startsAt: "2026-10-27T10:00:00+05:30", endsAt: "2026-10-27T11:00:00+05:30", access: "open" });
+    await admin("POST", "/admin/api/events", { title: "Silent", track: "Talk", startsAt: "2026-10-27T10:00:00+05:30", endsAt: "2026-10-27T11:00:00+05:30" });
     assert.equal(outbox.length, 0, "no other action sends a notification");
     // a blocked attendee stops receiving; logging out removes the token
     await admin("PATCH", `/admin/api/users/${kim}`, { status: "blocked" });
@@ -433,7 +406,6 @@ describe("addresses: one canonical URL per page, proper 404s", () => {
 describe("website sync: people registered on the main website become attendees here", () => {
   const KEY = "sync-test-secret-0123456789"; const auth = { authorization: `Bearer ${KEY}` };
   const push = (people: unknown[], headers: Record<string, string> = auth) => app.inject({ method: "POST", url: "/integrations/website/attendees", headers, payload: { people } });
-  let flagshipEvent = "";
 
   it("labels SRM addresses: underscore = student, dot = faculty, anything else on the domain = unclear, other domains = external", () => {
     assert.equal(classifyEmail("vaishnav_s@srmap.edu.in"), "student"); assert.equal(classifyEmail("Vaishnav_S@SRMAP.edu.in"), "student");
@@ -470,26 +442,15 @@ describe("website sync: people registered on the main website become attendees h
     await push([{ email: "late.comer@example.org", name: "Late Comer" }]);
     assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "late.comer@example.org" } })).statusCode, 200);
   });
-  it("Rs 499 flagship pass holders are registered for the chosen event; nothing else changes", async () => {
-    flagshipEvent = (await admin("POST", "/admin/api/events", { title: "Grand Finale", description: "x", track: "Hackathon", location: "SRM", startsAt: new Date(Date.now() + 86400_000).toISOString(), endsAt: new Date(Date.now() + 2 * 86400_000).toISOString(), access: "prereg", registrationRequired: true, published: true })).json().id;
-    assert.ok(flagshipEvent);
-    const before = (await push([{ email: "fin@example.org", name: "Finalist", flagshipPass: true }])).json(); assert.equal(before.registered, 0, "no event chosen yet: nobody is registered");
-    assert.equal((await admin("PUT", "/admin/api/sync/flagship-event", { eventId: flagshipEvent })).json().ok, true);
-    assert.equal((await admin("PUT", "/admin/api/sync/flagship-event", { eventId: "a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d" })).json().ok, false);
-    const r1 = (await push([{ email: "fin@example.org", name: "Finalist", flagshipPass: true }, { email: "plain@example.org", name: "Plain" }])).json(); assert.equal(r1.registered, 1);
-    assert.equal((await push([{ email: "fin@example.org", name: "Finalist", flagshipPass: true }])).json().registered, 0, "repeat is a no-op");
-    const rows = (await admin("GET", "/admin/api/users")).json();
-    assert.equal(rows.find((u: any) => u.email === "fin@example.org").enrolledIds.join(), flagshipEvent); assert.equal(rows.find((u: any) => u.email === "plain@example.org").enrolledIds.length, 0);
-  });
   it("pulls the website's export (several pages) on a schedule or from the admin button, and logs it", async () => {
-    const pages = [{ people: [{ email: "p1@example.org", name: "P One", flagshipPass: true }, { email: "p2_x@srmap.edu.in", name: "P Two" }], nextCursor: "c2" }, { people: [{ email: "p3@example.org", name: "P Three" }], nextCursor: null }];
+    const pages = [{ people: [{ email: "p1@example.org", name: "P One" }, { email: "p2_x@srmap.edu.in", name: "P Two" }], nextCursor: "c2" }, { people: [{ email: "p3@example.org", name: "P Three" }], nextCursor: null }];
     let seenAuth = ""; const srv = createServer((req, res) => { seenAuth = String(req.headers.authorization); const cur = new URL(req.url!, "http://x").searchParams.get("cursor"); res.setHeader("content-type", "application/json"); res.end(JSON.stringify(pages[cur ? 1 : 0])); });
     await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r)); const was = config.website.baseUrl; config.website.baseUrl = `http://127.0.0.1:${(srv.address() as any).port}`;
     try {
       const run = (await admin("POST", "/admin/api/sync/run")).json(); assert.equal(run.ok, true); assert.equal(seenAuth, `Bearer ${KEY}`);
-      assert.deepEqual([run.counts.seen, run.counts.created, run.counts.registered], [3, 3, 1]);
+      assert.deepEqual([run.counts.seen, run.counts.created], [3, 3]);
       const sch = (await app.inject({ method: "POST", url: "/integrations/website/reconcile", headers: auth })).json(); assert.equal(sch.ok, true); assert.equal(sch.counts.created, 0, "second run adds nothing");
-      const st = (await admin("GET", "/admin/api/sync")).json(); assert.equal(st.configured, true); assert.equal(st.flagshipEventId, flagshipEvent); assert.ok(st.runs.some((r: any) => r.trigger === "scheduler" && r.status === "ok"));
+      const st = (await admin("GET", "/admin/api/sync")).json(); assert.equal(st.configured, true); assert.ok(st.runs.some((r: any) => r.trigger === "scheduler" && r.status === "ok"));
       await db.query("INSERT INTO sync_runs (trigger) VALUES ('admin')"); // a run in progress blocks a second one
       assert.match((await admin("POST", "/admin/api/sync/run")).json().message, /already running/); await db.query("DELETE FROM sync_runs WHERE status='running'");
       srv.close(); srv.closeAllConnections();
@@ -498,17 +459,18 @@ describe("website sync: people registered on the main website become attendees h
   });
 });
 
-describe("check-in never blocks someone for not being registered; lookup for dead phones", () => {
-  it("an unregistered person scanned at a pre-registration event gets a warning, can be let in, and shows up in attendance", async () => {
-    const [ev] = await db.query("INSERT INTO events (title,description,track,location,starts_at,ends_at,access,registration_required) VALUES ('Prereg Only','x','Main','SRM',now(),now() + interval '2 hours','prereg',true) RETURNING id");
+describe("check-in: anyone with a pass can be let in to any event; lookup for dead phones", () => {
+  it("scanning someone at any event just works and shows up in attendance", async () => {
+    const [ev] = await db.query("INSERT INTO events (title,description,track,location,starts_at,ends_at) VALUES ('Any Event','x','Main','SRM',now(),now() + interval '2 hours') RETURNING id");
     const u = (await db.query("SELECT id,pass_code,pass_secret FROM users WHERE email='ext@example.org'"))[0]!;
     const scope = `event:${ev!.id}`;
     const v = (await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(u.pass_secret), u.pass_code), scope })).json();
-    assert.equal(v.result, "verify"); assert.match(v.warning, /Not on the registered list for this event\. You can still let them in/);
+    assert.equal(v.result, "verify"); assert.doesNotMatch(v.warning ?? "", /registered/, "no registration warning exists any more");
     assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
     const att = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(scope)}`)).json(); assert.equal(att.rows.length, 1); assert.equal(att.rows[0].name, "Ext Person");
   });
   it("finds a person by name or pass code, then runs the same face check", async () => {
+    await admin("POST", "/admin/api/users", { email: "fin@example.org", name: "Finalist" });
     assert.equal((await check("GET", "/checkin/api/lookup?q=ab")).statusCode, 400, "needs 3+ characters");
     assert.equal((await app.inject({ url: "/checkin/api/lookup?q=finalist" })).statusCode, 401, "scanner login required");
     const hits = (await check("GET", "/checkin/api/lookup?q=finalist")).json(); assert.equal(hits.length, 1); assert.equal(hits[0].name, "Finalist");
