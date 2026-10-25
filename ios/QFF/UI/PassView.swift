@@ -9,6 +9,7 @@ struct PassView: View {
     @State private var fullQR = false
 
     private var saved: [Event] { app.events.filter(\.saved) }
+    private var attended: [(scope: String, at: Date)] { app.checkins.map { (scope: $0.key, at: $0.value) }.sorted { $0.at > $1.at } }
     private var hidden: Bool { captured || scenePhase != .active }
 
     var body: some View {
@@ -33,12 +34,35 @@ struct PassView: View {
                     ForEach(saved) { e in EventRow(event: e, day: nil, trailing: true).padding(.horizontal, 24).padding(.vertical, 6) }
                 } else {
                     Text("Events you save appear here. Tap the bookmark on any event to save it.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity).padding(.horizontal, 40).padding(.vertical, 48)
+                        .frame(maxWidth: .infinity).padding(.horizontal, 40).padding(.vertical, 36)
+                }
+
+                SectionLabel(text: "ATTENDED EVENTS").padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 8)
+                if attended.isEmpty {
+                    Text("Events you attend appear here after the team scans your pass at the door.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity).padding(.horizontal, 40).padding(.vertical, 24)
+                } else {
+                    ForEach(attended, id: \.scope) { a in
+                        let n = app.checkinLabel(a.scope, a.at)
+                        Card {
+                            HStack(spacing: 14) {
+                                IconBubble(symbol: "checkmark.circle", size: 50, tint: P.mintInk, bg: P.mint)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(n.title).font(T.title).foregroundStyle(P.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                                    Text("Checked in · \(n.time)").font(T.small).foregroundStyle(P.muted).lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(18)
+                        }
+                        .padding(.horizontal, 24).padding(.vertical, 6)
+                    }
                 }
             }
             .padding(.bottom, 24)
         }
         .background(Backdrop())
+        .task { while !Task.isCancelled { try? await Task.sleep(nanoseconds: 4_000_000_000); await app.pollCheckins() } } // a door scan shows up within seconds
         .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in captured = UIScreen.main.isCaptured }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in app.message = "Screenshots won't scan — the code changes every 30 seconds." }
         .fullScreenCover(isPresented: $fullQR) { FullQR(hidden: hidden) { fullQR = false }.environmentObject(app) }

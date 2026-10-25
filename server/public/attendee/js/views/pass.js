@@ -2,8 +2,8 @@
 import { api } from "../api.js";
 import { atom } from "../atom.js";
 import { drawQR } from "../qr.js";
-import { S, loadAll, subscribe } from "../store.js";
-import { button, h, icon, posterTitle, sectionLabel, toast } from "../ui.js";
+import { S, checkinLabel, loadAll, pollCheckins, subscribe } from "../store.js";
+import { bubble, button, h, icon, posterTitle, sectionLabel, toast } from "../ui.js";
 import { eventRow } from "./hub.js";
 
 const STEP = 30, QR_IDLE_MS = 120_000;
@@ -38,10 +38,20 @@ export function passView({ open }) {
       h("div", { class: "att" }, "ATTENDEE"), h("div", { class: "nm" }, p.name || ""), h("div", { class: "id" }, `ID: ${p.passCode || ""}`), p.college ? h("div", { class: "col" }, p.college) : null,
       h("button", { class: "btn", type: "button", onclick: showQR }, icon("qr"), "Tap to show QR"));
     const reg = S.events.filter((e) => e.saved);
-    listBox.replaceChildren(...(reg.length ? [sectionLabel("Saved events"), h("div", { class: "list" }, reg.map((e) => eventRow(e, { trailing: true, open })))] : [h("div", { class: "empty", style: { padding: "48px 40px" } }, h("p", { class: "body muted" }, "Events you save appear here. Tap the bookmark on any event to save it."))]));
+    const att = Object.entries(S.checkins).sort((a, b) => Date.parse(b[1]) - Date.parse(a[1]));
+    const attRow = ([scope, at]) => {
+      const n = checkinLabel(scope, at), id = scope.startsWith("event:") ? scope.slice(6) : null;
+      return h("div", { class: "card press row", role: id ? "button" : null, tabindex: id ? "0" : null, onclick: () => id && S.events.some((e) => e.id === id) && open(id) },
+        bubble("check", 50, true), h("div", { class: "meta" }, h("div", { class: "name" }, n.title), h("div", { class: "where" }, `Checked in · ${n.time}`)));
+    };
+    listBox.replaceChildren(
+      ...(reg.length ? [sectionLabel("Saved events"), h("div", { class: "list" }, reg.map((e) => eventRow(e, { trailing: true, open })))] : [h("div", { class: "empty", style: { padding: "36px 40px" } }, h("p", { class: "body muted" }, "Events you save appear here. Tap the bookmark on any event to save it."))]),
+      sectionLabel("Attended events"),
+      att.length ? h("div", { class: "list" }, att.map(attRow)) : h("div", { class: "empty", style: { padding: "24px 40px" } }, h("p", { class: "body muted" }, "Events you attend appear here after the team scans your pass at the door.")));
   }
   const un = subscribe(update); update();
-  return { el: root, refresh: loadAll, destroy: un };
+  const poll = setInterval(() => { if (!document.hidden) pollCheckins(); }, 4000); // a door scan shows up within seconds
+  return { el: root, refresh: loadAll, destroy() { un(); clearInterval(poll); } };
 }
 
 /** Full-screen QR with a border that counts down the 30-second window. Closed automatically when the page is hidden (app switcher). */

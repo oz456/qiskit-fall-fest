@@ -23,6 +23,9 @@ final class AppState: ObservableObject {
     var pushRegistered: String? { defaults.string(forKey: "push_registered") }
     func setPushRegistered(_ t: String) { defaults.set(t, forKey: "push_registered") }
     @Published var message: String?
+    /// Set when door staff have just checked this attendee in; the UI shows an alert and clears it.
+    @Published var checkinNotice: CheckinNotice?
+    private var announcedCheckins: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "seen_checkins") ?? [])
     @Published var now = Date()
     @Published var seenAnnouncement: String?
     /// Support replies: when the attendee last looked at each ticket (timestamp of its last message). Drives the badge on the Support tab.
@@ -120,8 +123,8 @@ final class AppState: ObservableObject {
     private func wipe() {
         accessToken = nil; passSecret = nil
         keychain.wipe()
-        for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "seen_tickets", "push_registered", "notif_asked"] { defaults.removeObject(forKey: k) }
-        seenTickets = [:]
+        for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "seen_tickets", "push_registered", "notif_asked", "seen_checkins"] { defaults.removeObject(forKey: k) }
+        seenTickets = [:]; announcedCheckins = []; checkinNotice = nil
         needsSelfie = false
         profile = nil; events = []; announcements = []; tickets = []; checkins = [:]; faqs = []; settings = [:]
     }
@@ -173,7 +176,7 @@ final class AppState: ObservableObject {
             announcements = try JSONDecoder.api.decode([Announcement].self, from: annData)
             try await loadTickets()
             let me: MeResponse = try await authed("GET", "/v1/me")
-            checkins = Dictionary(me.checkins.map { ($0.scope, $0.at) }, uniquingKeysWith: { a, _ in a })
+            applyCheckins(me)
             if let has = me.profile.hasPhoto, needsSelfie == has { needsSelfie = !has; defaults.set(needsSelfie, forKey: "needs_selfie") }
             offline = false
             Task { [self] in await refreshNotifStatus() }
@@ -248,6 +251,24 @@ final class AppState: ObservableObject {
     // MARK: status
 
     func status(of e: Event) -> EventStatus { now < e.startsAt ? .upcoming : (now < e.endsAt ? .live : .done) }
+    /// Takes the check-ins from /v1/me. One we have not announced yet and that is under 15 minutes old becomes an alert (older ones are marked as seen silently).
+    private func applyCheckins(_ me: MeResponse) {
+        checkins = Dictionary(me.checkins.map { ($0.scope, $0.at) }, uniquingKeysWith: { a, _ in a })
+        let fresh = checkins.filter { !announcedCheckins.contains($0.key) }
+        guard !fresh.isEmpty else { return }
+        announcedCheckins.formUnion(fresh.keys)
+        defaults.set(Array(announcedCheckins), forKey: "seen_checkins")
+        if let newest = fresh.filter({ Date().timeIntervalSince($0.value) < 15 * 60 }).max(by: { $0.value < $1.value }) { checkinNotice = checkinLabel(newest.key, newest.value) }
+    }
+    func checkinLabel(_ scope: String, _ at: Date) -> CheckinNotice {
+        if scope.hasPrefix("event:") { return CheckinNotice(title: events.first { $0.id == String(scope.dropFirst(6)) }?.title ?? "Event", time: Fmt.dmTime.string(from: at)) }
+        return CheckinNotice(title: "Campus entry", time: Fmt.dmTime.string(from: at))
+    }
+    /// Light check for a new door scan: only /v1/me. Called every few seconds while My Pass is on screen.
+    func pollCheckins() async {
+        guard signedIn, !needsSelfie, !isPreview else { return }
+        if let me: MeResponse = try? await authed("GET", "/v1/me") { applyCheckins(me) }
+    }
     func isCheckedIn(_ e: Event) -> Bool { checkins["event:\(e.id)"] != nil }
 
     // MARK: rotating pass QR

@@ -86,3 +86,6 @@ val Greetings = listOf(
     "Hi {n}. No cats were harmed, promise.",
     "Back again, {n}? We're flattered.",
 )
+
+/** Door staff checked this attendee in: [title] is the event (or "Campus entry"), [time] when. */
+data class CheckinNotice(val title: String, val time: String)

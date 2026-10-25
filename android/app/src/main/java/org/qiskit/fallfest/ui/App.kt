@@ -87,6 +87,15 @@ fun App(app: AppState) {
     if (notifs) NotificationsSheet(app) { notifs = false }
     app.message?.let { msg -> Toast(msg) { app.message = null } }
     if (profile) ProfileSheet(app) { profile = false }
+    app.checkinNotice?.let { n ->
+        AlertDialog(
+            onDismissRequest = { app.checkinNotice = null }, containerColor = P.bg,
+            icon = { IconBubble(Icons.Outlined.CheckCircle, 64.dp, P.mintInk, P.mint) },
+            title = { Text("You’re checked in", style = T.h1.copy(fontSize = 24.sp, lineHeight = 28.sp), color = P.ink, textAlign = androidx.compose.ui.text.style.TextAlign.Center) },
+            text = { Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) { Text(n.title, style = T.title, color = P.ink, textAlign = androidx.compose.ui.text.style.TextAlign.Center); Text(n.time, style = T.small, color = P.muted) } },
+            confirmButton = { TextButton({ app.checkinNotice = null }) { Text("OK", color = P.primary) } },
+        )
+    }
 
     // A tapped notification opens the right place once the app is ready (signed in, selfie done).
     LaunchedEffect(app.pendingOpen, app.signedIn, app.needsSelfie) {

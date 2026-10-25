@@ -6,7 +6,9 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
+import java.time.Duration
 import java.time.Instant
+import java.time.format.DateTimeFormatter
 import java.time.ZonedDateTime
 import java.util.UUID
 import javax.crypto.Mac
@@ -31,6 +33,9 @@ class AppState(context: Context) {
     var announcements by mutableStateOf(emptyList<Announcement>()); private set
     var tickets by mutableStateOf(emptyList<Ticket>()); private set
     var checkins by mutableStateOf(emptyMap<String, Instant>()); private set
+    /** Set when door staff have just checked this attendee in; the UI shows a popup and clears it. */
+    var checkinNotice by mutableStateOf<CheckinNotice?>(null)
+    private var announcedCheckins: Set<String> = prefs.getStringSet("seen_checkins", emptySet()) ?: emptySet()
     var refreshing by mutableStateOf(false); private set
     var offline by mutableStateOf(false); private set
     /** First sign-in: the attendee has no selfie on file yet. Door staff compare faces, so we ask once. */
@@ -119,7 +124,7 @@ class AppState(context: Context) {
         wipe()
     }
     private fun wipe() {
-        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; seenTickets = emptyMap()
+        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null
         profile = null; events = emptyList(); announcements = emptyList(); tickets = emptyList(); checkins = emptyMap()
     }
 
@@ -155,7 +160,7 @@ class AppState(context: Context) {
                 announcements = (authed("GET", "/v1/announcements") as org.json.JSONArray).mapObjects { Announcement(it.str("id"), it.str("title"), it.str("body"), Instant.parse(it.str("createdAt"))) }
                 loadTickets()
                 (authed("GET", "/v1/me") as JSONObject).let { me ->
-                    checkins = me.getJSONArray("checkins").mapObjects { it.str("scope") to Instant.parse(it.str("at")) }.toMap()
+                    applyCheckins(me)
                     val missing = !me.getJSONObject("profile").optBoolean("hasPhoto", true)
                     if (missing != needsSelfie) { needsSelfie = missing; prefs.edit().putBoolean("needs_selfie", missing).apply() }
                 }
@@ -219,6 +224,27 @@ class AppState(context: Context) {
 
     // ---------- status ----------
     fun statusOf(e: Event): Status { val n = now(); return when { n.isBefore(e.start) -> Status.Upcoming; n.isBefore(e.end) -> Status.Live; else -> Status.Done } }
+    /** Takes the check-ins from /v1/me. A check-in we have not announced yet and that is under 15 minutes old becomes a popup (older ones are marked as seen silently). */
+    private fun applyCheckins(me: JSONObject) {
+        val all = me.getJSONArray("checkins").mapObjects { it.str("scope") to Instant.parse(it.str("at")) }.toMap()
+        checkins = all
+        val fresh = all.entries.filter { it.key !in announcedCheckins }
+        if (fresh.isEmpty()) return
+        announcedCheckins = announcedCheckins + fresh.map { it.key }
+        prefs.edit().putStringSet("seen_checkins", announcedCheckins).apply()
+        val newest = fresh.filter { Duration.between(it.value, Instant.now()).toMinutes() < 15 }.maxByOrNull { it.value } ?: return
+        checkinNotice = checkinLabel(newest.key, newest.value)
+    }
+    fun checkinLabel(scope: String, at: Instant): CheckinNotice {
+        val time = DateTimeFormatter.ofPattern("EEE d MMM, h:mm a").withZone(IST).format(at)
+        return if (scope.startsWith("event:")) CheckinNotice(events.firstOrNull { it.id == scope.removePrefix("event:") }?.title ?: "Event", time)
+        else CheckinNotice("Campus entry", time)
+    }
+    /** Light check for a new door scan: only /v1/me. Called every few seconds while My Pass is on screen. */
+    fun pollCheckins() {
+        if (!signedIn || needsSelfie) return
+        scope.launch { try { applyCheckins(authed("GET", "/v1/me") as JSONObject) } catch (_: Exception) { } }
+    }
     fun isCheckedIn(e: Event) = "event:${e.id}" in checkins
     fun dayCheckedIn(d: java.time.LocalDate) = "day:$d" in checkins
 

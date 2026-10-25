@@ -62,6 +62,8 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
     var qrOpen by remember { mutableStateOf(false) }
     SecureWindow((LocalContext.current as? Activity)?.window)
     val saved = app.events.filter { it.saved }
+    val attended = app.checkins.entries.sortedByDescending { it.value }.map { app.checkinLabel(it.key, it.value) to it.key.removePrefix("event:").takeIf { k -> it.key.startsWith("event:") } }
+    LaunchedEffect(Unit) { while (true) { delay(4000); app.pollCheckins() } } // a door scan shows up within seconds
     val (payload, progress) = rememberLivePass(app)
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 130.dp)) {
@@ -80,7 +82,22 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
             item { SectionLabel("SAVED EVENTS", Modifier.padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 8.dp)) }
             items(saved, key = { it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen) }
         } else item {
-            Text("Events you save appear here. Tap the bookmark on any event to save it.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 48.dp))
+            Text("Events you save appear here. Tap the bookmark on any event to save it.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 36.dp))
+        }
+        item { SectionLabel("ATTENDED EVENTS", Modifier.padding(horizontal = 24.dp).padding(top = 24.dp, bottom = 8.dp)) }
+        if (attended.isEmpty()) item {
+            Text("Events you attend appear here after the team scans your pass at the door.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 24.dp))
+        } else items(attended, key = { it.first.title + it.first.time }) { (n, id) ->
+            val ev = id?.let { k -> app.events.firstOrNull { it.id == k } }
+            Card(Modifier.padding(horizontal = 24.dp, vertical = 6.dp).fillMaxWidth(), RoundedCornerShape(24.dp), onClick = { ev?.let(onOpen) }) {
+                Row(Modifier.padding(horizontal = 18.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    IconBubble(Icons.Outlined.CheckCircle, 50.dp, P.mintInk, P.mint)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(n.title, style = T.title, color = P.ink, maxLines = 2)
+                        Text("Checked in · ${n.time}", style = T.small, color = P.muted, maxLines = 1)
+                    }
+                }
+            }
         }
     }
     // a forgotten QR must not stay on screen: close it after 2 minutes

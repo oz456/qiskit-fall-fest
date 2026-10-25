@@ -121,6 +121,8 @@ struct Profile: Codable, Equatable {
     var firstName: String { name.split(separator: " ").first.map(String.init) ?? name }
 }
 struct Checkin: Decodable { let scope: String; let at: Date }
+/// Door staff checked this attendee in: `title` is the event (or "Campus entry"), `time` when.
+struct CheckinNotice: Identifiable { let id = UUID(); let title: String; let time: String }
 
 // ---- API payloads ----
 struct EventsResponse: Decodable { let events: [Event]; let faqs: [Faq]; let settings: [String: String] }

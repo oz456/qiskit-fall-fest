@@ -79,11 +79,30 @@ export const markTicketSeen = (id) => { const t = S.tickets.find((x) => x.id ===
 const cached = read("qff.cache", null);
 if (cached) { S.events = (cached.events || []).map(norm); S.faqs = cached.faqs || []; S.settings = cached.settings || {}; S.announcements = cached.announcements || []; S.tickets = cached.tickets || []; }
 
+// ---- door check-ins: a new one (under 15 minutes old, not announced before) opens a popup; older ones are marked as seen silently ----
+export const checkinLabel = (scope, at) => ({
+  title: scope.startsWith("event:") ? S.events.find((e) => e.id === scope.slice(6))?.title || "Event" : "Campus entry",
+  time: fmtStamp(Date.parse(at)),
+});
+export const hooks = { onCheckin(_notice) {} };
+function applyCheckins(list) {
+  S.checkins = Object.fromEntries(list.map((c) => [c.scope, c.at]));
+  const seen = new Set(read("qff.checkSeen", [])), fresh = list.filter((c) => !seen.has(c.scope));
+  if (!fresh.length) return;
+  fresh.forEach((c) => seen.add(c.scope)); write("qff.checkSeen", [...seen]);
+  const newest = fresh.filter((c) => S.now - Date.parse(c.at) < 15 * 60000).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
+  if (newest) hooks.onCheckin(checkinLabel(newest.scope, newest.at));
+}
+/** Light check for a new door scan: only /v1/me. Called every few seconds while My Pass is open. */
+export async function pollCheckins() {
+  try { const me = await api.me(); applyCheckins(me.checkins); emit(); } catch { /* the next tick tries again */ }
+}
+
 export async function loadAll() {
   if (S.loading) return; S.loading = true; emit();
   try {
     const me = await api.me();
-    S.profile = me.profile; S.needsSelfie = !me.profile.hasPhoto; S.checkins = Object.fromEntries(me.checkins.map((c) => [c.scope, c.at])); write("qff.profile", S.profile);
+    S.profile = me.profile; S.needsSelfie = !me.profile.hasPhoto; applyCheckins(me.checkins); write("qff.profile", S.profile);
     if (!S.needsSelfie) {
       const [ev, ann, tix] = await Promise.all([api.events(), api.announcements(), api.tickets()]);
       S.events = ev.events.map(norm); S.faqs = ev.faqs; S.settings = ev.settings; S.announcements = ann; S.tickets = tix; S.loaded = true;
@@ -105,6 +124,6 @@ export async function toggleSaved(ev, toast) {
 
 export function resetState() {
   Object.assign(S, { profile: null, events: [], faqs: [], settings: {}, announcements: [], tickets: [], checkins: {}, needsSelfie: false, loaded: false, offline: false, seenAnn: null, seenTickets: {} });
-  for (const k of ["qff.profile", "qff.cache", "qff.seenAnn", "qff.seenTickets", "qff.notifAsked"]) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
+  for (const k of ["qff.profile", "qff.cache", "qff.seenAnn", "qff.seenTickets", "qff.notifAsked", "qff.checkSeen"]) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
   emit();
 }

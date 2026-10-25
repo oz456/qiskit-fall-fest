@@ -2,8 +2,8 @@
 import { ApiError, api, hooks, restoreSession } from "./api.js";
 import * as push from "./push.js";
 import { detectPlatform, showDesktopFrame, showGate } from "./platform.js";
-import { S, emit, loadAll, newReplies, resetState, subscribe } from "./store.js";
-import { clear, closeAllSheets, closeTopSheet, h, icon, pullToRefresh, toast } from "./ui.js";
+import { S, emit, hooks as storeHooks, loadAll, newReplies, resetState, subscribe } from "./store.js";
+import { bubble, button, clear, closeAllSheets, closeTopSheet, h, icon, pullToRefresh, toast } from "./ui.js";
 import { hubView } from "./views/hub.js";
 import { passView } from "./views/pass.js";
 import { selfieView } from "./views/selfie.js";
@@ -22,6 +22,14 @@ if (platform === "desktop" && desktopOk && window.top === window) showDesktopFra
 else if (platform !== "ios" && !(platform === "desktop" && desktopOk)) { showGate(platform, h, document.getElementById("layer")); }
 else boot();
 
+storeHooks.onCheckin = (n) => {
+  document.querySelector(".qrfull")?.click();   // close the full-screen QR: the scan is done
+  const done = () => scrim.remove();
+  const scrim = h("div", { class: "dialogscrim" }, h("div", { class: "dialog center", role: "alertdialog", "aria-modal": "true" },
+    bubble("check", 72, true), h("h2", {}, "You’re checked in"), h("div", { class: "title" }, n.title), h("p", { class: "muted" }, n.time),
+    h("div", { class: "actions" }, button("OK", { onclick: done }))));
+  document.body.append(scrim);
+};
 hooks.onBlocked = () => showGate("desktop", h, document.getElementById("layer"));
 hooks.onPhotoRequired = () => { if (!S.needsSelfie) { S.needsSelfie = true; render(); } };
 hooks.onSignedOut = () => { if (!signedIn) return; endSession(); toast("You were signed out. Sign in again to continue."); };

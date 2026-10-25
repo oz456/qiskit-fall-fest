@@ -241,3 +241,4 @@ body.kb .tabbar,body.kb .toast{display:none}
 .devpage .note{font-size:13px;color:var(--muted);text-align:center;max-width:420px}
 .devphone{width:390px;max-width:100%;height:min(844px,calc(100dvh - 90px));border-radius:46px;border:10px solid #161818;background:var(--bg);overflow:hidden;box-shadow:0 30px 80px rgba(40,24,16,.35)}
 .devphone iframe{display:block;width:100%;height:100%;border:0}
+.dialog.center{align-items:center;text-align:center}.dialog.center h2{color:var(--ink)}.dialog.center .actions{align-self:stretch}

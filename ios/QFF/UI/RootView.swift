@@ -23,6 +23,9 @@ struct RootView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: app.message)
+        .alert("You’re checked in", isPresented: Binding(get: { app.checkinNotice != nil }, set: { if !$0 { app.checkinNotice = nil } }), presenting: app.checkinNotice) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { n in Text("\(n.title)\n\(n.time)") }
         .tint(P.primary)
         .task { await bootPreviewScreen() }
         .onChange(of: app.signedIn) { signedIn in if !signedIn { router.tab = .hub; router.sheet = nil } }

@@ -107,7 +107,14 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     const lg = await app.inject({ method: "POST", url: "/checkin/api/login", payload: { username: "check", password: "check-dev-password" } });
     const scan = (await app.inject({ method: "POST", url: "/checkin/api/scan", headers: { cookie: String(lg.headers["set-cookie"]).split(";")[0]!, "x-csrf-token": lg.json().csrf }, payload: { payload: decoded, scope: "day:2026-10-26" } })).json();
     assert.equal(scan.result, "verify", "the door scanner accepts the code shown by the web app"); assert.equal(scan.who.name, "Web Tester"); assert.equal(scan.who.hasPhoto, true);
-    await b.tap(".qrfull"); assert.ok(await b.until(`!document.querySelector('.qrfull')`));
+    // the door confirms the check-in: the attendee's phone shows a popup within seconds, closes the QR, and lists it under "Attended events"
+    const hdr = { cookie: String(lg.headers["set-cookie"]).split(";")[0]!, "x-csrf-token": lg.json().csrf };
+    assert.equal((await app.inject({ method: "POST", url: "/checkin/api/confirm", headers: hdr, payload: { ticket: scan.ticket, decision: "confirm" } })).json().result, "ok");
+    assert.ok(await b.until(`!!document.querySelector('.dialog') && /checked in/i.test(document.querySelector('.dialog').textContent)`, 12000), "popup on scan");
+    assert.match(await b.ev(`document.querySelector('.dialog').textContent`), /Campus entry/);
+    assert.equal(await b.ev(`!!document.querySelector('.qrfull')`), false, "the QR closes when the scan is done");
+    await b.tap(".dialog .btn"); assert.ok(await b.until(`!document.querySelector('.dialog')`));
+    assert.match(await b.ev(`document.querySelector('.screen').textContent`), /Attended events[\s\S]*Campus entry[\s\S]*Checked in/, "listed under My pass");
 
     // support: ticket, reply, thread, red dot
     await b.tap(".tab[aria-label='Support']"); assert.ok(await b.until(`location.pathname === '/attendee/support' && !!document.querySelector('.support-opts')`));
