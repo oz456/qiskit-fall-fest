@@ -154,17 +154,30 @@ async function enrollment(e) {
 
 async function people(m) {
   const q = h("input", { placeholder: "Search name, email or pass code…", oninput: debounce(guard(load), 250) });
+  const kind = h("select", { onchange: guard(load) }, h("option", { value: "" }, "Everyone"), h("option", { value: "student" }, "SRM students (name_surname@)"), h("option", { value: "faculty" }, "SRM faculty (name.surname@)"), h("option", { value: "unclear" }, "SRM, unclear"), h("option", { value: "external" }, "Outside SRM"));
   const out = h("div", { class: "card" });
-  m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), q, out);
+  const syncBox = h("div", { class: "card" });
+  m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), syncBox, h("div", { class: "row" }, q, kind), out);
+  const KIND = { student: "SRM student", faculty: "SRM faculty", unclear: "SRM", external: "Outside SRM" };
+  async function drawSync() {
+    const [s, events] = await Promise.all([api("GET", "/sync"), api("GET", "/events")]); clear(syncBox);
+    const last = s.runs.find((r) => r.status !== "running"), when = (iso) => new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const pick = h("select", { onchange: guard(async () => { const r = await api("PUT", "/sync/flagship-event", { eventId: pick.value }); toast(r.ok === false ? r.message : "Saved"); }) }, h("option", { value: "" }, "Not set"), events.map((e) => h("option", { value: e.id, selected: e.id === s.flagshipEventId }, e.title)));
+    syncBox.append(h("h3", {}, "Website sync"),
+      h("p", { class: "muted small" }, s.configured ? `People who register on ${s.websiteUrl.replace(/^https?:\/\//, "")} appear here automatically (${s.fromWebsite} so far, ${s.total} in total). Checked every 10 minutes and whenever someone registers.` : "Not connected: the sync key is not set on the server."),
+      last && h("p", { class: "small" }, `Last run ${when(last.at)} · ${last.status === "ok" ? `saw ${last.seen}, added ${last.created}, updated ${last.updated}` : "failed: " + (last.error || "")}`),
+      h("div", { class: "row", style: "align-items:flex-end;gap:12px;flex-wrap:wrap" }, h("div", { class: "grow" }, h("label", {}, "Rs 499 flagship pass holders are registered for"), pick),
+        h("button", { class: "btn ghost", disabled: !s.configured, onclick: guard(async () => { const r = await api("POST", "/sync/run"); toast(r.message); await drawSync(); await load(); }) }, "Sync now")));
+  }
   async function load() {
-    const list = await api("GET", "/users?q=" + encodeURIComponent(q.value)); clear(out);
+    const list = await api("GET", "/users?q=" + encodeURIComponent(q.value) + (kind.value ? "&kind=" + kind.value : "")); clear(out);
     out.append(h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Status", ""].map((x) => h("th", {}, x))),
-      list.map((u) => h("tr", { class: "click", onclick: guard(() => openUser(u)) }, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, u.college || "")), h("td", {}, u.email), h("td", {}, u.passCode),
+      list.map((u) => h("tr", { class: "click", onclick: guard(() => openUser(u)) }, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, [u.college, KIND[u.kind]].filter(Boolean).join(" · "))), h("td", {}, u.email), h("td", {}, u.passCode),
         h("td", {}, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), h("div", { class: "muted small", style: "margin-top:4px" }, [u.hasApp ? "Signed in" : "Not signed in", u.hasPhoto ? "Selfie ✓" : "No selfie"].join(" · "))),
         h("td", { class: "chev" }, "›")))));
     if (!list.length) out.append(h("p", { class: "muted" }, "No attendees found."));
   }
-  await load();
+  await Promise.all([drawSync(), load()]);
   async function openUser(u) {
     const events = await api("GET", "/events");
     const picker = eventPicker(events, new Set(u.enrolledIds || []));

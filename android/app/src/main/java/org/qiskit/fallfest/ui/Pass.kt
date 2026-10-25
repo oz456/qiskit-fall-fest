@@ -84,6 +84,8 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
             Text("Events you’re registered for appear here.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 48.dp))
         }
     }
+    // a forgotten QR must not stay on screen: close it after 2 minutes
+    LaunchedEffect(qrOpen) { if (qrOpen) { delay(120_000); qrOpen = false } }
     if (qrOpen) FullQr(app, payload, progress) { qrOpen = false }
 }
 

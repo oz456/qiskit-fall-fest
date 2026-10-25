@@ -55,19 +55,43 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
       if (!safeEqual(mac, passMac(Buffer.from(u.pass_secret), code, step))) return { result: "invalid", message: "Pass signature is wrong. Possibly an old or forwarded code.", who: { ...who, hasPhoto: false } };
       if (Math.abs(nowStep - step) > 1) return { result: "expired", message: "This QR is stale (a screenshot?). Ask the attendee to open the live pass.", who: { ...who, hasPhoto: false } };
       if (u.status !== "active") return { result: "blocked", message: "This pass is blocked.", who: { ...who, hasPhoto: false } };
-      const ticket = signJwt({ aud: "check-ticket", uid: u.id, scope: b.scope }, config.sessionSecret, 120);
-      const [prev] = await db.query("SELECT scanned_at FROM checkins WHERE user_id=$1 AND scope=$2", [u.id, b.scope]);
+      return verdict(u, b.scope);
+    });
+
+    // Shared by the QR scan and the manual lookup. Registration never blocks anyone: a person who isn't registered for the event is
+    // shown with a warning and the volunteer decides; the check-in is recorded on confirm like any other.
+    async function verdict(u: any, scope: string, manual = false) {
+      const who = { name: u.name, college: u.college, passCode: u.pass_code, hasPhoto: u.has_photo };
+      const ticket = signJwt({ aud: "check-ticket", uid: u.id, scope }, config.sessionSecret, 120);
+      const [prev] = await db.query("SELECT scanned_at FROM checkins WHERE user_id=$1 AND scope=$2", [u.id, scope]);
       if (prev) return { result: "duplicate", message: "Already checked in.", at: new Date(prev.scanned_at).toISOString(), who, ticket };
-      let warning: string | undefined;
-      if (b.scope.startsWith("event:")) {
-        const [e] = await db.query("SELECT access FROM events WHERE id=$1", [b.scope.slice(6)]);
+      const warnings: string[] = [];
+      if (scope.startsWith("event:")) {
+        const [e] = await db.query("SELECT access FROM events WHERE id=$1", [scope.slice(6)]);
         if (e?.access === "prereg") {
-          const [reg] = await db.query("SELECT 1 FROM user_events WHERE user_id=$1 AND event_id=$2 AND kind='registered'", [u.id, b.scope.slice(6)]);
-          if (!reg) warning = "Not enrolled: this event is pre-registration only.";
+          const [reg] = await db.query("SELECT 1 FROM user_events WHERE user_id=$1 AND event_id=$2 AND kind='registered'", [u.id, scope.slice(6)]);
+          if (!reg) warnings.push("Not on the registered list for this event. You can still let them in.");
         }
       }
-      if (!u.has_photo) warning = [warning, "No selfie on file yet."].filter(Boolean).join(" ");
-      return { result: "verify", message: "Check the face, then confirm.", warning, who, ticket };
+      if (manual) warnings.push("Found by search, no QR was scanned. Compare the face with the selfie carefully.");
+      if (!u.has_photo) warnings.push("No selfie on file yet.");
+      return { result: "verify", message: "Check the face, then confirm.", warning: warnings.join(" ") || undefined, who, ticket };
+    }
+
+    // Phone dead or screen cracked: find the person by name, pass code or email, then go through the same face check.
+    api.get("/checkin/api/lookup", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req) => {
+      const { q } = z.object({ q: z.string().trim().min(3).max(80) }).parse(req.query);
+      const like = `%${q.replace(/[%_\\]/g, "\\$&").toLowerCase()}%`;
+      const rows = await db.query("SELECT u.id,u.name,u.college,u.pass_code,u.status, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id) AS has_photo FROM users u WHERE lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1 OR lower(u.email) LIKE $1 ORDER BY u.name LIMIT 8", [like]);
+      return rows.map((r) => ({ id: r.id, name: r.name, college: r.college, passCode: r.pass_code, hasPhoto: r.has_photo, blocked: r.status !== "active" }));
+    });
+    api.post("/checkin/api/scan-manual", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req) => {
+      const b = z.object({ userId: z.string().uuid(), scope: Scope }).parse(req.body);
+      const [u] = await db.query("SELECT id,name,college,pass_code,status, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [b.userId]);
+      if (!u) return { result: "invalid", message: "Unknown person." };
+      await audit(db, req, "check.manual_lookup", "user", u.id, { scope: b.scope });
+      if (u.status !== "active") return { result: "blocked", message: "This pass is blocked.", who: { name: u.name, college: u.college, passCode: u.pass_code, hasPhoto: false } };
+      return verdict(u, b.scope, true);
     });
 
     const ticketOf = (t: string) => { const c = verifyJwt<{ aud: string; uid: string; scope: string }>(t, config.sessionSecret); return c && c.aud === "check-ticket" ? c : null; };

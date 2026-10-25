@@ -6,7 +6,7 @@ import { S, loadAll, subscribe } from "../store.js";
 import { button, h, icon, posterTitle, sectionLabel, toast } from "../ui.js";
 import { eventRow } from "./hub.js";
 
-const STEP = 30;
+const STEP = 30, QR_IDLE_MS = 120_000;
 let codes = [], skew = 0;
 async function fetchCodes() {
   const r = await api.passCodes();
@@ -47,7 +47,7 @@ export function passView({ open }) {
 /** Full-screen QR with a border that counts down the 30-second window. Closed automatically when the page is hidden (app switcher). */
 export function showQR() {
   const p = S.profile || {};
-  let timer = 0, lastPayload = null, wake = null, closed = false;
+  let timer = 0, idle = 0, lastPayload = null, wake = null, closed = false;
   const canvas = h("canvas", { "aria-label": "Your pass QR code" });
   const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
   for (const [k, v] of Object.entries({ x: 1.5, y: 1.5, width: 97, height: 97, rx: 8, fill: "none", "stroke-width": 1.8, "stroke-linecap": "round", pathLength: 100, stroke: "#7e1322" })) rect.setAttribute(k, v);
@@ -72,7 +72,8 @@ export function showQR() {
     if (payload !== lastPayload) { lastPayload = payload; drawQR(canvas, payload); }
     rect.setAttribute("stroke-dasharray", `${(progress() * 100).toFixed(1)} 100`);
   }
-  function close() { if (closed) return; closed = true; clearInterval(timer); document.removeEventListener("visibilitychange", onHide); wake?.release?.().catch(() => {}); view.remove(); }
+  function close() { if (closed) return; closed = true; clearInterval(timer); clearTimeout(idle); document.removeEventListener("visibilitychange", onHide); wake?.release?.().catch(() => {}); view.remove(); }
   tick(); timer = setInterval(tick, 250);
+  idle = setTimeout(close, QR_IDLE_MS);   // a forgotten QR must not keep the screen awake or the code on show
   return close;
 }
