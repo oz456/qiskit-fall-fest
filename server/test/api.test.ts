@@ -423,18 +423,31 @@ describe("website sync: people registered on the main website become attendees h
     const a = (await push([{ email: "Ravi_K@srmap.edu.in", name: "Ravi Kumar", institution: "SRM AP" }, { email: "prof.rao@srmap.edu.in", name: "Prof Rao" }, { email: "ext@example.org", name: "Ext Person", institution: "IIT" },
       { email: "mentor@example.org", name: "A Mentor", role: "mentor" }, { email: "gone@example.org", name: "Gone", isActive: false }, { email: "not-an-email", name: "Bad" }])).json();
     assert.deepEqual([a.created, a.skipped, a.failed], [3, 3, 0]);
-    const rows = (await admin("GET", "/admin/api/users")).json(); const by = (e: string) => rows.find((u: any) => u.email === e);
+    const rows = (await admin("GET", "/admin/api/users")).json().rows; const by = (e: string) => rows.find((u: any) => u.email === e);
     assert.equal(by("ravi_k@srmap.edu.in").kind, "student"); assert.equal(by("ravi_k@srmap.edu.in").source, "website"); assert.equal(by("prof.rao@srmap.edu.in").kind, "faculty"); assert.equal(by("ext@example.org").kind, "external");
     assert.equal(by("mentor@example.org"), undefined); assert.equal(by("gone@example.org"), undefined);
     const again = (await push([{ email: "ravi_k@srmap.edu.in", name: "Changed Name", institution: "Other" }])).json();
     assert.deepEqual([again.created, again.updated], [0, 0]); assert.equal(by("ravi_k@srmap.edu.in").name, "Ravi Kumar");
-    assert.equal((await admin("GET", "/admin/api/users?kind=faculty")).json().map((u: any) => u.email).join(), "prof.rao@srmap.edu.in");
+    assert.equal((await admin("GET", "/admin/api/users?kind=faculty")).json().rows.map((u: any) => u.email).join(), "prof.rao@srmap.edu.in");
     // switched off on the website -> blocked here, but only for people who came from the website
     await push([{ email: "ravi_k@srmap.edu.in", name: "Ravi Kumar", isActive: false }]);
-    assert.equal((await admin("GET", "/admin/api/users")).json().find((u: any) => u.email === "ravi_k@srmap.edu.in").status, "blocked");
+    assert.equal((await admin("GET", "/admin/api/users")).json().rows.find((u: any) => u.email === "ravi_k@srmap.edu.in").status, "blocked");
     await admin("POST", "/admin/api/users", { email: "adminmade@example.org", name: "Admin Made", college: null });
     await push([{ email: "adminmade@example.org", name: "Admin Made", isActive: false }]);
-    assert.equal((await admin("GET", "/admin/api/users")).json().find((u: any) => u.email === "adminmade@example.org").status, "active", "admin-created people are never switched off by the website");
+    assert.equal((await admin("GET", "/admin/api/users")).json().rows.find((u: any) => u.email === "adminmade@example.org").status, "active", "admin-created people are never switched off by the website");
+  });
+  it("the attendee list filters by selfie, app use, status and source, counts the matches, sorts and pages", async () => {
+    const get = async (qs: string) => (await admin("GET", "/admin/api/users" + qs)).json();
+    const all = await get(""); assert.equal(all.total, all.all); assert.ok(all.total >= 4);
+    const withPhoto = await get("?selfie=yes"), noPhoto = await get("?selfie=no");
+    assert.equal(withPhoto.total + noPhoto.total, all.total, "yes + no covers everyone");
+    assert.equal(withPhoto.rows.every((u: any) => u.hasPhoto), true); assert.equal(noPhoto.rows.every((u: any) => !u.hasPhoto), true);
+    const web = await get("?source=website"); assert.ok(web.total >= 3); assert.equal(web.rows.every((u: any) => u.source === "website"), true);
+    assert.equal((await get("?status=blocked")).rows.map((u: any) => u.email).includes("ravi_k@srmap.edu.in"), true);
+    assert.equal((await get("?app=no&selfie=no&source=website&kind=faculty")).total, 1, "filters combine");
+    const byName = (await get("?sort=name")).rows.map((u: any) => u.name.toLowerCase()); assert.deepEqual(byName, [...byName].sort());
+    const page = await get("?limit=2&offset=1"); assert.equal(page.rows.length, 2); assert.equal(page.total, all.total, "total ignores paging");
+    assert.equal((await admin("GET", "/admin/api/users?selfie=maybe")).statusCode, 400);
   });
   it("an email that isn't registered yet gets a pointer to the website; after the sync it can log in", async () => {
     const r = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "late.comer@example.org" } });

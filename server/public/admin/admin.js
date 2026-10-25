@@ -125,10 +125,19 @@ function editEvent(e) {
 
 async function people(m) {
   const q = h("input", { placeholder: "Search name, email or pass code…", oninput: debounce(guard(load), 250) });
-  const kind = h("select", { onchange: guard(load) }, h("option", { value: "" }, "Everyone"), h("option", { value: "student" }, "SRM students (name_surname@)"), h("option", { value: "faculty" }, "SRM faculty (name.surname@)"), h("option", { value: "unclear" }, "SRM, unclear"), h("option", { value: "external" }, "Outside SRM"));
+  const sel = (label, opts) => h("select", { "aria-label": label, onchange: guard(() => load(true)) }, opts.map(([v, t]) => h("option", { value: v }, t)));
+  const kind = sel("Who", [["", "Everyone"], ["student", "SRM students (name_surname@)"], ["faculty", "SRM faculty (name.surname@)"], ["unclear", "SRM, unclear"], ["external", "Outside SRM"]]);
+  const selfie = sel("Selfie", [["", "Selfie: any"], ["yes", "Selfie taken"], ["no", "No selfie yet"]]);
+  const app = sel("App", [["", "App: any"], ["yes", "Signed in to the app"], ["no", "Never signed in"]]);
+  const status = sel("Status", [["", "Status: any"], ["active", "Active"], ["blocked", "Blocked"]]);
+  const checked = sel("Check-in", [["", "Check-in: any"], ["yes", "Checked in at least once"], ["no", "Never checked in"]]);
+  const source = sel("Source", [["", "Source: any"], ["website", "From the website"], ["admin", "Added by admin"], ["import", "CSV import"]]);
+  const sort = sel("Sort", [["newest", "Sort: newest first"], ["name", "Sort: name A–Z"], ["checkins", "Sort: most check-ins"]]);
+  const count = h("p", { class: "muted", style: "margin:10px 0 0;font-weight:600" });
+  const PAGE = 200; let shown = [];
   const out = h("div", { class: "card" });
   const syncBox = h("div", { class: "card" });
-  m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), syncBox, h("div", { class: "row" }, q, kind), out);
+  m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), syncBox, h("div", { class: "row", style: "flex-wrap:wrap;gap:10px" }, q, kind, selfie, app, status, checked, source, sort, h("button", { class: "btn ghost sm", onclick: () => { for (const x of [q, kind, selfie, app, status, checked, source]) x.value = ""; sort.value = "newest"; load(true); } }, "Clear filters")), count, out);
   const KIND = { student: "SRM student", faculty: "SRM faculty", unclear: "SRM", external: "Outside SRM" };
   async function drawSync() {
     const s = await api("GET", "/sync"); clear(syncBox);
@@ -139,13 +148,19 @@ async function people(m) {
       h("div", { class: "row" },
         h("button", { class: "btn ghost", disabled: !s.configured, onclick: guard(async () => { const r = await api("POST", "/sync/run"); toast(r.message); await drawSync(); await load(); }) }, "Sync now")));
   }
-  async function load() {
-    const list = await api("GET", "/users?q=" + encodeURIComponent(q.value) + (kind.value ? "&kind=" + kind.value : "")); clear(out);
+  async function load(reset = true) {
+    if (reset) shown = [];
+    const qs = new URLSearchParams({ q: q.value, sort: sort.value, limit: PAGE, offset: shown.length });
+    for (const [k, el] of Object.entries({ kind, selfie, app, status, checkedin: checked, source })) if (el.value) qs.set(k, el.value);
+    const r = await api("GET", "/users?" + qs); shown = shown.concat(r.rows); clear(out);
+    const filtered = r.total !== r.all;
+    count.textContent = `${r.total.toLocaleString()} ${r.total === 1 ? "attendee" : "attendees"}` + (filtered ? ` match these filters (of ${r.all.toLocaleString()} in total)` : " in total");
     out.append(h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Status", ""].map((x) => h("th", {}, x))),
-      list.map((u) => h("tr", { class: "click", onclick: guard(() => openUser(u)) }, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, [u.college, KIND[u.kind]].filter(Boolean).join(" · "))), h("td", {}, u.email), h("td", {}, u.passCode),
+      shown.map((u) => h("tr", { class: "click", onclick: guard(() => openUser(u)) }, h("td", {}, h("b", {}, u.name), h("div", { class: "muted small" }, [u.college, KIND[u.kind]].filter(Boolean).join(" · "))), h("td", {}, u.email), h("td", {}, u.passCode),
         h("td", {}, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), h("div", { class: "muted small", style: "margin-top:4px" }, [u.hasApp ? "Signed in" : "Not signed in", u.hasPhoto ? "Selfie ✓" : "No selfie"].join(" · "))),
         h("td", { class: "chev" }, "›")))));
-    if (!list.length) out.append(h("p", { class: "muted" }, "No attendees found."));
+    if (!shown.length) out.append(h("p", { class: "muted" }, "No attendees found."));
+    else if (shown.length < r.total) out.append(h("div", { class: "row", style: "justify-content:center;padding:14px" }, h("button", { class: "btn ghost", onclick: guard(() => load(false)) }, `Show ${Math.min(PAGE, r.total - shown.length)} more (${shown.length} of ${r.total.toLocaleString()} shown)`)));
   }
   await Promise.all([drawSync(), load()]);
   async function openUser(u) {

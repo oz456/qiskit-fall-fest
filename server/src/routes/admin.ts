@@ -88,13 +88,25 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
 
     // ---- attendees ----
     api.get("/admin/api/users", async (req) => {
-      const { q, kind } = z.object({ q: z.string().max(100).optional(), kind: z.enum(["student", "faculty", "unclear", "external"]).optional() }).parse(req.query);
-      const like = q ? `%${q.replace(/[%_\\]/g, "\\$&").toLowerCase()}%` : "%";
+      const f = z.object({
+        q: z.string().max(100).optional(), kind: z.enum(["student", "faculty", "unclear", "external"]).optional(),
+        selfie: z.enum(["yes", "no"]).optional(), app: z.enum(["yes", "no"]).optional(), status: z.enum(["active", "blocked"]).optional(),
+        checkedin: z.enum(["yes", "no"]).optional(), source: z.enum(["admin", "import", "website"]).optional(),
+        sort: z.enum(["newest", "name", "checkins"]).default("newest"), limit: z.coerce.number().int().min(1).max(500).default(200), offset: z.coerce.number().int().min(0).max(100000).default(0),
+      }).parse(req.query);
+      const like = f.q ? `%${f.q.replace(/[%_\\]/g, "\\$&").toLowerCase()}%` : "%";
+      const HAS_APP = "EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL)", HAS_PHOTO = "EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id)", HAS_CHECKIN = "EXISTS(SELECT 1 FROM checkins c WHERE c.user_id=u.id)";
+      const yn = (v: string | undefined, expr: string) => (v === "yes" ? `AND ${expr}` : v === "no" ? `AND NOT ${expr}` : "");
+      const where = `(lower(u.email) LIKE $1 OR lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1) AND ($2::text IS NULL OR u.kind=$2) AND ($3::text IS NULL OR u.status=$3) AND ($4::text IS NULL OR u.source=$4)
+        ${yn(f.selfie, HAS_PHOTO)} ${yn(f.app, HAS_APP)} ${yn(f.checkedin, HAS_CHECKIN)}`;
+      const args = [like, f.kind ?? null, f.status ?? null, f.source ?? null];
+      const order = f.sort === "name" ? "lower(u.name), u.email" : f.sort === "checkins" ? "checkins DESC, u.created_at DESC" : "u.created_at DESC";
+      const [t] = await db.query(`SELECT count(*)::int AS n FROM users u WHERE ${where}`, args);
+      const [all] = await db.query("SELECT count(*)::int AS n FROM users");
       const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,
-        EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL) AS has_app, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id) AS has_photo,
-        (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins
-        FROM users u WHERE (lower(u.email) LIKE $1 OR lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1) AND ($2::text IS NULL OR u.kind=$2) ORDER BY u.created_at DESC LIMIT 500`, [like, kind ?? null]);
-      return rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins }));
+        ${HAS_APP} AS has_app, ${HAS_PHOTO} AS has_photo, (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins
+        FROM users u WHERE ${where} ORDER BY ${order} LIMIT ${f.limit} OFFSET ${f.offset}`, args);
+      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins })) };
     });
     api.get("/admin/api/users/:id/photo", async (req, reply) => {
       const { id } = Id.parse(req.params);
