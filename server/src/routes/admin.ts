@@ -143,12 +143,16 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     api.patch("/admin/api/users/:id", async (req) => {
       const { id } = Id.parse(req.params);
-      const b = z.object({ status: z.enum(["active", "blocked"]) }).parse(req.body);
-      await db.tx(async (q) => {
-        await q.query("UPDATE users SET status=$2 WHERE id=$1", [id, b.status]);
-        if (b.status === "blocked") { await q.query("UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", [id]); await q.query("DELETE FROM push_tokens WHERE user_id=$1", [id]); }
-      });
-      await audit(db, req, "user." + b.status, "user", id); return { ok: true };
+      const b = z.object({ status: z.enum(["active", "blocked"]).optional(), name: z.string().trim().min(1).max(100).optional() }).refine((x) => x.status || x.name, "Nothing to change.").parse(req.body);
+      if (b.name) { await db.query("UPDATE users SET name=$2 WHERE id=$1", [id, b.name]); await audit(db, req, "user.rename", "user", id, { name: b.name }); }
+      if (b.status) {
+        await db.tx(async (q) => {
+          await q.query("UPDATE users SET status=$2 WHERE id=$1", [id, b.status]);
+          if (b.status === "blocked") { await q.query("UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", [id]); await q.query("DELETE FROM push_tokens WHERE user_id=$1", [id]); }
+        });
+        await audit(db, req, "user." + b.status, "user", id);
+      }
+      return { ok: true };
     });
     api.post("/admin/api/users/:id/reset-device", async (req) => { // frees the pass for a new phone (e.g. lost device)
       const { id } = Id.parse(req.params);

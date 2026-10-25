@@ -492,6 +492,12 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
     const att = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(scope)}`)).json(); assert.equal(att.rows.length, 1); assert.equal(att.rows[0].name, "Ext Person");
   });
+  it("the admin can correct a person's name", async () => {
+    const id = (await admin("POST", "/admin/api/users", { email: "rename@example.org", name: "0Day" })).json().id;
+    assert.equal((await admin("PATCH", `/admin/api/users/${id}`, { name: "Krish" })).statusCode, 200);
+    assert.equal((await db.query("SELECT name FROM users WHERE id=$1", [id]))[0]!.name, "Krish");
+    assert.equal((await admin("PATCH", `/admin/api/users/${id}`, {})).statusCode >= 400, true, "an empty change is refused");
+  });
   it("there is no search-and-check-in: a live QR is the only way in", async () => {
     assert.equal((await check("GET", "/checkin/api/lookup?q=finalist")).statusCode, 404);
     assert.equal((await check("POST", "/checkin/api/scan-manual", { userId: "a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d", scope: "day:2026-10-26" })).statusCode, 404);

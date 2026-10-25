@@ -177,6 +177,7 @@ final class AppState: ObservableObject {
             try await loadTickets()
             let me: MeResponse = try await authed("GET", "/v1/me")
             applyCheckins(me)
+            if me.profile != profile { profile = me.profile; if let d = try? JSONEncoder().encode(me.profile) { defaults.set(d, forKey: "profile") } } // a name fixed by the team shows up without signing in again
             if let has = me.profile.hasPhoto, needsSelfie == has { needsSelfie = !has; defaults.set(needsSelfie, forKey: "needs_selfie") }
             offline = false
             Task { [self] in await refreshNotifStatus() }

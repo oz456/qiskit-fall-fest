@@ -161,6 +161,7 @@ class AppState(context: Context) {
                 loadTickets()
                 (authed("GET", "/v1/me") as JSONObject).let { me ->
                     applyCheckins(me)
+                    me.getJSONObject("profile").let { p -> val fresh = Profile(p.str("name"), p.str("email"), p.strOrNull("college"), p.str("passCode")); if (fresh != profile) { profile = fresh; prefs.edit().putString("profile", p.toString()).apply() } } // a name fixed by the team shows up without signing in again
                     val missing = !me.getJSONObject("profile").optBoolean("hasPhoto", true)
                     if (missing != needsSelfie) { needsSelfie = missing; prefs.edit().putBoolean("needs_selfie", missing).apply() }
                 }
