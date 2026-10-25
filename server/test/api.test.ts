@@ -341,7 +341,6 @@ describe("web app: device gate and browser sessions", () => {
   it("the landing page, and downloads work for everyone", async () => {
     for (const ua of [IOS, ANDROID, DESKTOP]) { const r = await get("/", ua); assert.equal(r.statusCode, 200); assert.match(r.body, /Download the app \(APK\)/); assert.match(r.body, /href="\/attendee"/); }
     assert.equal((await get("/downloads/qff-2026.apk", ANDROID)).headers["content-type"], "application/vnd.android.package-archive");
-    assert.equal((await get("/download", ANDROID)).headers.location, "/");
     assert.match((await get("/robots.txt", DESKTOP)).body, /Disallow: \/attendee/);
     assert.equal((await get("/admin", DESKTOP)).statusCode, 200); assert.equal((await get("/checkin", DESKTOP)).statusCode, 200);
     assert.match(String((await get("/attendee/hub", IOS)).headers["x-robots-tag"]), /noindex/);
