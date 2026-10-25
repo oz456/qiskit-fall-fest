@@ -13,6 +13,9 @@ if gcloud secrets describe qff-vapid-private --project "$PROJECT" >/dev/null 2>&
   SECRETS="$SECRETS,VAPID_PRIVATE_KEY=qff-vapid-private:latest,VAPID_PUBLIC_KEY=qff-vapid-public:latest"
 fi
 
+# Shared key with the main website (registrations sync). Wired in once the secret exists (see docs/WEBSITE-SYNC.md).
+if gcloud secrets describe qff-sync-secret --project "$PROJECT" >/dev/null 2>&1; then SECRETS="$SECRETS,SYNC_SECRET=qff-sync-secret:latest"; fi
+
 cd "$(dirname "$0")"
 gcloud run deploy "$SERVICE" --quiet --project "$PROJECT" --region "$REGION" --source . \
   --service-account "qff-run@$PROJECT.iam.gserviceaccount.com" \

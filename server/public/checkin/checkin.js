@@ -51,7 +51,20 @@ async function boot() {
     h("optgroup", { label: "Venue entry · once per day" }, sc.days.map((d) => h("option", { value: "day:" + d, selected: "day:" + d === sc.defaultScope }, (d === sc.today ? "Today · " : "") + new Date(d + "T00:00:00Z").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })))),
     h("optgroup", { label: "Event attendance" }, sc.events.map((e) => h("option", { value: "event:" + e.id }, e.title))));
   const count = h("b", {}, "–"), totalEl = h("span", {}, ""), recent = h("div", { class: "recent" }), sheet = h("div", { class: "sheet" }), toastEl = h("div", { class: "toast" });
-  const manual = h("input", { placeholder: "Paste or type a pass code", autocomplete: "off", autocapitalize: "none", onkeydown: (e) => { if (e.key === "Enter" && manual.value.trim()) { submit(manual.value.trim()); manual.value = ""; } } });
+  const found = h("div", { class: "found" });
+  const manual = h("input", { type: "search", placeholder: "Name, pass code or email", autocomplete: "off", autocapitalize: "none", oninput: () => { clearTimeout(lookT); lookT = setTimeout(lookup, 300); } });
+  let lookT = 0;
+  async function lookup() {
+    const q = manual.value.trim(); found.replaceChildren();
+    if (q.length < 3) return;
+    try {
+      const list = await api("GET", "/lookup?q=" + encodeURIComponent(q));
+      if (!list.length) return found.append(h("p", { class: "muted small" }, "Nobody found. Ask them to register on the website."));
+      for (const p of list) found.append(h("button", { class: "pick", type: "button", onclick: async () => {
+        try { busy = true; openSheet(await api("POST", "/scan-manual", { userId: p.id, scope: scope.value })); manual.value = ""; found.replaceChildren(); } catch (x) { busy = false; flash(x.message, "bad"); }
+      } }, h("b", {}, p.name), h("span", { class: "muted small" }, [p.passCode, p.college, p.blocked ? "BLOCKED" : ""].filter(Boolean).join(" · "))));
+    } catch (x) { flash(x.message, "bad"); }
+  }
   const video = h("video", { playsinline: true, muted: true });
   const startBtn = h("button", { class: "btn", onclick: startCam }, "Start camera");
   const startWrap = h("div", { class: "start" }, startBtn);
@@ -126,7 +139,7 @@ async function boot() {
     h("div", { class: "top" }, h("img", { src: "/checkin/qiskit.svg", alt: "" }), h("b", {}, "Check-in"), h("button", { class: "link right", onclick: async () => { stopCam(); await api("POST", "/logout"); showLogin(); } }, "Sign out")),
     h("div", { class: "scopebar" }, scope, h("div", { class: "tally" }, count, totalEl)),
     h("div", { class: "cam" }, video, h("div", { class: "corners" }), h("div", { class: "hint" }, "Point at the live pass QR"), startWrap),
-    h("details", { class: "manual" }, h("summary", {}, "Enter a code manually"), manual),
+    h("details", { class: "manual" }, h("summary", {}, "No QR? Find the person"), manual, found),
     recent, sheet, toastEl));
   refresh(); setInterval(refresh, 20000);
   startCam();

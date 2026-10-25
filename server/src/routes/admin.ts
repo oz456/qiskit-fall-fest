@@ -5,6 +5,7 @@ import { z } from "zod";
 import { config } from "../config.ts";
 import type { Db, Queryable } from "../db.ts";
 import { staffAuth } from "../lib/staff.ts";
+import { FLAGSHIP_SETTING, reconcile } from "../lib/website-sync.ts";
 import { mailRemaining } from "../lib/mail.ts";
 import { getPhoto, removePhoto } from "../lib/photos.ts";
 import { devicesForAll, devicesForUser, pushInBackground } from "../lib/push.ts";
@@ -126,15 +127,15 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
 
     // ---- attendees ----
     api.get("/admin/api/users", async (req) => {
-      const { q } = z.object({ q: z.string().max(100).optional() }).parse(req.query);
+      const { q, kind } = z.object({ q: z.string().max(100).optional(), kind: z.enum(["student", "faculty", "unclear", "external"]).optional() }).parse(req.query);
       const like = q ? `%${q.replace(/[%_\\]/g, "\\$&").toLowerCase()}%` : "%";
-      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,
+      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,
         EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL) AS has_app, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id) AS has_photo,
         (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins,
         (SELECT coalesce(json_agg(e.title ORDER BY e.starts_at), '[]'::json) FROM user_events r JOIN events e ON e.id=r.event_id WHERE r.user_id=u.id AND r.kind='registered') AS enrolled,
         (SELECT coalesce(json_agg(r.event_id), '[]'::json) FROM user_events r WHERE r.user_id=u.id AND r.kind='registered') AS enrolled_ids
-        FROM users u WHERE lower(u.email) LIKE $1 OR lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1 ORDER BY u.created_at DESC LIMIT 500`, [like]);
-      return rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins, enrolled: u.enrolled, enrolledIds: u.enrolled_ids }));
+        FROM users u WHERE (lower(u.email) LIKE $1 OR lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1) AND ($2::text IS NULL OR u.kind=$2) ORDER BY u.created_at DESC LIMIT 500`, [like, kind ?? null]);
+      return rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins, enrolled: u.enrolled, enrolledIds: u.enrolled_ids }));
     });
     api.get("/admin/api/users/:id/photo", async (req, reply) => {
       const { id } = Id.parse(req.params);
@@ -280,6 +281,22 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const b = SettingsInput.parse(req.body);
       for (const [k, v] of Object.entries(b)) await db.query("INSERT INTO settings (key,value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [k, v]);
       await audit(db, req, "settings.update"); return { ok: true };
+    });
+
+    // ---- website sync (people come from the main website; see lib/website-sync.ts) ----
+    api.get("/admin/api/sync", async () => {
+      const runs = await db.query("SELECT id,started_at,finished_at,trigger,status,seen,created,updated,skipped,registered,error FROM sync_runs ORDER BY started_at DESC LIMIT 8");
+      const [fs] = await db.query("SELECT value FROM settings WHERE key=$1", [FLAGSHIP_SETTING]);
+      const [c] = await db.query("SELECT count(*) FILTER (WHERE source='website')::int AS website, count(*)::int AS total FROM users");
+      return { configured: Boolean(config.website.secret), websiteUrl: config.website.baseUrl, flagshipEventId: fs?.value ?? "", fromWebsite: c!.website, total: c!.total,
+        runs: runs.map((r) => ({ at: new Date(r.started_at).toISOString(), trigger: r.trigger, status: r.status, seen: r.seen, created: r.created, updated: r.updated, skipped: r.skipped, registered: r.registered, error: r.error })) };
+    });
+    api.post("/admin/api/sync/run", { config: { rateLimit: { max: 6, timeWindow: "1 minute" } } }, async (req) => { const r = await reconcile(db, "admin"); await audit(db, req, "sync.run", undefined, undefined, { ok: r.ok }); return r; });
+    api.put("/admin/api/sync/flagship-event", async (req) => {
+      const { eventId } = z.object({ eventId: z.union([z.string().uuid(), z.literal("")]) }).parse(req.body);
+      if (eventId && !(await db.query("SELECT 1 FROM events WHERE id=$1", [eventId]))[0]) return { ok: false, message: "Unknown event." };
+      if (eventId) await db.query("INSERT INTO settings (key,value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [FLAGSHIP_SETTING, eventId]); else await db.query("DELETE FROM settings WHERE key=$1", [FLAGSHIP_SETTING]);
+      await audit(db, req, "sync.flagship_event", "event", eventId || undefined); return { ok: true };
     });
 
     // ---- attendance (read-only view of what the /check scanners recorded) ----

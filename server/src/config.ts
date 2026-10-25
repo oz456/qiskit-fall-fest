@@ -29,6 +29,8 @@ const Env = z.object({
   APNS_KEY_ID: z.string().optional(),
   APNS_TEAM_ID: z.string().optional(),
   APNS_TOPIC: z.string().default("org.qiskit.fallfest.amaravati"),
+  SYNC_SECRET: z.string().min(20).optional(),    // shared with the main website: it pushes registrations to /integrations/website/*, we pull its export with it
+  WEBSITE_URL: z.string().url().default("https://www.qffsrmap2026.com"),
   WEB_APP_PLATFORMS: z.string().default("ios"), // who may open the /attendee web app: comma list of ios,android,desktop (production: ios only)
   PHOTO_BUCKET: z.string().optional(), // private GCS bucket for attendee selfies (prod); dev/tests use PHOTO_DIR
   PHOTO_DIR: z.string().default(".photos"),
@@ -62,6 +64,7 @@ export const config = {
   env: e.NODE_ENV,
   photoBucket: e.PHOTO_BUCKET,
   vapid: e.VAPID_PUBLIC_KEY && e.VAPID_PRIVATE_KEY ? { publicKey: e.VAPID_PUBLIC_KEY, privateKey: e.VAPID_PRIVATE_KEY, subject: e.PUBLIC_URL ?? "https://app.qffsrmap2026.com" } : undefined,
+  website: { baseUrl: e.WEBSITE_URL.replace(/\/+$/, ""), secret: e.SYNC_SECRET },
   webAppPlatforms: e.WEB_APP_PLATFORMS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean),
   fcmProject: e.FCM_PROJECT, fcmTestToken: isProd ? undefined : e.FCM_TEST_TOKEN,
   apns: e.APNS_KEY_P8 && e.APNS_KEY_ID && e.APNS_TEAM_ID ? { key: e.APNS_KEY_P8.replace(/\\n/g, "\n"), keyId: e.APNS_KEY_ID, teamId: e.APNS_TEAM_ID, topic: e.APNS_TOPIC } : undefined,

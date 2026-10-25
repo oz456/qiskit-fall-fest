@@ -7,6 +7,8 @@ import { hmac, passPayload } from "../src/lib/crypto.ts";
 import { config } from "../src/config.ts";
 import { exportTables, importTables } from "../src/lib/backup.ts";
 import { outbox } from "../src/lib/push.ts";
+import { classifyEmail } from "../src/lib/website-sync.ts";
+import { createServer } from "node:http";
 
 let app: Awaited<ReturnType<typeof buildApp>>; let db: Db;
 let cookie = ""; let csrf = ""; let ccookie = ""; let ccsrf = "";
@@ -120,7 +122,7 @@ describe("attendee flow", () => {
     const a = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email } });
     const b = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "stranger@example.org" } });
     assert.equal(a.statusCode, 200);
-    assert.equal(b.statusCode, 404); assert.equal(b.json().error, "not_registered"); assert.match(b.json().message, /attendee list/);
+    assert.equal(b.statusCode, 404); assert.equal(b.json().error, "not_registered"); assert.match(b.json().message, /isn.t registered yet/);
     const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int n FROM otp_codes WHERE email='stranger@example.org'");
     assert.equal(n, 0);
   });
@@ -425,5 +427,101 @@ describe("addresses: one canonical URL per page, proper 404s", () => {
   it("the APK is a download with the right type", async () => {
     const r = await get("/downloads/qff-2026.apk"); assert.equal(r.statusCode, 200);
     assert.match(String(r.headers["content-disposition"]), /attachment; filename="qff-2026.apk"/); assert.match(String(r.headers["content-type"]), /android\.package-archive/);
+  });
+});
+
+describe("website sync: people registered on the main website become attendees here", () => {
+  const KEY = "sync-test-secret-0123456789"; const auth = { authorization: `Bearer ${KEY}` };
+  const push = (people: unknown[], headers: Record<string, string> = auth) => app.inject({ method: "POST", url: "/integrations/website/attendees", headers, payload: { people } });
+  let flagshipEvent = "";
+
+  it("labels SRM addresses: underscore = student, dot = faculty, anything else on the domain = unclear, other domains = external", () => {
+    assert.equal(classifyEmail("vaishnav_s@srmap.edu.in"), "student"); assert.equal(classifyEmail("Vaishnav_S@SRMAP.edu.in"), "student");
+    assert.equal(classifyEmail("vaishnav.s@srmap.edu.in"), "faculty"); assert.equal(classifyEmail("vaishnav@srmap.edu.in"), "unclear");
+    assert.equal(classifyEmail("a_b.c@srmap.edu.in"), "unclear"); assert.equal(classifyEmail("a_b@gmail.com"), "external"); assert.equal(classifyEmail("a_b@x.srmap.edu.in"), "external");
+  });
+  it("only the shared key gets in", async () => {
+    config.website.secret = KEY;
+    assert.equal((await push([{ email: "x@example.org", name: "X" }], {})).statusCode, 401);
+    assert.equal((await push([{ email: "x@example.org", name: "X" }], { authorization: "Bearer wrong-key-wrong-key-wrong" })).statusCode, 401);
+    assert.equal((await app.inject({ method: "POST", url: "/integrations/website/reconcile" })).statusCode, 401);
+    config.website.secret = undefined; assert.equal((await push([{ email: "x@example.org", name: "X" }])).statusCode, 401, "no key configured = closed"); config.website.secret = KEY;
+  });
+  it("adds people once, keeps names and admin decisions, labels them, skips non-participants", async () => {
+    const a = (await push([{ email: "Ravi_K@srmap.edu.in", name: "Ravi Kumar", institution: "SRM AP" }, { email: "prof.rao@srmap.edu.in", name: "Prof Rao" }, { email: "ext@example.org", name: "Ext Person", institution: "IIT" },
+      { email: "mentor@example.org", name: "A Mentor", role: "mentor" }, { email: "gone@example.org", name: "Gone", isActive: false }, { email: "not-an-email", name: "Bad" }])).json();
+    assert.deepEqual([a.created, a.skipped, a.failed], [3, 3, 0]);
+    const rows = (await admin("GET", "/admin/api/users")).json(); const by = (e: string) => rows.find((u: any) => u.email === e);
+    assert.equal(by("ravi_k@srmap.edu.in").kind, "student"); assert.equal(by("ravi_k@srmap.edu.in").source, "website"); assert.equal(by("prof.rao@srmap.edu.in").kind, "faculty"); assert.equal(by("ext@example.org").kind, "external");
+    assert.equal(by("mentor@example.org"), undefined); assert.equal(by("gone@example.org"), undefined);
+    const again = (await push([{ email: "ravi_k@srmap.edu.in", name: "Changed Name", institution: "Other" }])).json();
+    assert.deepEqual([again.created, again.updated], [0, 0]); assert.equal(by("ravi_k@srmap.edu.in").name, "Ravi Kumar");
+    assert.equal((await admin("GET", "/admin/api/users?kind=faculty")).json().map((u: any) => u.email).join(), "prof.rao@srmap.edu.in");
+    // switched off on the website -> blocked here, but only for people who came from the website
+    await push([{ email: "ravi_k@srmap.edu.in", name: "Ravi Kumar", isActive: false }]);
+    assert.equal((await admin("GET", "/admin/api/users")).json().find((u: any) => u.email === "ravi_k@srmap.edu.in").status, "blocked");
+    await admin("POST", "/admin/api/users", { email: "adminmade@example.org", name: "Admin Made", college: null });
+    await push([{ email: "adminmade@example.org", name: "Admin Made", isActive: false }]);
+    assert.equal((await admin("GET", "/admin/api/users")).json().find((u: any) => u.email === "adminmade@example.org").status, "active", "admin-created people are never switched off by the website");
+  });
+  it("an email that isn't registered yet gets a pointer to the website; after the sync it can log in", async () => {
+    const r = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "late.comer@example.org" } });
+    assert.equal(r.statusCode, 404); assert.match(r.json().message, /Register on the Fall Fest website first/);
+    await push([{ email: "late.comer@example.org", name: "Late Comer" }]);
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "late.comer@example.org" } })).statusCode, 200);
+  });
+  it("Rs 499 flagship pass holders are registered for the chosen event; nothing else changes", async () => {
+    flagshipEvent = (await admin("POST", "/admin/api/events", { title: "Grand Finale", description: "x", track: "Hackathon", location: "SRM", startsAt: new Date(Date.now() + 86400_000).toISOString(), endsAt: new Date(Date.now() + 2 * 86400_000).toISOString(), access: "prereg", registrationRequired: true, published: true })).json().id;
+    assert.ok(flagshipEvent);
+    const before = (await push([{ email: "fin@example.org", name: "Finalist", flagshipPass: true }])).json(); assert.equal(before.registered, 0, "no event chosen yet: nobody is registered");
+    assert.equal((await admin("PUT", "/admin/api/sync/flagship-event", { eventId: flagshipEvent })).json().ok, true);
+    assert.equal((await admin("PUT", "/admin/api/sync/flagship-event", { eventId: "a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d" })).json().ok, false);
+    const r1 = (await push([{ email: "fin@example.org", name: "Finalist", flagshipPass: true }, { email: "plain@example.org", name: "Plain" }])).json(); assert.equal(r1.registered, 1);
+    assert.equal((await push([{ email: "fin@example.org", name: "Finalist", flagshipPass: true }])).json().registered, 0, "repeat is a no-op");
+    const rows = (await admin("GET", "/admin/api/users")).json();
+    assert.equal(rows.find((u: any) => u.email === "fin@example.org").enrolledIds.join(), flagshipEvent); assert.equal(rows.find((u: any) => u.email === "plain@example.org").enrolledIds.length, 0);
+  });
+  it("pulls the website's export (several pages) on a schedule or from the admin button, and logs it", async () => {
+    const pages = [{ people: [{ email: "p1@example.org", name: "P One", flagshipPass: true }, { email: "p2_x@srmap.edu.in", name: "P Two" }], nextCursor: "c2" }, { people: [{ email: "p3@example.org", name: "P Three" }], nextCursor: null }];
+    let seenAuth = ""; const srv = createServer((req, res) => { seenAuth = String(req.headers.authorization); const cur = new URL(req.url!, "http://x").searchParams.get("cursor"); res.setHeader("content-type", "application/json"); res.end(JSON.stringify(pages[cur ? 1 : 0])); });
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r)); const was = config.website.baseUrl; config.website.baseUrl = `http://127.0.0.1:${(srv.address() as any).port}`;
+    try {
+      const run = (await admin("POST", "/admin/api/sync/run")).json(); assert.equal(run.ok, true); assert.equal(seenAuth, `Bearer ${KEY}`);
+      assert.deepEqual([run.counts.seen, run.counts.created, run.counts.registered], [3, 3, 1]);
+      const sch = (await app.inject({ method: "POST", url: "/integrations/website/reconcile", headers: auth })).json(); assert.equal(sch.ok, true); assert.equal(sch.counts.created, 0, "second run adds nothing");
+      const st = (await admin("GET", "/admin/api/sync")).json(); assert.equal(st.configured, true); assert.equal(st.flagshipEventId, flagshipEvent); assert.ok(st.runs.some((r: any) => r.trigger === "scheduler" && r.status === "ok"));
+      await db.query("INSERT INTO sync_runs (trigger) VALUES ('admin')"); // a run in progress blocks a second one
+      assert.match((await admin("POST", "/admin/api/sync/run")).json().message, /already running/); await db.query("DELETE FROM sync_runs WHERE status='running'");
+      srv.close(); srv.closeAllConnections();
+      const down = (await admin("POST", "/admin/api/sync/run")).json(); assert.equal(down.ok, false); assert.match(down.message, /Sync failed/);
+    } finally { config.website.baseUrl = was; srv.close(); }
+  });
+});
+
+describe("check-in never blocks someone for not being registered; lookup for dead phones", () => {
+  it("an unregistered person scanned at a pre-registration event gets a warning, can be let in, and shows up in attendance", async () => {
+    const [ev] = await db.query("INSERT INTO events (title,description,track,location,starts_at,ends_at,access,registration_required) VALUES ('Prereg Only','x','Main','SRM',now(),now() + interval '2 hours','prereg',true) RETURNING id");
+    const u = (await db.query("SELECT id,pass_code,pass_secret FROM users WHERE email='ext@example.org'"))[0]!;
+    const scope = `event:${ev!.id}`;
+    const v = (await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(u.pass_secret), u.pass_code), scope })).json();
+    assert.equal(v.result, "verify"); assert.match(v.warning, /Not on the registered list for this event\. You can still let them in/);
+    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
+    const att = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(scope)}`)).json(); assert.equal(att.rows.length, 1); assert.equal(att.rows[0].name, "Ext Person");
+  });
+  it("finds a person by name or pass code, then runs the same face check", async () => {
+    assert.equal((await check("GET", "/checkin/api/lookup?q=ab")).statusCode, 400, "needs 3+ characters");
+    assert.equal((await app.inject({ url: "/checkin/api/lookup?q=finalist" })).statusCode, 401, "scanner login required");
+    const hits = (await check("GET", "/checkin/api/lookup?q=finalist")).json(); assert.equal(hits.length, 1); assert.equal(hits[0].name, "Finalist");
+    const byCode = (await check("GET", `/checkin/api/lookup?q=${hits[0].passCode.toLowerCase()}`)).json(); assert.equal(byCode[0].id, hits[0].id);
+    const scope = "day:2026-10-26";
+    const v = (await check("POST", "/checkin/api/scan-manual", { userId: hits[0].id, scope })).json();
+    assert.equal(v.result, "verify"); assert.match(v.warning, /Found by search, no QR was scanned/); assert.equal(v.who.name, "Finalist");
+    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
+    assert.equal((await check("POST", "/checkin/api/scan-manual", { userId: hits[0].id, scope })).json().result, "duplicate");
+    assert.equal((await check("POST", "/checkin/api/scan-manual", { userId: "a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d", scope })).json().result, "invalid");
+    await db.query("UPDATE users SET status='blocked' WHERE id=$1", [hits[0].id]);
+    assert.equal((await check("POST", "/checkin/api/scan-manual", { userId: hits[0].id, scope: "day:2026-10-27" })).json().result, "blocked");
+    await db.query("UPDATE users SET status='active' WHERE id=$1", [hits[0].id]);
+    assert.ok((await db.query("SELECT 1 FROM audit_log WHERE action='check.manual_lookup'")).length >= 2, "manual lookups are on the record");
   });
 });

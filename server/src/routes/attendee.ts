@@ -45,9 +45,9 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
   app.post("/v1/auth/request-code", { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } }, async (req, reply) => {
     const { email } = z.object({ email: Email }).parse(req.body);
     const [user] = await db.query("SELECT id, status FROM users WHERE lower(email)=$1", [email]);
-    // The attendee list is closed and pre-registered, so say plainly when an email isn't on it (otherwise people just wait for a mail that never comes).
+    // The attendee list is closed (people register on the website and are synced in), so say plainly when an email isn't on it (otherwise people just wait for a mail that never comes).
     // The route is rate-limited per IP, which bounds how fast the list could be probed.
-    if (!user) return reply.code(404).send({ error: "not_registered", message: "This email isn't on the attendee list. Use the exact email you registered with." });
+    if (!user) return reply.code(404).send({ error: "not_registered", message: "This email isn't registered yet. Register on the Fall Fest website first (www.qffsrmap2026.com/learning); it appears here within a few minutes. Use the same email you registered with." });
     if (user.status !== "active") return reply.code(403).send({ error: "account_inactive", message: "This account isn't active. Please contact the organisers." });
     const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '10 minutes'", [email]);
     if (n >= 3) return reply.code(429).send({ error: "too_many_codes", message: "You've requested several codes already. Use the latest one in your inbox (check spam), or try again in 10 minutes." });
