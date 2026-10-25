@@ -409,7 +409,7 @@ describe("addresses: one canonical URL per page, proper 404s", () => {
   const get = (url: string, headers: Record<string, string> = {}) => app.inject({ method: "GET", url, headers: { "user-agent": ios, ...headers } });
   it("duplicate spellings redirect permanently to the canonical address; retired names are simply gone", async () => {
     for (const [from, to] of [["/admin/", "/admin"], ["/checkin/", "/checkin"], ["/index.html", "/"], ["/admin/index.html", "/admin"], ["/checkin/index.html", "/checkin"],
-      ["/attendee/index.html", "/attendee"], ["/attendee/hub/", "/attendee/hub"], ["/attendee/pass/", "/attendee/pass"], ["/attendee/support/", "/attendee/support"], ["/favicon.ico", "/shared/qiskit.svg"]] as const) {
+      ["/attendee/index.html", "/attendee"], ["/attendee/hub/", "/attendee/hub"], ["/attendee/pass/", "/attendee/pass"], ["/attendee/support/", "/attendee/support"], ["/favicon.ico", "/shared/favicon.ico"]] as const) {
       const r = await get(from); assert.equal(r.statusCode, 301, from); assert.equal(r.headers.location, to, from);
     }
     for (const gone of ["/user", "/user/hub", "/check", "/scan", "/download", "/download/qiskit-fallfest-2026.apk"]) assert.equal((await get(gone, { accept: "application/json" })).statusCode, 404, gone);

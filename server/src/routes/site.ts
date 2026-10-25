@@ -18,7 +18,7 @@ export async function siteRoutes(app: FastifyInstance) {
   app.get("/admin", async (_req, reply) => reply.header("Cache-Control", "no-cache").sendFile("index.html", join(pub, "admin")));
   app.get("/checkin", async (_req, reply) => reply.header("Cache-Control", "no-cache").sendFile("index.html", join(pub, "checkin")));
   // duplicate spellings (trailing slash, /index.html) redirect to the one canonical address
-  for (const [from, to] of [["/admin/", "/admin"], ["/admin/index.html", "/admin"], ["/checkin/", "/checkin"], ["/checkin/index.html", "/checkin"], ["/index.html", "/"], ["/favicon.ico", "/shared/qiskit.svg"]] as const)
+  for (const [from, to] of [["/admin/", "/admin"], ["/admin/index.html", "/admin"], ["/checkin/", "/checkin"], ["/checkin/index.html", "/checkin"], ["/index.html", "/"], ["/favicon.ico", "/shared/favicon.ico"]] as const)
     app.get(from, async (_req, reply) => reply.redirect(to, 301));
 
   // ---- shared assets and downloads ----
