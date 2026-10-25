@@ -146,7 +146,7 @@ async function people(m) {
     const last = s.runs.find((r) => r.status !== "running"), when = (iso) => new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     syncBox.append(h("h3", {}, "Website sync"),
       h("p", { class: "muted small" }, s.configured ? `People who register on ${s.websiteUrl.replace(/^https?:\/\//, "")} appear here automatically (${s.fromWebsite} so far, ${s.total} in total). Checked every 10 minutes and whenever someone registers.` : "Not connected: the sync key is not set on the server."),
-      access && h("p", { class: "small" }, `${access.total.toLocaleString()} in the app: ${access.srm.toLocaleString()} with an SRM email · ${access.general.toLocaleString()} with the ₹99 pass · ${access.flagship.toLocaleString()} with the ₹499 pass · ${access.signedIn.toLocaleString()} signed in · ${access.outsideWithoutPass.toLocaleString()} outside SRM without a pass`),
+      access && h("p", { class: "small" }, `${access.total.toLocaleString()} in the app: ${access.srm.toLocaleString()} with an SRM email · ${access.outsideFlagship.toLocaleString()} outside SRM with the ₹499 pass · ${access.outsideGeneral.toLocaleString()} outside SRM with the ₹99 pass · ${access.signedIn.toLocaleString()} signed in`),
       last && h("p", { class: "small" }, `Last run ${when(last.at)} · ${last.status === "ok" ? `saw ${last.seen}, added ${last.created}, updated ${last.updated}` : "failed: " + (last.error || "")}`),
       h("div", { class: "row" },
         h("button", { class: "btn ghost", disabled: !s.configured, onclick: guard(async () => { const r = await api("POST", "/sync/run"); toast(r.message); await drawSync(); await load(); }) }, "Sync now"),

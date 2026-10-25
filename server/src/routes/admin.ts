@@ -110,17 +110,18 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     // Who is in the app, by how they got in: SRM address, ₹99 pass, ₹499 pass, or neither. Signed in = has a live session.
     api.get("/admin/api/access-summary", async () => {
+      const OUT = "lower(u.email) NOT LIKE '%@srmap.edu.in'";
       const [r] = await db.query(`SELECT count(*)::int AS total,
         count(*) FILTER (WHERE EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL))::int AS signed_in,
         count(*) FILTER (WHERE lower(u.email) LIKE '%@srmap.edu.in')::int AS srm,
-        count(*) FILTER (WHERE u.pass_tier='general')::int AS general, count(*) FILTER (WHERE u.pass_tier='flagship')::int AS flagship,
-        count(*) FILTER (WHERE lower(u.email) NOT LIKE '%@srmap.edu.in' AND u.pass_tier IS NULL)::int AS outside_without_pass
+        count(*) FILTER (WHERE ${OUT} AND u.pass_tier='general')::int AS outside_general,
+        count(*) FILTER (WHERE ${OUT} AND u.pass_tier='flagship')::int AS outside_flagship
         FROM users u`);
       const [sync] = await db.query("SELECT value FROM settings WHERE key='passes_synced_at'");
-      return { total: r!.total, signedIn: r!.signed_in, srm: r!.srm, general: r!.general, flagship: r!.flagship, outsideWithoutPass: r!.outside_without_pass, passesSyncedAt: sync?.value ?? null };
+      return { total: r!.total, signedIn: r!.signed_in, srm: r!.srm, outsideGeneral: r!.outside_general, outsideFlagship: r!.outside_flagship, passesSyncedAt: sync?.value ?? null };
     });
-    // Removes outside people (not @srmap.edu.in) who hold no verified ₹99/₹499 pass AND never signed in, never did a selfie and never checked in.
-    // Anyone who signed in, took a selfie, checked in, was added by hand or has a pass is never touched. Refuses to run before the pass list has been synced.
+    // Outside people whose payment is waiting for review or was rejected (they see the matching message at sign-in).
+    api.get("/admin/api/pass-claims-waiting", async () => (await db.query("SELECT email, status, updated_at FROM pass_claim_status ORDER BY status, email")).map((r) => ({ email: r.email, status: r.status, at: new Date(r.updated_at).toISOString() })));
     // Cross-check against the website's own pass table: claims by tier / status / paid-or-free / SRM-or-outside.
     api.get("/admin/api/pass-report", async () => {
       const { baseUrl, secret } = config.website; if (!secret) return { ok: false, message: "Website sync is not configured." };
