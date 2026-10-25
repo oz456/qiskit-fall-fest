@@ -13,6 +13,10 @@ export interface StaffCfg {
   user: string;
   password?: string;
   hash?: string;
+  /** Extra named logins (door volunteers), each with its own password hash. Checked in addition to user/hash. */
+  accounts?: { user: string; hash: string }[];
+  /** Login attempts allowed per IP per 15 minutes (a whole door team can share one Wi-Fi address). Default 5. */
+  loginLimit?: number;
   ttlSec: number;
 }
 
@@ -26,11 +30,13 @@ export function staffAuth(app: FastifyInstance, db: Db, cfg: StaffCfg) {
   };
   const credsOk = (user: string, pass: string) => {
     const userOk = safeEqual(user, cfg.user);
-    const passOk = cfg.hash ? verifyPasswordHash(pass, cfg.hash) : safeEqual(pass, cfg.password ?? "\u0000none");
-    return userOk && passOk; // evaluate both so timing doesn't reveal which was wrong
+    const passOk = cfg.hash ? verifyPasswordHash(pass, cfg.hash) : cfg.password ? safeEqual(pass, cfg.password) : false; // no legacy login configured = none
+    let named = false;
+    for (const a of cfg.accounts ?? []) if (safeEqual(user, a.user) && verifyPasswordHash(pass, a.hash)) named = true; // no early exit: timing must not reveal which account exists
+    return (userOk && passOk) || named; // evaluate both so timing doesn't reveal which was wrong
   };
 
-  app.post(`${base}/api/login`, { config: { rateLimit: { max: 5, timeWindow: "15 minutes" } } }, async (req, reply) => {
+  app.post(`${base}/api/login`, { config: { rateLimit: { max: cfg.loginLimit ?? 5, timeWindow: "15 minutes" } } }, async (req, reply) => {
     const b = z.object({ username: z.string().max(200), password: z.string().max(500) }).parse(req.body);
     if (!credsOk(b.username, b.password)) {
       await db.query("INSERT INTO audit_log (action, ip) VALUES ($1, $2)", [`${cfg.name}.login_failed`, req.ip]);
@@ -43,7 +49,7 @@ export function staffAuth(app: FastifyInstance, db: Db, cfg: StaffCfg) {
     reply.setCookie(cookie, signJwt({ aud: cfg.name, csrf, jti }, config.sessionSecret, cfg.ttlSec), {
       httpOnly: true, secure: isProd, sameSite: "strict", path: base, maxAge: cfg.ttlSec,
     });
-    await audit(db, req, `${cfg.name}.login`);
+    await audit(db, req, `${cfg.name}.login`, "staff", b.username.slice(0, 40));
     return { ok: true, csrf };
   });
 

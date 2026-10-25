@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { migrate, openDb, type Db } from "../src/db.ts";
 import { buildApp } from "../src/app.ts";
-import { hmac, passPayload } from "../src/lib/crypto.ts";
+import { hashPassword, hmac, passPayload } from "../src/lib/crypto.ts";
 import { config } from "../src/config.ts";
 import { exportTables, importTables } from "../src/lib/backup.ts";
 import { outbox } from "../src/lib/push.ts";
@@ -58,6 +58,16 @@ describe("scanner/admin separation", () => {
     assert.equal((await app.inject({ method: "GET", url: "/checkin/api/scopes", headers: { cookie } })).statusCode, 401);
     assert.equal((await app.inject({ method: "POST", url: "/checkin/api/login", payload: { username: "admin", password: "admin-dev-password" } })).statusCode, 401);
     assert.equal((await app.inject({ method: "POST", url: "/admin/api/login", payload: { username: "check", password: "check-dev-password" } })).statusCode, 401);
+  });
+
+  it("named door logins (CHECK_ACCOUNTS) each work with their own password, and only for /checkin", async () => {
+    config.checkAccounts.push({ user: "AP00000000001", hash: hashPassword("AP00000000001abc") }, { user: "AP00000000002", hash: hashPassword("AP00000000002xyz") });
+    const login = (username: string, password: string, site = "checkin") => app.inject({ method: "POST", url: `/${site}/api/login`, payload: { username, password } });
+    assert.equal((await login("AP00000000001", "AP00000000001abc")).statusCode, 200);
+    assert.equal((await login("AP00000000002", "AP00000000002xyz")).statusCode, 200);
+    assert.equal((await login("AP00000000001", "AP00000000002xyz")).statusCode, 401, "another volunteer's password does not work");
+    assert.equal((await login("AP00000000001", "AP00000000001abc", "admin")).statusCode, 401, "door logins never open /admin");
+    config.checkAccounts.length = 0;
   });
 });
 

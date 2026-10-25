@@ -11,7 +11,7 @@ import { audit, eventDay } from "../lib/util.ts";
 const Scope = z.string().regex(/^(day:\d{4}-\d{2}-\d{2}|event:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/);
 
 export function checkinRoutes(app: FastifyInstance, db: Db) {
-  const { guard, common } = staffAuth(app, db, { name: "check", base: "/checkin", user: config.checkUser, password: config.checkPassword, hash: config.checkPasswordHash, ttlSec: 12 * 3600 });
+  const { guard, common } = staffAuth(app, db, { name: "check", base: "/checkin", user: config.checkUser, password: config.checkPassword, hash: config.checkPasswordHash, accounts: config.checkAccounts, loginLimit: 40, ttlSec: 12 * 3600 });
 
   app.register(async (api) => {
     api.addHook("preHandler", guard);

@@ -13,6 +13,7 @@ const Env = z.object({
   CHECK_USERNAME: z.string().min(3).optional(),
   CHECK_PASSWORD: z.string().min(10).optional(),
   CHECK_PASSWORD_HASH: z.string().optional(),
+  CHECK_ACCOUNTS: z.string().optional(), // JSON [{"user":"AP…","hash":"scrypt$…"}]: named door logins; when set, CHECK_USERNAME/CHECK_PASSWORD_HASH are not needed
   // JSON array: [{"user":"a@gmail.com","pass":"16-char app password"}, ...] — several accounts = round-robin
   SMTP_ACCOUNTS: z.string().optional(),
   SMTP_HOST: z.string().default("smtp.gmail.com"),
@@ -42,15 +43,22 @@ if (!parsed.success) {
   process.exit(1);
 }
 const e = parsed.data;
+function parseAccounts(raw?: string): { user: string; hash: string }[] {
+  if (!raw) return [];
+  try { const a = JSON.parse(raw); return Array.isArray(a) ? a.filter((x) => typeof x?.user === "string" && x.user.length >= 3 && typeof x?.hash === "string" && x.hash.startsWith("scrypt$")) : []; } catch { return []; }
+}
 export const isProd = e.NODE_ENV === "production";
 
 // Fail fast in production: never boot with missing security-critical config.
 if (isProd) {
-  const missing = ["DATABASE_URL", "JWT_SECRET", "SESSION_SECRET", "OTP_PEPPER", "ADMIN_USERNAME", "CHECK_USERNAME", "SMTP_ACCOUNTS"].filter(
+  const missing = ["DATABASE_URL", "JWT_SECRET", "SESSION_SECRET", "OTP_PEPPER", "ADMIN_USERNAME", "SMTP_ACCOUNTS"].filter(
     (k) => !(e as Record<string, unknown>)[k],
   );
   if (!e.ADMIN_PASSWORD_HASH) missing.push("ADMIN_PASSWORD_HASH (plain ADMIN_PASSWORD is dev-only)");
-  if (!e.CHECK_PASSWORD_HASH) missing.push("CHECK_PASSWORD_HASH (plain CHECK_PASSWORD is dev-only)");
+  if (!e.CHECK_ACCOUNTS) {
+    if (!e.CHECK_USERNAME) missing.push("CHECK_USERNAME (or CHECK_ACCOUNTS)");
+    if (!e.CHECK_PASSWORD_HASH) missing.push("CHECK_PASSWORD_HASH (plain CHECK_PASSWORD is dev-only; or set CHECK_ACCOUNTS)");
+  }
   if (e.ADMIN_USERNAME && e.ADMIN_USERNAME === e.CHECK_USERNAME) missing.push("CHECK_USERNAME (must differ from ADMIN_USERNAME)");
   if (missing.length) {
     console.error("Missing required production env vars:", missing.join(", "));
@@ -80,6 +88,7 @@ export const config = {
   checkUser: e.CHECK_USERNAME ?? "check",
   checkPassword: e.CHECK_PASSWORD ?? (isProd ? undefined : "check-dev-password"),
   checkPasswordHash: e.CHECK_PASSWORD_HASH,
+  checkAccounts: parseAccounts(e.CHECK_ACCOUNTS),
   smtpAccounts: ((): { user: string; pass: string }[] => {
     if (!e.SMTP_ACCOUNTS) return [];
     try {
