@@ -20,7 +20,7 @@ export class Browser {
   static async launch(): Promise<Browser> {
     const b = new Browser(); const port = 9500 + Math.floor(Math.random() * 400);
     b.chrome = spawn(chromeBin!, ["--headless=new", "--no-sandbox", "--disable-gpu", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", `--remote-debugging-port=${port}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), "qff-b-"))}`, "about:blank"], { stdio: "ignore" });
-    let tabs: any[] = []; for (let i = 0; i < 60 && !tabs.length; i++) { await b.wait(200); tabs = await fetch(`http://127.0.0.1:${port}/json`).then((r) => r.json()).catch(() => []); }
+    let tabs: any[] = []; for (let i = 0; i < 60 && !tabs.some((t) => t.type === "page"); i++) { await b.wait(200); tabs = await fetch(`http://127.0.0.1:${port}/json`).then((r) => r.json()).catch(() => []); }
     b.ws = new WebSocket(tabs.find((t) => t.type === "page").webSocketDebuggerUrl); await new Promise((r) => (b.ws.onopen = r));
     b.ws.onmessage = (m) => {
       const d = JSON.parse(String(m.data));

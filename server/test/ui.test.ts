@@ -26,7 +26,7 @@ describe("browser smoke (admin + scanner)", { skip: chromeBin ? false : "no Chro
     db = await openDb(); await migrate(db); app = await buildApp(db);
     await app.listen({ port: 0, host: "127.0.0.1" }); base = `http://127.0.0.1:${(app.server.address() as any).port}`;
     chrome = spawn(chromeBin!, ["--headless=new", "--no-sandbox", "--disable-gpu", `--remote-debugging-port=${debugPort}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), "qff-ui-"))}`, "about:blank"], { stdio: "ignore" });
-    let tabs: any[] = []; for (let i = 0; i < 50 && !tabs.length; i++) { await wait(200); tabs = await fetch(`http://127.0.0.1:${debugPort}/json`).then((r) => r.json()).catch(() => []); }
+    let tabs: any[] = []; for (let i = 0; i < 50 && !tabs.some((t) => t.type === "page"); i++) { await wait(200); tabs = await fetch(`http://127.0.0.1:${debugPort}/json`).then((r) => r.json()).catch(() => []); }
     ws = new WebSocket(tabs.find((t) => t.type === "page").webSocketDebuggerUrl); await new Promise((r) => (ws.onopen = r));
     ws.onmessage = (m) => {
       const d = JSON.parse(String(m.data));
