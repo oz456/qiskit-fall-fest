@@ -62,7 +62,7 @@ private fun rememberLivePass(app: AppState): Pair<String?, Float> {
 @Composable
 fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
     var qrOpen by remember { mutableStateOf(false) }
-    var showSaved by rememberSaveable { mutableStateOf(true) } // My Pass shows one list at a time: Attended (left) or Saved (right)
+    var showSaved by rememberSaveable { mutableStateOf(true) } // My Pass shows one list at a time: Saved (left) or Attended (right)
     SecureWindow((LocalContext.current as? Activity)?.window)
     val saved = app.events.filter { it.saved }
     val attended = app.checkins.entries.sortedByDescending { it.value }.map { app.checkinLabel(it.key, it.value) to it.key.removePrefix("event:").takeIf { k -> it.key.startsWith("event:") } }
@@ -83,7 +83,7 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
         }
         item {
             Row(Modifier.padding(horizontal = 24.dp).padding(top = 26.dp, bottom = 12.dp).fillMaxWidth().clip(CircleShape).background(P.surfaceAlt).padding(4.dp)) {
-                listOf(false to "Attended (${attended.size})", true to "Saved (${saved.size})").forEach { (isSaved, label) ->
+                listOf(true to "Saved (${saved.size})", false to "Attended (${attended.size})").forEach { (isSaved, label) ->
                     val sel = showSaved == isSaved
                     val bg by animateColorAsState(if (sel) P.primary else Color.Transparent, label = "tab")
                     Row(Modifier.weight(1f).clip(CircleShape).clickable { showSaved = isSaved }.background(bg).padding(vertical = 10.dp), horizontalArrangement = Arrangement.Center) {

@@ -7,13 +7,13 @@ struct PassView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var captured = UIScreen.main.isCaptured
     @State private var fullQR = false
-    @State private var showSaved = true // My Pass shows one list at a time: Attended (left) or Saved (right)
+    @State private var showSaved = true // My Pass shows one list at a time: Saved (left) or Attended (right)
 
     private var saved: [Event] { app.events.filter(\.saved) }
     private var attended: [(scope: String, at: Date)] { app.checkins.map { (scope: $0.key, at: $0.value) }.sorted { $0.at > $1.at } }
     private var passTabs: some View {
         HStack(spacing: 0) {
-            ForEach([(false, "Attended (\(attended.count))"), (true, "Saved (\(saved.count))")], id: \.0) { isSaved, label in
+            ForEach([(true, "Saved (\(saved.count))"), (false, "Attended (\(attended.count))")], id: \.0) { isSaved, label in
                 Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showSaved = isSaved }; Haptics.select() } label: {
                     Text(label).font(Fonts.body(13, 500, style: .footnote))
                         .foregroundStyle(showSaved == isSaved ? P.onPrimary : P.muted)

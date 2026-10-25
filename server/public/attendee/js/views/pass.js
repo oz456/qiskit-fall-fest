@@ -7,7 +7,7 @@ import { bubble, button, h, icon, posterTitle, sectionLabel, toast } from "../ui
 import { eventRow } from "./hub.js";
 
 const STEP = 30, QR_IDLE_MS = 120_000;
-let listTab = "saved";   // My Pass shows one list at a time: "attended" (left) or "saved" (right)
+let listTab = "saved";   // My Pass shows one list at a time: "saved" (left) or "attended" (right)
 let codes = [], skew = 0;
 async function fetchCodes() {
   const r = await api.passCodes();
@@ -49,7 +49,7 @@ export function passView({ open }) {
       : h("div", { class: "empty", style: { padding: "36px 40px" } }, h("p", { class: "body muted" }, "Events you save appear here. Tap the bookmark on any event to save it."));
     const attendedBox = att.length ? h("div", { class: "list" }, att.map(attRow))
       : h("div", { class: "empty", style: { padding: "36px 40px" } }, h("p", { class: "body muted" }, "Events you attend appear here after the team scans your pass at the door."));
-    const seg = h("div", { class: "seg", role: "tablist" }, ...[["attended", `Attended (${att.length})`], ["saved", `Saved (${reg.length})`]].map(([k, t]) =>
+    const seg = h("div", { class: "seg", role: "tablist" }, ...[["saved", `Saved (${reg.length})`], ["attended", `Attended (${att.length})`]].map(([k, t]) =>
       h("button", { type: "button", role: "tab", "aria-selected": String(listTab === k), class: listTab === k ? "on" : "", onclick: () => { listTab = k; update(); } }, t)));
     listBox.replaceChildren(h("div", { style: { height: "26px" } }), seg, listTab === "saved" ? savedBox : attendedBox);
   }
