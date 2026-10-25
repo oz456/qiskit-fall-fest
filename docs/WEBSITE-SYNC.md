@@ -14,7 +14,6 @@ The main website (`www.qffsrmap2026.com`, repo `qiskitfallfest-srmap/QisKit-Fall
 - SRM addresses are labelled for admin: `name_surname@srmap.edu.in` = student, `name.surname@srmap.edu.in` = faculty, other SRM addresses = unclear, everything else = outside SRM. A label only; it never grants or blocks access.
 - Switched off on the website → blocked here, but only for people who came from the website. People an admin created or blocked are never changed by the sync.
 - There is no event registration in the app: anyone with a pass can be scanned in at any event, and the Rs 99 / Rs 499 passes are not tracked here.
-- `/checkin` has "No QR? Find the person" (name, pass code or email) for dead phones. It goes through the same face check and is written to the activity log.
 
 ## Setup
 - Shared key: the same value in the website's Vercel env var `GCP_ACCESS` and in Secret Manager as `qff-sync-secret` (never in git). `./server/deploy.sh` wires it into Cloud Run as `SYNC_SECRET` automatically once the secret exists.

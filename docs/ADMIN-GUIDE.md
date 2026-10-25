@@ -15,7 +15,7 @@ Admin: `/admin`. Door scanner: `/checkin/` (a different login, give only this on
 
 ## Door scanner (`/checkin`)
 1. Pick what you're scanning for: *Campus entry* for a day (once per person per day) or a specific event.
-2. Point the camera at the attendee's live QR (or use "No QR? Find the person" for a dead phone).
+2. Point the camera at the attendee's live QR. There is no search-and-check-in: a live QR is the only way in, so nobody can be checked in as a proxy. Each volunteer has their own login; the admin Attendance page shows who scanned whom and when.
 3. The sheet shows the selfie, name and college. **Compare the face**, then **Confirm entry** or **Reject**.
 4. Warnings: "No selfie on file yet", "Already checked in" (shows when), "Stale QR" (a screenshot), "Invalid pass".
 5. If the photo can't load the sheet says PHOTO UNREADABLE: check the person's ID instead.

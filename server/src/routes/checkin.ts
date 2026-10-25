@@ -58,33 +58,16 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
       return verdict(u, b.scope);
     });
 
-    // Shared by the QR scan and the manual lookup. There is no event registration: anyone with a pass can be checked in to any event.
-    async function verdict(u: any, scope: string, manual = false) {
+    // There is no event registration: anyone with a pass can be checked in to any event. There is deliberately no search-and-check-in: a live QR is the only way in.
+    async function verdict(u: any, scope: string) {
       const who = { name: u.name, college: u.college, passCode: u.pass_code, hasPhoto: u.has_photo };
       const ticket = signJwt({ aud: "check-ticket", uid: u.id, scope }, config.sessionSecret, 120);
       const [prev] = await db.query("SELECT scanned_at FROM checkins WHERE user_id=$1 AND scope=$2", [u.id, scope]);
       if (prev) return { result: "duplicate", message: "Already checked in.", at: new Date(prev.scanned_at).toISOString(), who, ticket };
       const warnings: string[] = [];
-      if (manual) warnings.push("Found by search, no QR was scanned. Compare the face with the selfie carefully.");
       if (!u.has_photo) warnings.push("No selfie on file yet.");
       return { result: "verify", message: "Check the face, then confirm.", warning: warnings.join(" ") || undefined, who, ticket };
     }
-
-    // Phone dead or screen cracked: find the person by name, pass code or email, then go through the same face check.
-    api.get("/checkin/api/lookup", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req) => {
-      const { q } = z.object({ q: z.string().trim().min(3).max(80) }).parse(req.query);
-      const like = `%${q.replace(/[%_\\]/g, "\\$&").toLowerCase()}%`;
-      const rows = await db.query("SELECT u.id,u.name,u.college,u.pass_code,u.status, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id) AS has_photo FROM users u WHERE lower(u.name) LIKE $1 OR lower(u.pass_code) LIKE $1 OR lower(u.email) LIKE $1 ORDER BY u.name LIMIT 8", [like]);
-      return rows.map((r) => ({ id: r.id, name: r.name, college: r.college, passCode: r.pass_code, hasPhoto: r.has_photo, blocked: r.status !== "active" }));
-    });
-    api.post("/checkin/api/scan-manual", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req) => {
-      const b = z.object({ userId: z.string().uuid(), scope: Scope }).parse(req.body);
-      const [u] = await db.query("SELECT id,name,college,pass_code,status, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [b.userId]);
-      if (!u) return { result: "invalid", message: "Unknown person." };
-      await audit(db, req, "check.manual_lookup", "user", u.id, { scope: b.scope });
-      if (u.status !== "active") return { result: "blocked", message: "This pass is blocked.", who: { name: u.name, college: u.college, passCode: u.pass_code, hasPhoto: false } };
-      return verdict(u, b.scope, true);
-    });
 
     const ticketOf = (t: string) => { const c = verifyJwt<{ aud: string; uid: string; scope: string }>(t, config.sessionSecret); return c && c.aud === "check-ticket" ? c : null; };
 
@@ -93,7 +76,7 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
       const t = ticketOf(b.ticket);
       if (!t) return reply.code(400).send({ result: "expired", message: "That scan timed out. Scan the pass again." });
       if (b.decision === "reject") { await audit(db, req, "check.rejected", "user", t.uid, { scope: t.scope }); return { result: "rejected", message: "Entry rejected." }; }
-      const ins = await db.query("INSERT INTO checkins (user_id,scope) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING scanned_at", [t.uid, t.scope]);
+      const ins = await db.query("INSERT INTO checkins (user_id,scope,scanned_by) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING scanned_at", [t.uid, t.scope, (req as any).staffUser ?? null]);
       if (!ins[0]) return { result: "duplicate", message: "Already checked in." };
       return { result: "ok", message: "Checked in." };
     });

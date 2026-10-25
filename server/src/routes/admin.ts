@@ -245,8 +245,8 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const { scope } = z.object({ scope: z.string().max(60).optional() }).parse(req.query);
       const summary = await db.query("SELECT c.scope, e.title, count(*)::int AS n, max(c.scanned_at) AS last FROM checkins c LEFT JOIN events e ON c.scope = 'event:' || e.id::text GROUP BY c.scope, e.title ORDER BY c.scope"
 );
-      const rows = scope ? await db.query(`SELECT u.name, u.email, u.college, u.pass_code, c.scanned_at FROM checkins c JOIN users u ON u.id=c.user_id WHERE c.scope=$1 ORDER BY c.scanned_at DESC LIMIT 2000`, [scope]) : [];
-      return { summary: summary.map((r) => ({ scope: r.scope, title: r.title ?? null, count: r.n, last: new Date(r.last).toISOString() })), rows: rows.map((r) => ({ name: r.name, email: r.email, college: r.college, passCode: r.pass_code, at: new Date(r.scanned_at).toISOString() })) };
+      const rows = scope ? await db.query(`SELECT u.name, u.email, u.college, u.pass_code, c.scanned_at, c.scanned_by FROM checkins c JOIN users u ON u.id=c.user_id WHERE c.scope=$1 ORDER BY c.scanned_at DESC LIMIT 2000`, [scope]) : [];
+      return { summary: summary.map((r) => ({ scope: r.scope, title: r.title ?? null, count: r.n, last: new Date(r.last).toISOString() })), rows: rows.map((r) => ({ name: r.name, email: r.email, college: r.college, passCode: r.pass_code, at: new Date(r.scanned_at).toISOString(), scannedById: r.scanned_by ?? null, scannedByName: r.scanned_by ? config.checkNames[r.scanned_by] ?? null : null })) };
     });
 
     api.get("/admin/api/audit", async () => (await db.query("SELECT id, at, action, entity, entity_id, detail, ip FROM audit_log ORDER BY id DESC LIMIT 200")).map((a) => ({ ...a, at: new Date(a.at).toISOString() })));

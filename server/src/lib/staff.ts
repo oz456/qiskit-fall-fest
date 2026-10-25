@@ -44,7 +44,7 @@ export function staffAuth(app: FastifyInstance, db: Db, cfg: StaffCfg) {
       return reply.code(401).send({ error: "invalid_credentials", message: "Incorrect username or password." });
     }
     const csrf = randomToken(24); const jti = randomToken(18);
-    await db.query("INSERT INTO staff_sessions (id, site, expires_at) VALUES ($1,$2,$3)", [jti, cfg.name, new Date(Date.now() + cfg.ttlSec * 1000)]);
+    await db.query("INSERT INTO staff_sessions (id, site, expires_at, username) VALUES ($1,$2,$3,$4)", [jti, cfg.name, new Date(Date.now() + cfg.ttlSec * 1000), b.username.slice(0, 40)]);
     db.query("DELETE FROM staff_sessions WHERE expires_at < now()").catch(() => {});
     reply.setCookie(cookie, signJwt({ aud: cfg.name, csrf, jti }, config.sessionSecret, cfg.ttlSec), {
       httpOnly: true, secure: isProd, sameSite: "strict", path: base, maxAge: cfg.ttlSec,
@@ -59,7 +59,7 @@ export function staffAuth(app: FastifyInstance, db: Db, cfg: StaffCfg) {
     const c = claims(req);
     if (!c) return reply.code(401).send({ error: "unauthorized" });
     // the cookie alone is not enough: the session must still exist server-side (logout / revocation take effect immediately)
-    const [live] = await db.query("SELECT 1 FROM staff_sessions WHERE id=$1 AND site=$2 AND expires_at > now()", [c.jti, cfg.name]);
+    const [live] = await db.query("SELECT username FROM staff_sessions WHERE id=$1 AND site=$2 AND expires_at > now()", [c.jti, cfg.name]);
     if (!live) return reply.code(401).send({ error: "unauthorized" });
     if (req.method !== "GET" && req.method !== "HEAD") {
       const h = req.headers["x-csrf-token"];
@@ -67,7 +67,7 @@ export function staffAuth(app: FastifyInstance, db: Db, cfg: StaffCfg) {
       const origin = req.headers.origin; // same-origin check: the browser's Origin must be this very host
       if (isProd && origin) { let oh = ""; try { oh = new URL(origin).host; } catch {} if (oh !== req.headers.host) return reply.code(403).send({ error: "origin" }); }
     }
-    (req as any).csrf = c.csrf;
+    (req as any).csrf = c.csrf; (req as any).staffUser = live.username ?? null;
   };
 
   const common = (api: FastifyInstance) => {

@@ -482,7 +482,7 @@ describe("website sync: people registered on the main website become attendees h
   });
 });
 
-describe("check-in: anyone with a pass can be let in to any event; lookup for dead phones", () => {
+describe("check-in: anyone with a pass can be let in to any event; no manual search", () => {
   it("scanning someone at any event just works and shows up in attendance", async () => {
     const [ev] = await db.query("INSERT INTO events (title,description,track,location,starts_at,ends_at) VALUES ('Any Event','x','Main','SRM',now(),now() + interval '2 hours') RETURNING id");
     const u = (await db.query("SELECT id,pass_code,pass_secret FROM users WHERE email='ext@example.org'"))[0]!;
@@ -492,21 +492,20 @@ describe("check-in: anyone with a pass can be let in to any event; lookup for de
     assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
     const att = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(scope)}`)).json(); assert.equal(att.rows.length, 1); assert.equal(att.rows[0].name, "Ext Person");
   });
-  it("finds a person by name or pass code, then runs the same face check", async () => {
-    await admin("POST", "/admin/api/users", { email: "fin@example.org", name: "Finalist" });
-    assert.equal((await check("GET", "/checkin/api/lookup?q=ab")).statusCode, 400, "needs 3+ characters");
-    assert.equal((await app.inject({ url: "/checkin/api/lookup?q=finalist" })).statusCode, 401, "scanner login required");
-    const hits = (await check("GET", "/checkin/api/lookup?q=finalist")).json(); assert.equal(hits.length, 1); assert.equal(hits[0].name, "Finalist");
-    const byCode = (await check("GET", `/checkin/api/lookup?q=${hits[0].passCode.toLowerCase()}`)).json(); assert.equal(byCode[0].id, hits[0].id);
-    const scope = "day:2026-10-26";
-    const v = (await check("POST", "/checkin/api/scan-manual", { userId: hits[0].id, scope })).json();
-    assert.equal(v.result, "verify"); assert.match(v.warning, /Found by search, no QR was scanned/); assert.equal(v.who.name, "Finalist");
-    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
-    assert.equal((await check("POST", "/checkin/api/scan-manual", { userId: hits[0].id, scope })).json().result, "duplicate");
-    assert.equal((await check("POST", "/checkin/api/scan-manual", { userId: "a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d", scope })).json().result, "invalid");
-    await db.query("UPDATE users SET status='blocked' WHERE id=$1", [hits[0].id]);
-    assert.equal((await check("POST", "/checkin/api/scan-manual", { userId: hits[0].id, scope: "day:2026-10-27" })).json().result, "blocked");
-    await db.query("UPDATE users SET status='active' WHERE id=$1", [hits[0].id]);
-    assert.ok((await db.query("SELECT 1 FROM audit_log WHERE action='check.manual_lookup'")).length >= 2, "manual lookups are on the record");
+  it("there is no search-and-check-in: a live QR is the only way in", async () => {
+    assert.equal((await check("GET", "/checkin/api/lookup?q=finalist")).statusCode, 404);
+    assert.equal((await check("POST", "/checkin/api/scan-manual", { userId: "a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d", scope: "day:2026-10-26" })).statusCode, 404);
+  });
+  it("the admin sees which door volunteer scanned whom", async () => {
+    config.checkAccounts.push({ user: "AP00000000009", hash: hashPassword("AP00000000009qqq") }); config.checkNames["AP00000000009"] = "Door Volunteer";
+    const lg = await app.inject({ method: "POST", url: "/checkin/api/login", payload: { username: "AP00000000009", password: "AP00000000009qqq" } });
+    const hdr = { cookie: String(lg.headers["set-cookie"]).split(";")[0]!, "x-csrf-token": lg.json().csrf };
+    const u = (await db.query("SELECT id,pass_code,pass_secret FROM users WHERE email='ext@example.org'"))[0]!;
+    const scope = "day:2026-10-29";
+    const v = (await app.inject({ method: "POST", url: "/checkin/api/scan", headers: hdr, payload: { payload: passPayload(Buffer.from(u.pass_secret), u.pass_code), scope } })).json();
+    assert.equal((await app.inject({ method: "POST", url: "/checkin/api/confirm", headers: hdr, payload: { ticket: v.ticket, decision: "confirm" } })).json().result, "ok");
+    const row = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(scope)}`)).json().rows[0];
+    assert.equal(row.scannedById, "AP00000000009"); assert.equal(row.scannedByName, "Door Volunteer"); assert.ok(row.at);
+    config.checkAccounts.length = 0; delete config.checkNames["AP00000000009"];
   });
 });

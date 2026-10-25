@@ -13,6 +13,7 @@ const Env = z.object({
   CHECK_USERNAME: z.string().min(3).optional(),
   CHECK_PASSWORD: z.string().min(10).optional(),
   CHECK_PASSWORD_HASH: z.string().optional(),
+  CHECK_NAMES: z.string().optional(), // JSON {"AP…":"Full Name"}: who each door login belongs to (shown in the admin Attendance page)
   CHECK_ACCOUNTS: z.string().optional(), // JSON [{"user":"AP…","hash":"scrypt$…"}]: named door logins; when set, CHECK_USERNAME/CHECK_PASSWORD_HASH are not needed
   // JSON array: [{"user":"a@gmail.com","pass":"16-char app password"}, ...] — several accounts = round-robin
   SMTP_ACCOUNTS: z.string().optional(),
@@ -89,6 +90,7 @@ export const config = {
   checkPassword: e.CHECK_PASSWORD ?? (isProd ? undefined : "check-dev-password"),
   checkPasswordHash: e.CHECK_PASSWORD_HASH,
   checkAccounts: parseAccounts(e.CHECK_ACCOUNTS),
+  checkNames: (() => { try { const o = JSON.parse(e.CHECK_NAMES ?? "{}"); return (o && typeof o === "object" ? o : {}) as Record<string, string>; } catch { return {} as Record<string, string>; } })(),
   smtpAccounts: ((): { user: string; pass: string }[] => {
     if (!e.SMTP_ACCOUNTS) return [];
     try {
