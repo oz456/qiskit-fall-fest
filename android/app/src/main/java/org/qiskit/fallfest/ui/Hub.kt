@@ -116,13 +116,14 @@ fun HubScreen(app: AppState, onOpen: (Event) -> Unit, onNotifications: () -> Uni
 }
 private fun e0(e: Event, day: LocalDate) = e.isMultiDay && e.startDay.isBefore(day) // events already running float to the top of later days
 
+private val KICKOFF = java.time.ZonedDateTime.of(2026, 10, 26, 10, 0, 0, 0, IST)
+
 @Composable
 private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> Unit) {
     val now = app.now()
     // The festival window (admin setting) bounds the countdown and the "thanks" state, even before every session is listed.
-    val festStart = app.settings["fest_start"]?.let { runCatching { java.time.LocalDate.parse(it).atStartOfDay(IST) }.getOrNull() }
     val festEnd = app.settings["fest_end"]?.let { runCatching { java.time.LocalDate.parse(it).plusDays(1).atStartOfDay(IST) }.getOrNull() }
-    val firstStart = listOfNotNull(app.events.minOf { it.start }, festStart).minOf { it }
+    val firstStart = KICKOFF // the countdown reaches zero at the fest opening: 26 Oct 2026, 10:00 AM IST
     val lastEnd = listOfNotNull(app.events.maxOf { it.end }, festEnd).maxOf { it }
     val before = now.isBefore(firstStart); val after = now.isAfter(lastEnd)
     val target = live ?: next ?: app.events.first()

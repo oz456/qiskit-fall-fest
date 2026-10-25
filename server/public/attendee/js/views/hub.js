@@ -3,6 +3,7 @@ import { atom } from "../atom.js";
 import { S, addDays, coversDay, dayNum, daysWithEvents, festDays, fmtDayHead, fmtTime, greetDate, greeting, initials, loadAll, markAnnouncementsSeen, monthShort, rangeLabel, statusOf, subscribe, timeLabelOn, toggleSaved, unreadAnnouncements, weekdayShort } from "../store.js";
 import { TRACK_ICON, bubble, h, icon, pulse, toast } from "../ui.js";
 import { lockup, partnerLine } from "./signin.js";
+const KICKOFF_MS = Date.parse("2026-10-26T10:00:00+05:30"); // the countdown reaches zero at the fest opening: 26 Oct 2026, 10:00 AM IST
 
 let picked = null;        // null = every day
 
@@ -41,10 +42,9 @@ export function hubView({ open, openAnnouncements, openProfile }) {
     const evs = S.events, now = S.now;
     const live = evs.filter((e) => statusOf(e) === "live").sort((a, b) => b.startMs - a.startMs)[0];
     const next = evs.filter((e) => statusOf(e) === "upcoming").sort((a, b) => a.startMs - b.startMs)[0];
-    const fs = S.settings.fest_start, fe = S.settings.fest_end;
-    const festStart = /^\d{4}-\d{2}-\d{2}$/.test(fs || "") ? Date.parse(fs + "T00:00:00+05:30") : Infinity;
+    const fe = S.settings.fest_end;
     const festEnd = /^\d{4}-\d{2}-\d{2}$/.test(fe || "") ? Date.parse(addDays(fe, 1) + "T00:00:00+05:30") : -Infinity;
-    const firstStart = Math.min(...evs.map((e) => e.startMs), festStart), lastEnd = Math.max(...evs.map((e) => e.endMs), festEnd);
+    const firstStart = KICKOFF_MS, lastEnd = Math.max(...evs.map((e) => e.endMs), festEnd);
     const before = now < firstStart, after = now > lastEnd, target = live || next || evs[0];
     heroBox.onclick = () => open(target.id); heroBox.onkeydown = (k) => { if (k.key === "Enter") open(target.id); };
     if (live) heroBody.append(h("div", { class: "kicker" }, pulse(), `LIVE NOW · ${live.location.toUpperCase()}`));

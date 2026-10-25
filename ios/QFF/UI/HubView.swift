@@ -130,6 +130,8 @@ private struct EmptyHub: View {
 // MARK: Hero
 
 private struct Hero: View {
+    /// 26 Oct 2026, 10:00 AM IST: the countdown reaches zero here.
+    static let kickoff = istCalendar.date(from: DateComponents(timeZone: IST, year: 2026, month: 10, day: 26, hour: 10, minute: 0))!
     @EnvironmentObject var app: AppState
     @EnvironmentObject var router: Router
     let live: Event?
@@ -143,7 +145,7 @@ private struct Hero: View {
     var body: some View {
         let now = app.now
         // The festival window (admin setting) bounds the countdown and the "thanks" state, even before every session is listed.
-        let firstStart = ([app.events.map(\.startsAt).min(), day(app.settings["fest_start"])].compactMap { $0 }).min() ?? now
+        let firstStart = Self.kickoff // the countdown reaches zero at the fest opening: 26 Oct 2026, 10:00 AM IST
         let lastEnd = ([app.events.map(\.endsAt).max(), day(app.settings["fest_end"], endOfDay: true)].compactMap { $0 }).max() ?? now
         let before = now < firstStart, after = now > lastEnd
         let target = live ?? next ?? app.events.first
