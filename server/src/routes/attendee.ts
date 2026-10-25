@@ -42,19 +42,24 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
 
   const otpHash = (email: string, code: string) => hmac(config.otpPepper, `${email}|${code}`).toString("hex");
 
+  // What an outside email is told when it may not sign in: waiting for payment review, payment rejected, or never paid.
+  const noAccessReply = async (reply: any, email: string) => {
+    const [claim] = await db.query("SELECT status FROM pass_claim_status WHERE email=$1", [email]);
+    if (claim?.status === "pending") return reply.code(403).send({ error: "payment_pending", message: "Your pass payment is still under verification. You can sign in as soon as the organisers approve it (usually within a few minutes of approval). If it takes long, contact the organisers with the email you paid with." });
+    if (claim?.status === "rejected") return reply.code(403).send({ error: "payment_rejected", message: "Your payment verification failed. Please contact the organisers with the correct email you paid with." });
+    return reply.code(404).send({ error: "not_registered", message: "This email can't use the app yet. The app is for SRM University-AP emails (@srmap.edu.in) and for people with a verified ₹99 or ₹499 festival pass. Register on the Fall Fest website (www.qffsrmap2026.com/learning), get your pass, then sign in here with the same email. It works within a few minutes of your pass being verified." });
+  };
+  // An outside person who came from the website needs a verified pass NOW (a pass that was un-verified later closes the door again; verifying it opens it at the next sync).
+  const lacksPass = (u: { source?: string; pass_tier?: string | null } | undefined, email: string) => !!u && !isSrmEmail(email) && u.source === "website" && !u.pass_tier;
+
   // ---------- auth ----------
   app.post("/v1/auth/request-code", { config: { rateLimit: { max: 400, timeWindow: "10 minutes" } } }, async (req, reply) => {
     const { email } = z.object({ email: Email }).parse(req.body);
-    const [user] = await db.query("SELECT id, status FROM users WHERE lower(email)=$1", [email]);
+    const [user] = await db.query("SELECT id, status, source, pass_tier FROM users WHERE lower(email)=$1", [email]);
     // The attendee list is closed (people register on the website and are synced in), so say plainly when an email isn't on it (otherwise people just wait for a mail that never comes).
     // The route is rate-limited per IP, which bounds how fast the list could be probed.
     // every @srmap.edu.in address may sign in (the account is made when the code is verified, so typing random addresses leaves nothing behind)
-    if (!user && !isSrmEmail(email)) {
-      const [claim] = await db.query("SELECT status FROM pass_claim_status WHERE email=$1", [email]);
-      if (claim?.status === "pending") return reply.code(403).send({ error: "payment_pending", message: "Your pass payment is still under verification. You can sign in as soon as the organisers approve it (usually within a few minutes of approval). If it takes long, contact the organisers with the email you paid with." });
-      if (claim?.status === "rejected") return reply.code(403).send({ error: "payment_rejected", message: "Your payment verification failed. Please contact the organisers with the correct email you paid with." });
-      return reply.code(404).send({ error: "not_registered", message: "This email can't use the app yet. The app is for SRM University-AP emails (@srmap.edu.in) and for people with a verified ₹99 or ₹499 festival pass. Register on the Fall Fest website (www.qffsrmap2026.com/learning), get your pass, then sign in here with the same email. It works within a few minutes of your pass being verified." });
-    }
+    if ((!user && !isSrmEmail(email)) || lacksPass(user, email)) return noAccessReply(reply, email);
     if (user && user.status !== "active") return reply.code(403).send({ error: "account_inactive", message: "This account isn't active. Please contact the organisers." });
     const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '10 minutes'", [email]);
     if (n >= 3) return reply.code(429).send({ error: "too_many_codes", message: "You've requested several codes already. Use the latest one in your inbox (check spam), or try again in 10 minutes." });
@@ -93,7 +98,7 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       await allocate(db, b.email, nameFromEmail(b.email), "SRM University-AP", classifyEmail(b.email), "srm", true);
       [user] = await db.query("SELECT * FROM users WHERE lower(email)=$1 AND status='active'", [b.email]);
     }
-    if (!user) return bad();
+    if (!user || lacksPass(user, b.email)) return bad();
 
     const refresh = randomToken(32);
     const secret = randomBytes(32); // rotating the pass secret invalidates the previous device's QR

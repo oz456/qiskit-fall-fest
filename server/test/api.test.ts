@@ -525,6 +525,18 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
       assert.deepEqual([st["slow.payer@gmail.com"], st["bad.payer@gmail.com"], st["good.payer@gmail.com"]], ["pending", "rejected", undefined]);
     } finally { config.website.baseUrl = was; srv.close(); }
   });
+  it("an outside account whose pass is not (or no longer) verified cannot get a code; verifying it opens the door again", async () => {
+    const ask = (n: number) => app.inject({ method: "POST", url: "/v1/auth/request-code", remoteAddress: `10.79.0.${n}`, payload: { email: "unverified.later@gmail.com" } });
+    await db.query("INSERT INTO users (email,name,pass_code,pass_secret,source,kind,pass_tier) VALUES ('unverified.later@gmail.com','U L','QFF-90909',$1,'website','external','general')", [Buffer.alloc(32, 2)]);
+    assert.equal((await ask(1)).statusCode, 200, "verified pass: gets a code");
+    await db.query("UPDATE users SET pass_tier=NULL WHERE email='unverified.later@gmail.com'");
+    assert.equal((await ask(2)).statusCode, 404, "pass no longer verified: closed");
+    await db.query("INSERT INTO pass_claim_status (email,status) VALUES ('unverified.later@gmail.com','pending') ON CONFLICT (email) DO UPDATE SET status='pending'");
+    assert.equal((await ask(3)).json().error, "payment_pending", "and told why");
+    await db.query("UPDATE users SET pass_tier='general' WHERE email='unverified.later@gmail.com'");
+    assert.equal((await ask(4)).statusCode, 200, "verified again: open");
+    await db.query("DELETE FROM users WHERE email='unverified.later@gmail.com'"); await db.query("DELETE FROM pass_claim_status WHERE email='unverified.later@gmail.com'");
+  });
   it("an outside email with no pass is refused; the cleanup removes only never-signed-in outsiders without a pass", async () => {
     assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", remoteAddress: "10.77.0.3", payload: { email: "nobody.outside@gmail.com" } })).statusCode, 404);
     await db.query("UPDATE users SET pass_tier='general' WHERE pass_tier IS NULL"); // shield everyone created by earlier tests: only the three people below are under test
