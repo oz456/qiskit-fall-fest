@@ -41,7 +41,7 @@ export function gatePage(p: Exclude<Platform, "ios">): string {
 <meta name="theme-color" content="#f2e7d7">
 <title>QFF 2026</title>
 <link rel="icon" href="/shared/qiskit.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/gate.css">
+<link rel="stylesheet" href="/notice.css">
 </head>
 <body class="gate">
 <div class="backdrop"></div>
@@ -54,4 +54,29 @@ export function gatePage(p: Exclude<Platform, "ios">): string {
 </body>
 </html>
 `;
+}
+
+/** Branded page for a browser that asks for an address that doesn't exist. */
+export function notFoundPage(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#f2e7d7">
+<title>Page not found · QFF 2026</title>
+<link rel="icon" href="/shared/qiskit.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/notice.css">
+</head>
+<body class="gate">
+<div class="backdrop"></div>
+<main class="dialog">
+  <img src="/shared/qiskit.svg" alt="" width="44" height="44">
+  <h1>Page not found</h1>
+  <p>That address doesn’t exist. Head back to the Qiskit Fall Fest 2026 home page to download the app.</p>
+  <a class="btn" href="/">Go to home</a>
+</main>
+</body>
+</html>`;
 }

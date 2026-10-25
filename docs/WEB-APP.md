@@ -9,6 +9,12 @@ Plan: no Google Play / App Store accounts. **Android** installs the APK from the
 | `/admin`, `/check` | Admin portal, door scanner (unchanged) |
 | `/downloads/qff-2026.apk` | The APK. Old `/download*` links redirect here |
 
+### Address rules
+- One canonical address per page: `/`, `/admin/`, `/check/`, `/user`, `/user/hub`, `/user/pass`, `/user/support`. Variants (`/admin`, `/check`, `/scan`, `/index.html`, `/user/hub/`, `/user/index.html`, `/download`) redirect permanently (301); any other `/user/...` goes to `/user`.
+- Unknown addresses: a branded "Page not found" page for browsers, `{"error":"not_found","message":"Not found."}` JSON for API clients and anything under `/v1`, `/admin/api`, `/check/api`.
+- APIs: `/v1/...` attendee API (shared by Android, iPhone and web; versioned, existing apps depend on it), `/admin/api/...` and `/check/api/...` staff APIs. Health probe: `/ping`.
+- `/downloads/qff-2026.apk` is served as an attachment; the matching `.sha256` sits next to it.
+
 ## Who may use `/user`
 **Only iPhones** (`USER_APP_PLATFORMS`, default `ios`). The check runs in three places:
 1. **Server, on every `/user/**` request** (page, scripts, fonts, manifest, even missing files): Android/desktop get a small HTML popup, no app code at all, with a button to `/`.

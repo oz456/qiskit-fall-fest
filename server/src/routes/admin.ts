@@ -91,12 +91,12 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       return { ok: true };
     });
     // ---- enrollment: who has paid / been approved for an event (attendees cannot self-enrol) ----
-    api.get("/admin/api/events/:id/enrolled", async (req) => {
+    api.get("/admin/api/events/:id/registrations", async (req) => {
       const { id } = Id.parse(req.params);
       return (await db.query(`SELECT u.id,u.name,u.email,u.pass_code,u.college FROM user_events r JOIN users u ON u.id=r.user_id
         WHERE r.event_id=$1 AND r.kind='registered' ORDER BY u.name`, [id])).map((u) => ({ id: u.id, name: u.name, email: u.email, passCode: u.pass_code, college: u.college }));
     });
-    api.post("/admin/api/events/:id/enrolled", async (req, reply) => {
+    api.post("/admin/api/events/:id/registrations", async (req, reply) => {
       const { id } = Id.parse(req.params);
       const { emails } = z.object({ emails: z.array(z.string().max(200)).min(1).max(2000) }).parse(req.body);
       const [e] = await db.query("SELECT capacity FROM events WHERE id=$1", [id]);
@@ -112,7 +112,7 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       await audit(db, req, "event.enroll", "event", id, { added });
       return { added, notFound: wanted.filter((x) => !found.has(x)) };
     });
-    api.delete("/admin/api/events/:id/enrolled/:userId", async (req) => {
+    api.delete("/admin/api/events/:id/registrations/:userId", async (req) => {
       const { id, userId } = z.object({ id: z.string().uuid(), userId: z.string().uuid() }).parse(req.params);
       await db.query("DELETE FROM user_events WHERE event_id=$1 AND user_id=$2 AND kind='registered'", [id, userId]);
       await audit(db, req, "event.unenroll", "event", id, { userId });
@@ -156,7 +156,7 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       await audit(db, req, "user.create", "user", id); return reply.code(201).send({ id });
     });
     // Replace which events this attendee is registered for (the checkboxes in the attendee panel).
-    api.put("/admin/api/users/:id/enrollments", async (req, reply) => {
+    api.put("/admin/api/users/:id/registrations", async (req, reply) => {
       const { id } = Id.parse(req.params); const b = z.object({ eventIds: EventIds }).parse(req.body);
       const [u] = await db.query("SELECT 1 FROM users WHERE id=$1", [id]);
       if (!u) return reply.code(404).send({ error: "not_found" });

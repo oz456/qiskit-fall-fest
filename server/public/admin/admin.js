@@ -137,16 +137,16 @@ async function enrollment(e) {
   const box = h("div", {});
   const ta = h("textarea", { placeholder: "Paste emails — one per line, or separated by commas/spaces", rows: 4 });
   const draw = async () => {
-    const list = await api("GET", `/events/${e.id}/enrolled`);
+    const list = await api("GET", `/events/${e.id}/registrations`);
     box.replaceChildren(h("p", { class: "muted small" }, `${list.length} enrolled`),
       ...list.map((u) => h("div", { class: "row item" }, h("div", { class: "grow" }, h("b", {}, u.name), " ", h("span", { class: "muted small" }, u.email)),
-        h("button", { class: "btn danger sm", onclick: guard(async () => { await api("DELETE", `/events/${e.id}/enrolled/${u.id}`); await draw(); }) }, "Remove"))));
+        h("button", { class: "btn danger sm", onclick: guard(async () => { await api("DELETE", `/events/${e.id}/registrations/${u.id}`); await draw(); }) }, "Remove"))));
   };
   const body = h("div", {}, field("Add attendees by email", ta),
     h("div", { class: "row" }, h("button", { class: "btn sm", onclick: guard(async () => {
       const emails = ta.value.split(/[\s,;]+/).filter(Boolean);
       if (!emails.length) return;
-      const r = await api("POST", `/events/${e.id}/enrolled`, { emails });
+      const r = await api("POST", `/events/${e.id}/registrations`, { emails });
       ta.value = ""; toast(`Enrolled ${r.added}` + (r.notFound.length ? ` · not found: ${r.notFound.join(", ")}` : "")); await draw();
     }) }, "Enrol")), box);
   modal(`Enrolled — ${e.title}`, body); await draw();
@@ -176,7 +176,7 @@ async function people(m) {
         h("div", { class: "grow" }, h("h2", { style: "margin:0 0 4px" }, u.name), h("div", { class: "muted" }, u.email), h("div", { class: "muted" }, [u.passCode, u.college].filter(Boolean).join(" · ")),
           h("div", { style: "margin-top:10px" }, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), " ", h("span", { class: "pill" }, u.hasApp ? "SIGNED IN" : "NOT SIGNED IN"), " ", u.checkins ? h("span", { class: "pill" }, `${u.checkins} CHECK-IN${u.checkins > 1 ? "S" : ""}`) : null))),
       h("div", { class: "card", style: "margin-top:20px;box-shadow:none" }, h("h3", {}, "Registered events"), h("p", { class: "muted small" }, "Tick the events this person has paid for or been approved for. They appear under My Pass in the app."), picker.view,
-        h("div", { class: "row", style: "margin-top:12px" }, h("button", { class: "btn sm", onclick: guard(async () => { await api("PUT", `/users/${u.id}/enrollments`, { eventIds: picker.value() }); done("Registrations saved"); }) }, "Save registrations"))),
+        h("div", { class: "row", style: "margin-top:12px" }, h("button", { class: "btn sm", onclick: guard(async () => { await api("PUT", `/users/${u.id}/registrations`, { eventIds: picker.value() }); done("Registrations saved"); }) }, "Save registrations"))),
       h("div", { class: "row" },
         act(u.status === "active" ? "Block" : "Unblock", "ghost", guard(async () => { await api("PATCH", "/users/" + u.id, { status: u.status === "active" ? "blocked" : "active" }); done("Updated"); })),
         act("Reset device", "ghost", () => confirmDo("Sign " + u.name + " out of their phone so they can log in on a new one?", async () => { await api("POST", `/users/${u.id}/reset-device`); done("Device reset"); })),

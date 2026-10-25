@@ -9,7 +9,8 @@ import { initMail } from "./lib/mail.ts";
 import { adminRoutes } from "./routes/admin.ts";
 import { checkRoutes } from "./routes/check.ts";
 import { attendeeRoutes } from "./routes/attendee.ts";
-import { webRoutes } from "./routes/web.ts";
+import { notFoundPage } from "./lib/platform.ts";
+import { siteRoutes } from "./routes/site.ts";
 
 export async function buildApp(db: Db) {
   const app = Fastify({
@@ -61,7 +62,12 @@ export async function buildApp(db: Db) {
     req.log.error({ err: err.message, stack: isProd ? undefined : err.stack }, "unhandled");
     return reply.code(500).send({ error: "server_error", message: "Something went wrong." });
   });
-  app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: "not_found" }));
+  app.setNotFoundHandler((req, reply) => {   // browsers get a page, API clients get JSON
+    const path = req.url.split("?")[0]!;
+    const api = /^\/(v1|admin\/api|check\/api)(\/|$)/.test(path);
+    if (!api && (req.method === "GET" || req.method === "HEAD") && String(req.headers.accept ?? "").includes("text/html")) return reply.code(404).header("Cache-Control", "no-store").type("text/html; charset=utf-8").send(notFoundPage());
+    return reply.code(404).send({ error: "not_found", message: "Not found." });
+  });
 
   let pingOkUntil = 0; // the uptime probe must not be able to hammer the DB pool: re-check at most every 5 s
   app.get("/ping", { config: { rateLimit: false } }, async () => {
@@ -74,6 +80,6 @@ export async function buildApp(db: Db) {
   adminRoutes(app, db);
   checkRoutes(app, db);
 
-  await webRoutes(app);
+  await siteRoutes(app);
   return app;
 }

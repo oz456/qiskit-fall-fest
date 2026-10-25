@@ -196,11 +196,11 @@ describe("attendee flow", () => {
     let e2 = (await app.inject({ url: "/v1/events", headers: h })).json().events[0];
     assert.equal(e2.saved, true); assert.equal(e2.registered, false);
     // the admin enrols by email; unknown emails are reported back
-    const en = await admin("POST", `/admin/api/events/${eventId}/enrolled`, { emails: [email, "nobody@example.org"] });
+    const en = await admin("POST", `/admin/api/events/${eventId}/registrations`, { emails: [email, "nobody@example.org"] });
     assert.equal(en.statusCode, 200); assert.equal(en.json().added, 1); assert.deepEqual(en.json().notFound, ["nobody@example.org"]);
     e2 = (await app.inject({ url: "/v1/events", headers: h })).json().events[0];
     assert.equal(e2.registered, true); assert.equal(e2.spotsLeft, 0);
-    assert.equal((await admin("GET", `/admin/api/events/${eventId}/enrolled`)).json().length, 1);
+    assert.equal((await admin("GET", `/admin/api/events/${eventId}/registrations`)).json().length, 1);
     const who = (await admin("GET", "/admin/api/users?q=alex")).json()[0];
     assert.equal(who.enrolled.length, 1);
     await admin("POST", "/admin/api/users", { email: "sam@example.org", name: "Sam" });
@@ -212,7 +212,7 @@ describe("attendee flow", () => {
     const created = (await admin("POST", "/admin/api/users", { email: "kim@example.org", name: "Kim", eventIds: [eventId] })).json();
     const list = async () => (await admin("GET", "/admin/api/users?q=kim")).json()[0];
     assert.deepEqual((await list()).enrolledIds, [eventId]);
-    assert.equal((await admin("PUT", `/admin/api/users/${created.id}/enrollments`, { eventIds: [] })).statusCode, 200);
+    assert.equal((await admin("PUT", `/admin/api/users/${created.id}/registrations`, { eventIds: [] })).statusCode, 200);
     assert.deepEqual((await list()).enrolledIds, []);
     // CSV: one column per event (header = exact title); 1 adds, 0 never removes; existing emails still get enrolled
     const title = (await admin("GET", "/admin/api/events")).json().find((e: any) => e.id === eventId).title;
@@ -403,5 +403,27 @@ describe("web push endpoints", () => {
     const { isPushServiceUrl } = await import("../src/routes/attendee.ts");
     for (const ok of ["https://web.push.apple.com/Qabc", "https://fcm.googleapis.com/fcm/send/x", "https://updates.push.services.mozilla.com/wpush/v2/x", "https://wns2-par02p.notify.windows.com/w/?token=x"]) assert.equal(isPushServiceUrl(ok), true, ok);
     for (const bad of ["https://127.0.0.1/x", "https://evil.example/x", "https://web.push.apple.com.evil.example/x", "http://web.push.apple.com/x", "https://web.push.apple.com:8443/x", "https://user@web.push.apple.com/x", "https://169.254.169.254/", "nonsense"]) assert.equal(isPushServiceUrl(bad), false, bad);
+  });
+});
+
+describe("addresses: one canonical URL per page, proper 404s", () => {
+  const ios = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
+  const get = (url: string, headers: Record<string, string> = {}) => app.inject({ method: "GET", url, headers: { "user-agent": ios, ...headers } });
+  it("duplicates redirect permanently to the canonical address", async () => {
+    for (const [from, to] of [["/admin", "/admin/"], ["/check", "/check/"], ["/scan", "/check/"], ["/index.html", "/"], ["/admin/index.html", "/admin/"], ["/check/index.html", "/check/"], ["/user/index.html", "/user"], ["/user/hub/", "/user/hub"], ["/user/pass/", "/user/pass"], ["/user/support/", "/user/support"], ["/download", "/"], ["/favicon.ico", "/shared/qiskit.svg"]] as const) {
+      const r = await get(from); assert.equal(r.statusCode, 301, from); assert.equal(r.headers.location, to, from);
+    }
+    assert.equal((await get("/user/anything")).statusCode, 302); assert.equal((await get("/user/anything")).headers.location, "/user");
+    for (const ok of ["/", "/admin/", "/check/", "/user", "/user/hub", "/user/pass", "/user/support"]) assert.equal((await get(ok)).statusCode, 200, ok);
+  });
+  it("unknown addresses: a branded page for browsers, JSON for API clients", async () => {
+    const page = await get("/no-such-page", { accept: "text/html,application/xhtml+xml" });
+    assert.equal(page.statusCode, 404); assert.match(String(page.headers["content-type"]), /text\/html/); assert.match(page.body, /Page not found/);
+    const json = await get("/no-such-page", { accept: "application/json" }); assert.equal(json.statusCode, 404); assert.equal(json.json().error, "not_found");
+    const api = await get("/v1/no-such", { accept: "text/html" }); assert.equal(api.statusCode, 404); assert.equal(api.json().error, "not_found");
+  });
+  it("the APK is a download with the right type", async () => {
+    const r = await get("/downloads/qff-2026.apk"); assert.equal(r.statusCode, 200);
+    assert.match(String(r.headers["content-disposition"]), /attachment; filename="qff-2026.apk"/); assert.match(String(r.headers["content-type"]), /android\.package-archive/);
   });
 });

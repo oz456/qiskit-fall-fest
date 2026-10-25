@@ -6,7 +6,7 @@ import fstatic from "@fastify/static";
 import type { FastifyInstance } from "fastify";
 import { detectPlatform, gatePage, webAppAllowed } from "../lib/platform.ts";
 
-export async function webRoutes(app: FastifyInstance) {
+export async function siteRoutes(app: FastifyInstance) {
   const pub = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "public");
   /** HTML and scripts always revalidate (cheap 304s), so a new deploy reaches phones at once; big static files are cached. */
   const noCache = (res: any) => res.header("Cache-Control", "no-cache");
@@ -15,14 +15,13 @@ export async function webRoutes(app: FastifyInstance) {
   // ---- staff sites ----
   await app.register(fstatic, { root: join(pub, "admin"), prefix: "/admin/", index: ["index.html"], decorateReply: true, setHeaders: noCache });
   await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "check"), prefix: "/check/", index: ["index.html"], decorateReply: false, setHeaders: noCache }); });
-  app.get("/admin", async (_req, reply) => reply.redirect("/admin/"));
-  app.get("/check", async (_req, reply) => reply.redirect("/check/"));
-  app.get("/scan", async (_req, reply) => reply.redirect("/check/"));
-  app.get("/scan/", async (_req, reply) => reply.redirect("/check/"));
+  // one canonical address per page: /admin/, /check/, /user, /  (the others redirect permanently)
+  for (const [from, to] of [["/admin", "/admin/"], ["/admin/index.html", "/admin/"], ["/check", "/check/"], ["/check/index.html", "/check/"], ["/scan", "/check/"], ["/scan/", "/check/"], ["/index.html", "/"], ["/favicon.ico", "/shared/qiskit.svg"]] as const)
+    app.get(from, async (_req, reply) => reply.redirect(to, 301));
 
   // ---- shared assets and downloads ----
   await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "shared"), prefix: "/shared/", decorateReply: false, setHeaders: longCache }); });
-  await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "downloads"), prefix: "/downloads/", decorateReply: false, setHeaders: noCache }); });
+  await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "downloads"), prefix: "/downloads/", decorateReply: false, setHeaders: (res: any, path: string) => { noCache(res); if (path.endsWith(".apk")) res.header("Content-Disposition", 'attachment; filename="qff-2026.apk"'); } }); });
   // addresses printed on earlier posters/QR codes keep working
   app.get("/download", async (_req, reply) => reply.redirect("/", 301));
   app.get("/download/", async (_req, reply) => reply.redirect("/", 301));
@@ -42,8 +41,10 @@ export async function webRoutes(app: FastifyInstance) {
     await s.register(fstatic, { root: userRoot, prefix: "/", index: false, decorateReply: false, setHeaders: (res: any, path: string) => (/\.(ttf|png|svg)$/.test(path) ? longCache(res) : noCache(res)) });
     const shell = async (_req: any, reply: any) => reply.sendFile("index.html", userRoot);
     s.get("/", shell);
-    // client-side routes (/user/hub, /user/pass, /user/support, ...) all load the same shell; unknown files are real 404s
-    s.setNotFoundHandler((req, reply) => (req.method === "GET" && !/\.[a-z0-9]+$/i.test(req.url.split("?")[0]!) ? shell(req, reply) : reply.code(404).send({ error: "not_found" })));
+    // the app's own screens all load the same shell; /user/hub/ and /user/index.html collapse to one address; anything else under /user goes to the app's front door
+    for (const tab of ["hub", "pass", "support"]) { s.get(`/${tab}`, shell); s.get(`/${tab}/`, async (_req, reply) => reply.redirect(`/user/${tab}`, 301)); }
+    s.get("/index.html", async (_req, reply) => reply.redirect("/user", 301));
+    s.setNotFoundHandler((req, reply) => (req.method === "GET" && !/\.[a-z0-9]+$/i.test(req.url.split("?")[0]!) ? reply.redirect("/user", 302) : reply.code(404).send({ error: "not_found", message: "Not found." })));
   }, { prefix: "/user" });
 
   // ---- landing page at / (last, so it never shadows the sites above) ----
