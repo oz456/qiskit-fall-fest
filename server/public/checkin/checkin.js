@@ -48,7 +48,7 @@ async function boot() {
   const sc = await api("GET", "/scopes");
   clear($app);
   const scope = h("select", { onchange: () => { refresh(); } },
-    h("optgroup", { label: "Venue entry · once per day" }, sc.days.map((d) => h("option", { value: "day:" + d, selected: "day:" + d === sc.defaultScope }, (d === sc.today ? "Today · " : "") + new Date(d + "T00:00:00Z").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })))),
+    h("optgroup", { label: "Campus entry · once per day" }, sc.days.map((d) => h("option", { value: "day:" + d, selected: "day:" + d === sc.defaultScope }, (d === sc.today ? "Today · " : "") + new Date(d + "T00:00:00Z").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })))),
     h("optgroup", { label: "Event attendance" }, sc.events.map((e) => h("option", { value: "event:" + e.id }, e.title))));
   const count = h("b", {}, "–"), totalEl = h("span", {}, ""), recent = h("div", { class: "recent" }), sheet = h("div", { class: "sheet" }), toastEl = h("div", { class: "toast" });
   const found = h("div", { class: "found" });

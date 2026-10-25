@@ -243,8 +243,8 @@ async function attendance(m) {
   const sum = await api("GET", "/attendance"); let scope = sum.summary[0]?.scope || "";
   const out = h("div", { class: "card" }), chips = h("div", { class: "chips" });
   const dayLabel = (d) => new Date(d + "T00:00:00Z").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-  const label = (x) => x.scope.startsWith("day:") ? ["Venue entry", dayLabel(x.scope.slice(4))] : ["Event", x.title || "Deleted event"];
-  m.append(head("Attendance"), h("p", { class: "muted" }, "Who the door scanners checked in. Venue entry counts people once per day at the gate; an event counts people at that session."), chips, out);
+  const label = (x) => x.scope.startsWith("day:") ? ["Campus entry", dayLabel(x.scope.slice(4))] : ["Event", x.title || "Deleted event"];
+  m.append(head("Attendance"), h("p", { class: "muted" }, "Who the door scanners checked in. Campus entry counts people once per day at the gate; an event counts people at that session."), chips, out);
   function drawChips() {
     clear(chips);
     sum.summary.forEach((x) => { const [kind, name] = label(x); chips.append(h("button", { class: "chip" + (x.scope === scope ? " on" : ""), onclick: () => { scope = x.scope; drawChips(); load(); } }, h("small", {}, kind), h("b", {}, name), h("span", {}, x.count + " in"))); });

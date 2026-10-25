@@ -14,7 +14,7 @@ Admin: `/admin`. Door scanner: `/checkin/` (a different login, give only this on
 - **Import CSV**: columns `email,name,college` (the window has a **Download template** button). Existing emails are skipped, not duplicated.
 
 ## Door scanner (`/checkin`)
-1. Pick what you're scanning for: *Venue entry* for a day (once per person per day) or a specific event.
+1. Pick what you're scanning for: *Campus entry* for a day (once per person per day) or a specific event.
 2. Point the camera at the attendee's live QR (or use "No QR? Find the person" for a dead phone).
 3. The sheet shows the selfie, name and college. **Compare the face**, then **Confirm entry** or **Reject**.
 4. Warnings: "No selfie on file yet", "Already checked in" (shows when), "Stale QR" (a screenshot), "Invalid pass".
@@ -24,5 +24,5 @@ Admin: `/admin`. Door scanner: `/checkin/` (a different login, give only this on
 - **Support**: open a ticket, reply (the attendee sees it in the app after they refresh; the Support tab shows a red dot), change its status. Replies are *not* emailed; the attendee gets a push notification instead.
 - **Announcements** are sent **instantly as a push notification** to every phone that has notifications on (the page shows how many), and are listed in the app's bell menu. They are not emailed (the daily mail quota is kept for login codes). Support replies also push to that attendee's phone.
 - **Content**: festival name/venue/first and last day (drives the countdown and the scanner's days), support note, FAQs.
-- **Attendance**: pick *Venue entry* or an event; download the list as CSV.
+- **Attendance**: pick *Campus entry* or an event; download the list as CSV.
 - **Activity** (bottom of the menu): every admin change and failed login.
