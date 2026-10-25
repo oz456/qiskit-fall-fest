@@ -47,6 +47,9 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 
+private val hubPicked = mutableStateOf<LocalDate?>(null)
+private var hubPickedInit = false
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HubScreen(app: AppState, onOpen: (Event) -> Unit, onNotifications: () -> Unit, onProfile: () -> Unit) {
@@ -59,7 +62,9 @@ fun HubScreen(app: AppState, onOpen: (Event) -> Unit, onNotifications: () -> Uni
     val eventDays = events.flatMap { e -> generateSequence(e.startDay) { it.plusDays(1) }.takeWhile { !it.isAfter(e.endDay) }.take(30).toList() }
     val days = remember(festDays, eventDays) { (festDays + eventDays).distinct().sorted() }
     val withEvents = remember(eventDays) { eventDays.toSet() }
-    var picked by remember { mutableStateOf<LocalDate?>(null) } // null = every day
+    // open on today's date once the schedule is known (before or after the fest: all days); the choice survives switching tabs
+    var picked by hubPicked // null = every day
+    LaunchedEffect(days) { if (!hubPickedInit && days.isNotEmpty()) { hubPickedInit = true; val today = LocalDate.now(IST); if (today in days) picked = today } }
     val day = picked
     val hf = LocalHapticFeedback.current
 

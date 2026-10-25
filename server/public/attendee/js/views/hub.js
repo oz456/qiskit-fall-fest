@@ -1,11 +1,12 @@
 // Hub: greeting, hero (live / up next / countdown), day strip, event list.
 import { atom } from "../atom.js";
-import { S, addDays, coversDay, dayNum, daysWithEvents, festDays, fmtDayHead, fmtTime, greetDate, greeting, initials, loadAll, markAnnouncementsSeen, monthShort, rangeLabel, statusOf, subscribe, timeLabelOn, toggleSaved, unreadAnnouncements, weekdayShort } from "../store.js";
+import { S, addDays, istDay, coversDay, dayNum, daysWithEvents, festDays, fmtDayHead, fmtTime, greetDate, greeting, initials, loadAll, markAnnouncementsSeen, monthShort, rangeLabel, statusOf, subscribe, timeLabelOn, toggleSaved, unreadAnnouncements, weekdayShort } from "../store.js";
 import { TRACK_ICON, bubble, h, icon, pulse, toast } from "../ui.js";
 import { lockup, partnerLine } from "./signin.js";
 const KICKOFF_MS = Date.parse("2026-10-26T10:00:00+05:30"); // the countdown reaches zero at the fest opening: 26 Oct 2026, 10:00 AM IST
 
 let picked = null;        // null = every day
+let pickedInit = false;   // the first time the schedule is known, open on today's date (if it is a fest day)
 
 export function eventRow(e, { day = null, trailing = true, open }) {
   const st = statusOf(e);
@@ -62,6 +63,7 @@ export function hubView({ open, openAnnouncements, openProfile }) {
   function strip() {
     const days = festDays(); stripBox.replaceChildren();
     if (!days.length) return;
+    if (!pickedInit) { pickedInit = true; const today = istDay(S.now); if (days.includes(today)) picked = today; }
     const has = daysWithEvents();
     const rail = h("div", { class: "rail" });
     const mk = (d, label1, mid, label2, on) => h("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), onclick: () => { picked = d; update(); } },

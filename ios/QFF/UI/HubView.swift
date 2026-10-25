@@ -10,6 +10,7 @@ struct HubView: View {
     @EnvironmentObject var app: AppState
     @EnvironmentObject var router: Router
     @State private var picked: Date?
+    private static var didPickToday = false
 
     /// The whole festival window (admin setting) plus every day an event touches, so no day is ever hidden.
     private var days: [Date] {
@@ -74,6 +75,13 @@ struct HubView: View {
         }
         .background(Backdrop())
         .refreshable { await app.refresh() }
+        // open on today's date once the schedule is known (before or after the fest: all days)
+        .task(id: days.count) {
+            guard !Self.didPickToday, !days.isEmpty else { return }
+            Self.didPickToday = true
+            let today = istCalendar.startOfDay(for: Date())
+            if days.contains(today) { picked = today }
+        }
     }
 
     private var header: some View {

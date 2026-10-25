@@ -90,7 +90,11 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     assert.equal(await b.ev(`JSON.stringify(Object.keys(localStorage).filter(k=>/token|secret|refresh/i.test(k)))`), "[]");
 
     // hub content + event sheet + save
-    assert.match(await b.ev(`document.querySelector('.list').textContent`), /Inauguration/);
+    // the day strip opens on today's date when today is a fest day (26-30 Oct), otherwise on ALL DAYS
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    const on = await b.ev(`document.querySelector('.chip.on')?.textContent`);
+    if (today >= "2026-10-26" && today <= "2026-10-30") assert.ok(on.includes(String(Number(today.slice(8)))), "today is selected: " + on); else assert.match(on, /ALL/);
+    await b.tap(".chip:first-child"); assert.ok(await b.until(`/Inauguration/.test(document.querySelector('.list').textContent)`));
     await b.tap(".row .save"); assert.ok(await b.until(`document.querySelector('.row .save').classList.contains('on')`));
     assert.equal((await db.query("SELECT 1 FROM user_events WHERE kind='saved'")).length, 1, "saving reached the server");
     await b.tap(".row.card"); assert.ok(await b.until(`!!document.querySelector('.sheet .infoCard')`)); await b.ev(`history.back()`); assert.ok(await b.until(`!document.querySelector('.sheet')`));
