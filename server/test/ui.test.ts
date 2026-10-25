@@ -55,6 +55,28 @@ describe("browser smoke (admin + scanner)", { skip: chromeBin ? false : "no Chro
     assert.deepEqual(errors, [], "no JavaScript errors in the admin portal");
   });
 
+  it("admin: the attendee panel's Block, Reset device and Reset selfie buttons work", async () => {
+    errors.length = 0;
+    const [u] = await db.query("INSERT INTO users (email,name,college,pass_code,pass_secret) VALUES ('panel@example.org','Panel Tester','SRM AP','QFF-0042',$1) RETURNING id", [Buffer.alloc(32, 2)]);
+    await db.query("INSERT INTO user_photos (user_id, object_key, size_bytes, sha256) VALUES ($1,'photos/x.jpg',0,'')", [u!.id]);
+    await ev(`window.confirm = () => true`);
+    await ev(`location.hash = '#people'`); await wait(300);
+    assert.ok(await until(`[...document.querySelectorAll('tr.click')].some(r => r.textContent.includes('Panel Tester'))`), "the attendee is listed");
+    const open = () => ev(`[...document.querySelectorAll('tr.click')].find(r => r.textContent.includes('Panel Tester')).click()`);
+    const press = async (label: string) => { assert.ok(await until(`[...document.querySelectorAll('.modal button, [role=dialog] button, button')].some(b => b.textContent.trim() === ${JSON.stringify(label)})`), `button "${label}" is there`); await ev(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(label)}).click()`); await wait(600); };
+    await open(); await press("Block");
+    assert.equal((await db.query("SELECT status FROM users WHERE id=$1", [u!.id]))[0]!.status, "blocked", "Block blocked them");
+    await open(); await press("Unblock");
+    assert.equal((await db.query("SELECT status FROM users WHERE id=$1", [u!.id]))[0]!.status, "active", "Unblock unblocked them");
+    await db.query("INSERT INTO sessions (user_id, refresh_hash, device_id, expires_at) VALUES ($1,'h','d', now() + interval '1 day')", [u!.id]);
+    assert.equal((await db.query("SELECT 1 FROM sessions WHERE user_id=$1 AND revoked_at IS NULL", [u!.id])).length, 1, "test session exists");
+    await open(); await press("Reset device"); await wait(800);
+    assert.equal((await db.query("SELECT 1 FROM sessions WHERE user_id=$1 AND revoked_at IS NULL", [u!.id])).length, 0, "Reset device signed them out");
+    await open(); await press("Reset selfie");
+    assert.equal((await db.query("SELECT 1 FROM user_photos WHERE user_id=$1", [u!.id])).length, 0, "Reset selfie removed the photo");
+    assert.deepEqual(errors, [], "no JavaScript errors");
+  });
+
   it("scanner: signing in shows the scan screen with no script errors", async () => {
     errors.length = 0;
     // one existing check-in, so the "Latest" list has something to draw

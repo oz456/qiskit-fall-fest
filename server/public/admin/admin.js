@@ -84,6 +84,7 @@ function modal(title, body) {
   document.body.append(bg); return bg;
 }
 const field = (label, input) => h("div", { class: "field" }, h("label", {}, label), input);
+const confirmDo = (msg, fn) => { if (confirm(msg)) guard(fn)(); };
 
 // ---- pages ----
 async function events(m) {
