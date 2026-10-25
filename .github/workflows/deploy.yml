@@ -23,6 +23,7 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 12   # a hung test run must fail fast with logs, not block a deploy for an hour
     defaults: { run: { working-directory: server } }
     steps:
       - uses: actions/checkout@v4
