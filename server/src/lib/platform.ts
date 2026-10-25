@@ -40,7 +40,8 @@ export function gatePage(p: Exclude<Platform, "ios">): string {
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#f2e7d7">
 <title>QFF 2026</title>
-<link rel="icon" href="/shared/qiskit.svg" type="image/svg+xml">
+<link rel="icon" href="/shared/favicon.png?v=2" type="image/png">
+<link rel="icon" href="/shared/favicon.ico?v=2" sizes="any">
 <link rel="preload" href="/shared/fonts/anton.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="/notice.css">
 </head>
@@ -67,7 +68,8 @@ export function notFoundPage(): string {
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#f2e7d7">
 <title>Page not found · QFF 2026</title>
-<link rel="icon" href="/shared/qiskit.svg" type="image/svg+xml">
+<link rel="icon" href="/shared/favicon.png?v=2" type="image/png">
+<link rel="icon" href="/shared/favicon.ico?v=2" sizes="any">
 <link rel="preload" href="/shared/fonts/anton.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="/notice.css">
 </head>

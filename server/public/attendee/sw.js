@@ -1,5 +1,5 @@
 // Service worker for the QFF 2026 web app: keeps the app shell available offline and shows push notifications.
-const CACHE = "qff-attendee-v1";
+const CACHE = "qff-attendee-v2";
 const SHELL = ["/attendee/", "/attendee/css/attendee.css", "/attendee/js/main.js"];
 
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => {})).then(() => self.skipWaiting())); });
