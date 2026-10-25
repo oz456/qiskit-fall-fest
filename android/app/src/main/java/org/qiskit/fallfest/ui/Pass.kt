@@ -2,6 +2,7 @@ package org.qiskit.fallfest.ui
 
 import android.app.Activity
 import android.view.WindowManager
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -60,6 +62,7 @@ private fun rememberLivePass(app: AppState): Pair<String?, Float> {
 @Composable
 fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
     var qrOpen by remember { mutableStateOf(false) }
+    var showSaved by rememberSaveable { mutableStateOf(true) } // My Pass shows one list at a time: Attended (left) or Saved (right)
     SecureWindow((LocalContext.current as? Activity)?.window)
     val saved = app.events.filter { it.saved }
     val attended = app.checkins.entries.sortedByDescending { it.value }.map { app.checkinLabel(it.key, it.value) to it.key.removePrefix("event:").takeIf { k -> it.key.startsWith("event:") } }
@@ -78,23 +81,35 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
             Spacer(Modifier.height(14.dp))
             Text("QR appears when you tap. It refreshes every 30 seconds.", style = T.small, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
         }
-        if (saved.isNotEmpty()) {
-            item { SectionLabel("SAVED EVENTS", Modifier.padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 8.dp)) }
-            items(saved, key = { it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen) }
-        } else item {
-            Text("Events you save appear here. Tap the bookmark on any event to save it.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 36.dp))
+        item {
+            Row(Modifier.padding(horizontal = 24.dp).padding(top = 26.dp, bottom = 12.dp).fillMaxWidth().clip(CircleShape).background(P.surfaceAlt).padding(4.dp)) {
+                listOf(false to "Attended (${attended.size})", true to "Saved (${saved.size})").forEach { (isSaved, label) ->
+                    val sel = showSaved == isSaved
+                    val bg by animateColorAsState(if (sel) P.primary else Color.Transparent, label = "tab")
+                    Row(Modifier.weight(1f).clip(CircleShape).clickable { showSaved = isSaved }.background(bg).padding(vertical = 10.dp), horizontalArrangement = Arrangement.Center) {
+                        Text(label, style = T.bodyM.copy(fontSize = 13.sp), color = if (sel) P.onPrimary else P.muted)
+                    }
+                }
+            }
         }
-        item { SectionLabel("ATTENDED EVENTS", Modifier.padding(horizontal = 24.dp).padding(top = 24.dp, bottom = 8.dp)) }
-        if (attended.isEmpty()) item {
-            Text("Events you attend appear here after the team scans your pass at the door.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 24.dp))
-        } else items(attended, key = { it.first.title + it.first.time }) { (n, id) ->
-            val ev = id?.let { k -> app.events.firstOrNull { it.id == k } }
-            Card(Modifier.padding(horizontal = 24.dp, vertical = 6.dp).fillMaxWidth(), RoundedCornerShape(24.dp), onClick = { ev?.let(onOpen) }) {
-                Row(Modifier.padding(horizontal = 18.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    IconBubble(Icons.Outlined.CheckCircle, 50.dp, P.mintInk, P.mint)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(n.title, style = T.title, color = P.ink, maxLines = 2)
-                        Text("Checked in · ${n.time}", style = T.small, color = P.muted, maxLines = 1)
+        if (showSaved) {
+            if (saved.isNotEmpty()) {
+                items(saved, key = { it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen) }
+            } else item {
+                Text("Events you save appear here. Tap the bookmark on any event to save it.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 36.dp))
+            }
+        } else {
+            if (attended.isEmpty()) item {
+                Text("Events you attend appear here after the team scans your pass at the door.", style = T.body, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 24.dp))
+            } else items(attended, key = { it.first.title + it.first.time }) { (n, id) ->
+                val ev = id?.let { k -> app.events.firstOrNull { it.id == k } }
+                Card(Modifier.padding(horizontal = 24.dp, vertical = 6.dp).fillMaxWidth(), RoundedCornerShape(24.dp), onClick = { ev?.let(onOpen) }) {
+                    Row(Modifier.padding(horizontal = 18.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        IconBubble(Icons.Outlined.CheckCircle, 50.dp, P.mintInk, P.mint)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(n.title, style = T.title, color = P.ink, maxLines = 2)
+                            Text("Checked in · ${n.time}", style = T.small, color = P.muted, maxLines = 1)
+                        }
                     }
                 }
             }

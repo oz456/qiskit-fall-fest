@@ -7,9 +7,24 @@ struct PassView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var captured = UIScreen.main.isCaptured
     @State private var fullQR = false
+    @State private var showSaved = true // My Pass shows one list at a time: Attended (left) or Saved (right)
 
     private var saved: [Event] { app.events.filter(\.saved) }
     private var attended: [(scope: String, at: Date)] { app.checkins.map { (scope: $0.key, at: $0.value) }.sorted { $0.at > $1.at } }
+    private var passTabs: some View {
+        HStack(spacing: 0) {
+            ForEach([(false, "Attended (\(attended.count))"), (true, "Saved (\(saved.count))")], id: \.0) { isSaved, label in
+                Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showSaved = isSaved }; Haptics.select() } label: {
+                    Text(label).font(Fonts.body(13, 500, style: .footnote))
+                        .foregroundStyle(showSaved == isSaved ? P.onPrimary : P.muted)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background { if showSaved == isSaved { Capsule().fill(P.primary) } }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4).background(P.surfaceAlt, in: Capsule())
+    }
     private var hidden: Bool { captured || scenePhase != .active }
 
     var body: some View {
@@ -29,15 +44,15 @@ struct PassView: View {
                     .font(T.small).foregroundStyle(P.muted).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                     .padding(.horizontal, 24).padding(.top, 14)
 
+                passTabs.padding(.horizontal, 24).padding(.top, 26).padding(.bottom, 12)
+                if showSaved {
                 if !saved.isEmpty {
-                    SectionLabel(text: "SAVED EVENTS").padding(.horizontal, 24).padding(.top, 32).padding(.bottom, 8)
                     ForEach(saved) { e in EventRow(event: e, day: nil, trailing: true).padding(.horizontal, 24).padding(.vertical, 6) }
                 } else {
                     Text("Events you save appear here. Tap the bookmark on any event to save it.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity).padding(.horizontal, 40).padding(.vertical, 36)
                 }
-
-                SectionLabel(text: "ATTENDED EVENTS").padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 8)
+                } else {
                 if attended.isEmpty {
                     Text("Events you attend appear here after the team scans your pass at the door.").font(T.body).foregroundStyle(P.muted).multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity).padding(.horizontal, 40).padding(.vertical, 24)
@@ -57,6 +72,7 @@ struct PassView: View {
                         }
                         .padding(.horizontal, 24).padding(.vertical, 6)
                     }
+                }
                 }
             }
             .padding(.bottom, 24)

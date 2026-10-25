@@ -118,7 +118,10 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     assert.match(await b.ev(`document.querySelector('.dialog').textContent`), /Campus entry/);
     assert.equal(await b.ev(`!!document.querySelector('.qrfull')`), false, "the QR closes when the scan is done");
     await b.tap(".dialog .btn"); assert.ok(await b.until(`!document.querySelector('.dialog')`));
-    assert.match(await b.ev(`document.querySelector('.screen').textContent`), /Attended events[\s\S]*Campus entry[\s\S]*Checked in/, "listed under My pass");
+    assert.match(await b.ev(`document.querySelector('.seg').textContent`), /Attended \(1\).*Saved \(1\)/, "two tabs: Attended on the left, Saved on the right");
+    await b.tap(".seg button:first-child"); assert.match(await b.ev(`document.querySelector('.screen').textContent`), /Campus entry[\s\S]*Checked in/, "the attended tab lists it");
+    assert.doesNotMatch(await b.ev(`document.querySelector('.list').textContent`), /Inauguration/, "saved events are on the other tab");
+    await b.tap(".seg button:last-child"); assert.match(await b.ev(`document.querySelector('.list').textContent`), /Inauguration/);
 
     // support: ticket, reply, thread, red dot
     await b.tap(".tab[aria-label='Support']"); assert.ok(await b.until(`location.pathname === '/attendee/support' && !!document.querySelector('.support-opts')`));
