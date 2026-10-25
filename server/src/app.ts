@@ -4,6 +4,7 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import { config, isProd } from "./config.ts";
+import { verifyJwt } from "./lib/crypto.ts";
 import type { Db } from "./db.ts";
 import { initMail } from "./lib/mail.ts";
 import { adminRoutes } from "./routes/admin.ts";
@@ -53,7 +54,13 @@ export async function buildApp(db: Db) {
     if (req.url.startsWith("/v1/") || req.url.startsWith("/integrations/") || req.url.startsWith("/admin/api/") || req.url.startsWith("/checkin/api/")) reply.header("Cache-Control", "no-store");
   });
   await app.register(cookie);
-  await app.register(rateLimit, { global: true, max: 240, timeWindow: "1 minute" });
+  // Campus Wi-Fi puts thousands of phones behind ONE public address, so a per-address budget would lock everyone out at once.
+// Signed-in calls are counted per person (the bearer token's subject); everything else per address, with room for a whole campus.
+// The real brakes on sign-in abuse are per email and system-wide (see /v1/auth/request-code), not per address.
+await app.register(rateLimit, {
+  global: true, max: 6000, timeWindow: "1 minute",
+  keyGenerator: (req) => { const m = /^Bearer (.+)$/.exec(String(req.headers.authorization ?? "")); const c = m ? verifyJwt<{ sub?: string }>(m[1]!, config.jwtSecret) : null; return c?.sub ? `u:${c.sub}` : req.ip; },
+});
 
   app.setErrorHandler((err: any, req, reply) => {
     if (err instanceof ZodError) {

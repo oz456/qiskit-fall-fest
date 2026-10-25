@@ -100,21 +100,32 @@ export async function reconcile(db: Db, trigger: "scheduler" | "admin"): Promise
     // second feed: who holds a verified ₹99 / ₹499 pass (sets pass_tier, and lets outside pass-holders in)
     let passesOk = false;
     try {
-      let pc: string | null = null; const seenPass = new Set<string>();
+      let pc: string | null = null; const seenPass = new Set<string>(); const notYet = new Map<string, "pending" | "rejected">();
       for (let page = 0; page < 100; page++) {
         const url = new URL(`${baseUrl}/api/integrations/qff-app/passes`); url.searchParams.set("limit", "500"); if (pc) url.searchParams.set("cursor", pc);
         const res = await fetch(url, { headers: { Authorization: `Bearer ${secret}`, Accept: "application/json" }, signal: AbortSignal.timeout(25_000) });
         if (!res.ok) throw new Error(`passes feed answered ${res.status}`);
-        const body = (await res.json()) as { people?: { email: string; name?: string; tier: "general" | "flagship" }[]; nextCursor?: string | null };
+        const body = (await res.json()) as { people?: { email: string; name?: string; tier: "general" | "flagship"; status?: "verified" | "pending" | "rejected" }[]; nextCursor?: string | null };
         if (!Array.isArray(body.people)) throw new Error("passes feed has an unexpected shape");
-        for (const x of body.people) seenPass.add(String(x.email).toLowerCase());
-        const r = await upsertPeople(db, body.people.map((x) => ({ email: x.email, name: x.name ?? "", passTier: x.tier })));
+        const ok = body.people.filter((x) => !x.status || x.status === "verified");   // an older website answer has no status: everyone in it is verified
+        for (const x of ok) seenPass.add(String(x.email).toLowerCase());
+        for (const x of body.people) if (x.status === "pending" || x.status === "rejected") notYet.set(String(x.email).toLowerCase(), x.status);
+        const r = await upsertPeople(db, ok.map((x) => ({ email: x.email, name: x.name ?? "", passTier: x.tier })));
         total.created += r.created; total.updated += r.updated; failed.push(...r.failed);
         pc = body.nextCursor ?? null; if (!pc) break;
       }
       if (seenPass.size === 0) throw new Error("passes feed was empty"); // never wipe pass marks because of an empty answer
       // anyone we marked as a pass-holder who is no longer verified on the website loses the mark
       await db.query("UPDATE users SET pass_tier=NULL WHERE pass_tier IS NOT NULL AND NOT (lower(email) = ANY($1::text[]))", [[...seenPass]]);
+      // who is waiting for review / was rejected, so sign-in can say so (verified people are never in this table)
+      await db.tx(async (q) => {
+        await q.query("DELETE FROM pass_claim_status");
+        const rows = [...notYet].filter(([e]) => !seenPass.has(e));
+        for (let i = 0; i < rows.length; i += 400) {
+          const part = rows.slice(i, i + 400);
+          await q.query(`INSERT INTO pass_claim_status (email, status) VALUES ${part.map((_, k) => `($${k * 2 + 1},$${k * 2 + 2})`).join(",")} ON CONFLICT (email) DO UPDATE SET status=EXCLUDED.status`, part.flatMap(([e, st]) => [e, st]));
+        }
+      });
       passesOk = true;
     } catch (e: any) { failed.push(`passes: ${e.message}`); }
     if (passesOk) await db.query("INSERT INTO settings (key,value) VALUES ('passes_synced_at',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [new Date().toISOString()]);

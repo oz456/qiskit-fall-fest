@@ -128,6 +128,13 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       if (!res.ok) return { ok: false, message: `The website answered ${res.status}.` };
       return { ok: true, ...(await res.json() as object) };
     });
+    // Integrity checks on the outside-SRM people who paid (amount vs tier, reused bank references, reviewer, name match).
+    api.get("/admin/api/pass-audit", async () => {
+      const { baseUrl, secret } = config.website; if (!secret) return { ok: false, message: "Website sync is not configured." };
+      const res = await fetch(`${baseUrl}/api/integrations/qff-app/passes?audit=1`, { headers: { Authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(25_000) });
+      if (!res.ok) return { ok: false, message: `The website answered ${res.status}.` };
+      return { ok: true, ...(await res.json() as object) };
+    });
     api.post("/admin/api/cleanup-nonpass", async (req) => {
       const { dryRun, includeSignedIn } = z.object({ dryRun: z.boolean().default(true), includeSignedIn: z.boolean().default(false) }).parse(req.body ?? {});
       const [sync] = await db.query("SELECT value FROM settings WHERE key='passes_synced_at'");

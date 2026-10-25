@@ -43,20 +43,25 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
   const otpHash = (email: string, code: string) => hmac(config.otpPepper, `${email}|${code}`).toString("hex");
 
   // ---------- auth ----------
-  app.post("/v1/auth/request-code", { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } }, async (req, reply) => {
+  app.post("/v1/auth/request-code", { config: { rateLimit: { max: 400, timeWindow: "10 minutes" } } }, async (req, reply) => {
     const { email } = z.object({ email: Email }).parse(req.body);
     const [user] = await db.query("SELECT id, status FROM users WHERE lower(email)=$1", [email]);
     // The attendee list is closed (people register on the website and are synced in), so say plainly when an email isn't on it (otherwise people just wait for a mail that never comes).
     // The route is rate-limited per IP, which bounds how fast the list could be probed.
     // every @srmap.edu.in address may sign in (the account is made when the code is verified, so typing random addresses leaves nothing behind)
-    if (!user && !isSrmEmail(email)) return reply.code(404).send({ error: "not_registered", message: "This email can't use the app yet. The app is for SRM University-AP emails (@srmap.edu.in) and for people with a verified ₹99 or ₹499 festival pass. Register on the Fall Fest website (www.qffsrmap2026.com/learning), get your pass, then sign in here with the same email. It works within a few minutes of your pass being verified." });
+    if (!user && !isSrmEmail(email)) {
+      const [claim] = await db.query("SELECT status FROM pass_claim_status WHERE email=$1", [email]);
+      if (claim?.status === "pending") return reply.code(403).send({ error: "payment_pending", message: "Your pass payment is still under verification. You can sign in as soon as the organisers approve it (usually within a few minutes of approval). If it takes long, contact the organisers with the email you paid with." });
+      if (claim?.status === "rejected") return reply.code(403).send({ error: "payment_rejected", message: "Your payment verification failed. Please contact the organisers with the correct email you paid with." });
+      return reply.code(404).send({ error: "not_registered", message: "This email can't use the app yet. The app is for SRM University-AP emails (@srmap.edu.in) and for people with a verified ₹99 or ₹499 festival pass. Register on the Fall Fest website (www.qffsrmap2026.com/learning), get your pass, then sign in here with the same email. It works within a few minutes of your pass being verified." });
+    }
     if (user && user.status !== "active") return reply.code(403).send({ error: "account_inactive", message: "This account isn't active. Please contact the organisers." });
     const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '10 minutes'", [email]);
     if (n >= 3) return reply.code(429).send({ error: "too_many_codes", message: "You've requested several codes already. Use the latest one in your inbox (check spam), or try again in 10 minutes." });
     // Budgets that don't depend on the caller's IP: per attendee per day, and for the whole system per hour (keeps the mail quota for real use).
     const [{ d }] = await db.query<{ d: number }>("SELECT count(*)::int AS d FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '24 hours'", [email]);
     const [{ h }] = await db.query<{ h: number }>("SELECT count(*)::int AS h FROM otp_codes WHERE created_at > now() - interval '1 hour'");
-    if (d >= 12 || h >= 500) return reply.code(429).send({ error: "too_many_codes", message: "Too many sign-in requests right now. Please try again in a little while." });
+    if (d >= 12 || h >= 900) return reply.code(429).send({ error: "too_many_codes", message: "Too many sign-in requests right now. Please try again in a little while." });
     const code = otpCode();
     const [row] = await db.query<{ id: string }>("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3) RETURNING id", [email, otpHash(email, code), new Date(Date.now() + OTP_TTL_MS)]);
     try { await sendMail(otpMail(email, code)); }
@@ -70,7 +75,7 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     return CODE_SENT;
   });
 
-  app.post("/v1/auth/verify", { config: { rateLimit: { max: 15, timeWindow: "10 minutes" } } }, async (req, reply) => {
+  app.post("/v1/auth/verify", { config: { rateLimit: { max: 800, timeWindow: "10 minutes" } } }, async (req, reply) => {
     const b = z.object({ email: Email, code: z.string().regex(/^\d{6}$/), deviceId: z.string().min(8).max(100), deviceName: z.string().max(100).optional() }).parse(req.body);
     const bad = () => reply.code(401).send({ error: "invalid_code", message: "That code is incorrect or has expired." });
     // Per-attendee failure budget, independent of the caller's IP: after 10 wrong tries in 10 minutes nothing is accepted until it cools off.
@@ -111,7 +116,7 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     return { accessToken, expiresIn: ACCESS_TTL, refreshToken: refresh, profile, passSecret: secret.toString("base64") };
   });
 
-  app.post("/v1/auth/refresh", { config: { rateLimit: { max: 60, timeWindow: "10 minutes" } } }, async (req, reply) => {
+  app.post("/v1/auth/refresh", { config: { rateLimit: { max: 1500, timeWindow: "10 minutes" } } }, async (req, reply) => {
     const web = isWeb(req);
     const given = z.object({ refreshToken: z.string().min(20).max(100).optional() }).parse(req.body ?? {}).refreshToken;
     const refreshToken = web ? req.cookies[RT_COOKIE] : given; // browsers: cookie only. Native: body only.

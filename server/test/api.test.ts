@@ -506,6 +506,25 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
     await push([{ email: "new_student@srmap.edu.in", name: "Someone Else" }]);
     assert.equal((await db.query("SELECT name FROM users WHERE email='new_student@srmap.edu.in'"))[0]!.name, "Newton Student", "only a guessed name is replaced");
   });
+  it("outside people whose payment is pending or rejected are told exactly that, not the generic message", async () => {
+    await db.query("INSERT INTO pass_claim_status (email, status) VALUES ('waiting.payer@gmail.com','pending'),('failed.payer@gmail.com','rejected') ON CONFLICT (email) DO NOTHING");
+    const ask = (email: string, n: number) => app.inject({ method: "POST", url: "/v1/auth/request-code", remoteAddress: `10.78.0.${n}`, payload: { email } });
+    const p = await ask("waiting.payer@gmail.com", 1); assert.equal(p.statusCode, 403); assert.equal(p.json().error, "payment_pending"); assert.match(p.json().message, /still under verification/);
+    const r = await ask("failed.payer@gmail.com", 2); assert.equal(r.statusCode, 403); assert.equal(r.json().error, "payment_rejected"); assert.match(r.json().message, /verification failed[\s\S]*contact the organisers/i);
+    assert.equal((await ask("never.paid@gmail.com", 3)).json().error, "not_registered");
+  });
+  it("the sync stores pending/rejected claims for the sign-in message and never lets those people in", async () => {
+    config.website.secret = "sync-test-secret-0123456789";
+    const feed = { people: [{ email: "good.payer@gmail.com", name: "Good Payer", tier: "general", status: "verified" }, { email: "slow.payer@gmail.com", name: "Slow Payer", tier: "general", status: "pending" }, { email: "bad.payer@gmail.com", name: "Bad Payer", tier: "flagship", status: "rejected" }], nextCursor: null };
+    const srv = createServer((req, res) => { res.setHeader("content-type", "application/json"); res.end(JSON.stringify(req.url!.includes("/passes") ? feed : { people: [], nextCursor: null })); });
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r)); const was = config.website.baseUrl; config.website.baseUrl = `http://127.0.0.1:${(srv.address() as any).port}`;
+    try {
+      assert.equal((await admin("POST", "/admin/api/sync/run")).json().ok, true);
+      const em = (await db.query("SELECT email FROM users WHERE email LIKE '%.payer@gmail.com'")).map((r: any) => r.email); assert.deepEqual(em, ["good.payer@gmail.com"]);
+      const st = Object.fromEntries((await db.query("SELECT email,status FROM pass_claim_status")).map((r: any) => [r.email, r.status]));
+      assert.deepEqual([st["slow.payer@gmail.com"], st["bad.payer@gmail.com"], st["good.payer@gmail.com"]], ["pending", "rejected", undefined]);
+    } finally { config.website.baseUrl = was; srv.close(); }
+  });
   it("an outside email with no pass is refused; the cleanup removes only never-signed-in outsiders without a pass", async () => {
     assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", remoteAddress: "10.77.0.3", payload: { email: "nobody.outside@gmail.com" } })).statusCode, 404);
     await db.query("UPDATE users SET pass_tier='general' WHERE pass_tier IS NULL"); // shield everyone created by earlier tests: only the three people below are under test
