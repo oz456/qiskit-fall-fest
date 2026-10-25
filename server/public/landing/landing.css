@@ -16,7 +16,7 @@ code{font-size:11px;word-break:break-all;background:#e9dcc6;padding:1px 6px;bord
 /* the iPhone card: one big tappable row that leads to the web app */
 .webapp{display:flex;align-items:center;gap:14px;text-decoration:none;color:var(--ink);background:#fff;border:1.5px solid var(--pri);border-radius:18px;padding:16px;transition:transform .15s,box-shadow .15s}
 .webapp:active{transform:scale(.985)}.webapp:hover{box-shadow:0 6px 18px rgba(126,19,34,.18)}
-.webapp-text{flex:1;font-size:15px;line-height:1.4}.webapp-text b{color:var(--pri)}
+.webapp-text{flex:1;font-size:15px;line-height:1.4}.webapp-text b{display:block;font-size:17px;color:var(--pri);margin-bottom:2px}.webapp-sub{display:block;color:#6f5e54;font-size:14px}
 .arrow{flex:none;color:#fff;background:var(--pri);border-radius:50%;padding:10px;width:44px;height:44px}
 .tip{margin:12px 2px 0}
 .notice{background:#fff;border:1.5px solid var(--pri);border-radius:18px;padding:14px 16px;margin:0 0 6px;font-weight:600}

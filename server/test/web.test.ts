@@ -51,7 +51,7 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
 
   it("iPhone: landing page shows the web-app button, then sign in -> selfie -> hub -> QR that scans at the door -> support -> sign out", async () => {
     await b.device("ios"); await b.goto(base + "/");
-    assert.ok(await b.until(`!!document.querySelector('a.webapp')`)); assert.match(await b.ev(`document.querySelector('#ios').textContent`), /still being published to the App Store/);
+    assert.ok(await b.until(`!!document.querySelector('a.webapp')`)); assert.match(await b.ev(`document.querySelector('#ios').textContent`), /isn’t on the App Store yet/);
     await b.tap("a.webapp"); assert.ok(await b.until(`location.pathname === '/attendee' && !!document.querySelector('.signin')`));
     assert.match(await b.ev(`document.querySelector('.hero-title').textContent`), /Qiskit\s*Fall Fest\s*SRMAP 2026/i);
 
