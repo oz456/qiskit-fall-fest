@@ -120,7 +120,7 @@ export async function reconcile(db: Db, trigger: "scheduler" | "admin"): Promise
       // who is waiting for review / was rejected, so sign-in can say so (verified people are never in this table)
       await db.tx(async (q) => {
         await q.query("DELETE FROM pass_claim_status");
-        const rows = [...notYet].filter(([e]) => !seenPass.has(e));
+        const rows = [...notYet].filter(([e]) => !seenPass.has(e) && !isSrmEmail(e)); // SRM addresses never need a pass, so a rejected claim there changes nothing
         for (let i = 0; i < rows.length; i += 400) {
           const part = rows.slice(i, i + 400);
           await q.query(`INSERT INTO pass_claim_status (email, status) VALUES ${part.map((_, k) => `($${k * 2 + 1},$${k * 2 + 2})`).join(",")} ON CONFLICT (email) DO UPDATE SET status=EXCLUDED.status`, part.flatMap(([e, st]) => [e, st]));
