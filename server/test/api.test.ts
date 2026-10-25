@@ -132,7 +132,7 @@ describe("attendee flow", () => {
     const a = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email } });
     const b = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "stranger@example.org" } });
     assert.equal(a.statusCode, 200);
-    assert.equal(b.statusCode, 404); assert.equal(b.json().error, "not_registered"); assert.match(b.json().message, /isn.t registered yet/);
+    assert.equal(b.statusCode, 404); assert.equal(b.json().error, "not_registered"); assert.match(b.json().message, /Register on the Fall Fest website[\s\S]*get your pass/);
     const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int n FROM otp_codes WHERE email='stranger@example.org'");
     assert.equal(n, 0);
   });
@@ -461,7 +461,7 @@ describe("website sync: people registered on the main website become attendees h
   });
   it("an email that isn't registered yet gets a pointer to the website; after the sync it can log in", async () => {
     const r = await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "late.comer@example.org" } });
-    assert.equal(r.statusCode, 404); assert.match(r.json().message, /Register on the Fall Fest website first/);
+    assert.equal(r.statusCode, 404); assert.match(r.json().message, /Register on the Fall Fest website[\s\S]*get your pass/);
     assert.equal((await push([{ email: "late.comer@example.org", name: "Late Comer" }])).json().skipped, 1, "an outside email with no pass is not let in");
     assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", payload: { email: "late.comer@example.org" } })).statusCode, 404);
     await push([{ email: "late.comer@example.org", name: "Late Comer", passTier: "general" }]);

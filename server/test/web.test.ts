@@ -70,7 +70,7 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     assert.equal(await b.ev(`(() => { const r = document.querySelector('.field input').getBoundingClientRect(); return !!document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest('.field'); })()`), true, "nothing covers the email field");
     // unknown email -> the server's plain message
     await b.type("input[type=email]", "nobody@example.org"); await b.tap(".form .btn");
-    assert.ok(await b.until(`!!document.querySelector('.err')`)); assert.match(await b.ev(`document.querySelector('.err').textContent`), /isn't registered yet/);
+    assert.ok(await b.until(`!!document.querySelector('.err')`)); assert.match(await b.ev(`document.querySelector('.err').textContent`), /register on the Fall Fest website/i);
     // sign in with an emailed code
     await b.type("input[type=email]", "web@example.org"); await code("web@example.org", "246810"); await b.tap(".form .btn");
     assert.ok(await b.until(`!!document.querySelector('.codes')`));

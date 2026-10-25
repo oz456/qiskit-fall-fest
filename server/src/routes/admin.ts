@@ -121,17 +121,25 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     // Removes outside people (not @srmap.edu.in) who hold no verified ₹99/₹499 pass AND never signed in, never did a selfie and never checked in.
     // Anyone who signed in, took a selfie, checked in, was added by hand or has a pass is never touched. Refuses to run before the pass list has been synced.
+    // Cross-check against the website's own pass table: claims by tier / status / paid-or-free / SRM-or-outside.
+    api.get("/admin/api/pass-report", async () => {
+      const { baseUrl, secret } = config.website; if (!secret) return { ok: false, message: "Website sync is not configured." };
+      const res = await fetch(`${baseUrl}/api/integrations/qff-app/passes?summary=1`, { headers: { Authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(25_000) });
+      if (!res.ok) return { ok: false, message: `The website answered ${res.status}.` };
+      return { ok: true, ...(await res.json() as object) };
+    });
     api.post("/admin/api/cleanup-nonpass", async (req) => {
-      const { dryRun } = z.object({ dryRun: z.boolean().default(true) }).parse(req.body ?? {});
+      const { dryRun, includeSignedIn } = z.object({ dryRun: z.boolean().default(true), includeSignedIn: z.boolean().default(false) }).parse(req.body ?? {});
       const [sync] = await db.query("SELECT value FROM settings WHERE key='passes_synced_at'");
       if (!sync || Date.now() - Date.parse(sync.value) > 24 * 3600_000) return { ok: false, message: "The pass list has not been synced from the website in the last 24 hours, so nobody can be judged yet. Run Sync now first." };
-      const WHERE = `u.source IN ('website','import') AND lower(u.email) NOT LIKE '%@srmap.edu.in' AND u.pass_tier IS NULL
-        AND NOT EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id) AND NOT EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id) AND NOT EXISTS(SELECT 1 FROM checkins c WHERE c.user_id=u.id)`;
-      const [c] = await db.query(`SELECT count(*)::int AS n FROM users u WHERE ${WHERE}`);
-      if (dryRun) return { ok: true, dryRun: true, wouldRemove: c!.n };
-      await db.query(`DELETE FROM users u WHERE ${WHERE}`);
-      await audit(db, req, "users.cleanup_nonpass", "user", undefined, { removed: c!.n });
-      return { ok: true, dryRun: false, removed: c!.n };
+      // includeSignedIn: also people who signed in or took a selfie (their selfie is deleted from storage too). Still never anyone added by hand or anyone ever checked in at a door.
+      const WHERE = `u.source IN ('website','import') AND lower(u.email) NOT LIKE '%@srmap.edu.in' AND u.pass_tier IS NULL AND NOT EXISTS(SELECT 1 FROM checkins c WHERE c.user_id=u.id)
+        ${includeSignedIn ? "" : "AND NOT EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id) AND NOT EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id)"}`;
+      const ids = (await db.query<{ id: string }>(`SELECT u.id FROM users u WHERE ${WHERE}`)).map((r) => r.id);
+      if (dryRun) return { ok: true, dryRun: true, wouldRemove: ids.length };
+      for (const id of ids) { await removePhoto(db, id).catch(() => {}); await db.query("DELETE FROM users WHERE id=$1", [id]); } // photo first: the stored image goes, then the account and its sessions
+      await audit(db, req, "users.cleanup_nonpass", "user", undefined, { removed: ids.length, includeSignedIn });
+      return { ok: true, dryRun: false, removed: ids.length };
     });
     api.get("/admin/api/users/:id/photo", async (req, reply) => {
       const { id } = Id.parse(req.params);
