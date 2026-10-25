@@ -17,19 +17,13 @@ export async function siteRoutes(app: FastifyInstance) {
   await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "checkin"), prefix: "/checkin/", index: false, decorateReply: false, setHeaders: noCache }); });
   app.get("/admin", async (_req, reply) => reply.header("Cache-Control", "no-cache").sendFile("index.html", join(pub, "admin")));
   app.get("/checkin", async (_req, reply) => reply.header("Cache-Control", "no-cache").sendFile("index.html", join(pub, "checkin")));
-  // duplicates and older addresses redirect permanently to the canonical one
-  for (const [from, to] of [["/admin/", "/admin"], ["/admin/index.html", "/admin"], ["/checkin/", "/checkin"], ["/checkin/index.html", "/checkin"], ["/check", "/checkin"], ["/check/", "/checkin"], ["/scan", "/checkin"], ["/scan/", "/checkin"], ["/index.html", "/"], ["/favicon.ico", "/shared/qiskit.svg"], ["/user", "/attendee"], ["/user/", "/attendee"]] as const)
+  // duplicate spellings (trailing slash, /index.html) redirect to the one canonical address
+  for (const [from, to] of [["/admin/", "/admin"], ["/admin/index.html", "/admin"], ["/checkin/", "/checkin"], ["/checkin/index.html", "/checkin"], ["/index.html", "/"], ["/favicon.ico", "/shared/qiskit.svg"]] as const)
     app.get(from, async (_req, reply) => reply.redirect(to, 301));
-  for (const tab of ["hub", "pass", "support"]) app.get(`/user/${tab}`, async (_req, reply) => reply.redirect(`/attendee/${tab}`, 301));
 
   // ---- shared assets and downloads ----
   await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "shared"), prefix: "/shared/", decorateReply: false, setHeaders: longCache }); });
   await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "downloads"), prefix: "/downloads/", decorateReply: false, setHeaders: (res: any, path: string) => { noCache(res); if (path.endsWith(".apk")) res.header("Content-Disposition", 'attachment; filename="qff-2026.apk"'); } }); });
-  // addresses printed on earlier posters/QR codes keep working
-  app.get("/download", async (_req, reply) => reply.redirect("/", 301));
-  app.get("/download/", async (_req, reply) => reply.redirect("/", 301));
-  app.get("/download/qiskit-fallfest-2026.apk", async (_req, reply) => reply.redirect("/downloads/qff-2026.apk", 301));
-  app.get("/download/qiskit-fallfest-2026.apk.sha256", async (_req, reply) => reply.redirect("/downloads/qff-2026.apk.sha256", 301));
 
   // ---- the attendee web app (/attendee): iPhone/iPad only ----
   const attendeeRoot = join(pub, "attendee");

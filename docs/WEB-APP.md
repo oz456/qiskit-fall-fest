@@ -6,11 +6,11 @@ Plan: no Google Play / App Store accounts. **Android** installs the APK from the
 |---|---|
 | `/` | Landing page: APK download (+ SHA-256, install steps) and the iPhone card with the web-app button |
 | `/attendee` | Web app sign-in; `/attendee/hub`, `/attendee/pass`, `/attendee/support` are the three tabs (same screens as the mobile apps) |
-| `/admin`, `/checkin` | Admin portal, door check-in scanner (`/check` and `/scan` redirect to `/checkin`) |
-| `/downloads/qff-2026.apk` | The APK. Old `/download*` links redirect here |
+| `/admin`, `/checkin` | Admin portal, door check-in scanner |
+| `/downloads/qff-2026.apk` | The APK. |
 
 ### Address rules
-- One canonical address per page, no trailing slash: `/`, `/admin`, `/checkin`, `/attendee`, `/attendee/hub`, `/attendee/pass`, `/attendee/support`. Older and duplicate addresses redirect permanently (301): `/admin/`, `/checkin/`, `/check`, `/scan`, `/index.html`, `/user`, `/user/hub|pass|support`, `/attendee/hub/`, `/attendee/index.html`, `/download`. Any other `/attendee/...` goes to `/attendee`.
+- One canonical address per page, no trailing slash: `/`, `/admin`, `/checkin`, `/attendee`, `/attendee/hub`, `/attendee/pass`, `/attendee/support`. Duplicate spellings redirect permanently (301): `/admin/`, `/checkin/`, `/index.html`, `/attendee/hub/`, `/attendee/index.html`. Any other `/attendee/...` goes to `/attendee`.
 - Unknown addresses: a branded "Page not found" page for browsers, `{"error":"not_found","message":"Not found."}` JSON for API clients and anything under `/v1`, `/admin/api`, `/checkin/api`.
 - APIs: `/v1/...` attendee API (shared by Android, iPhone and web; versioned, existing apps depend on it), `/admin/api/...` and `/checkin/api/...` staff APIs. Health probe: `/ping`.
 - `/downloads/qff-2026.apk` is served as an attachment; the matching `.sha256` sits next to it.

@@ -338,10 +338,9 @@ describe("web app: device gate and browser sessions", () => {
     assert.match((await get("/attendee/hub", DESKTOP, { "sec-ch-ua-platform": '"Android"' })).body, /isn’t available on Android/);
   });
 
-  it("the landing page, downloads and old links work for everyone", async () => {
+  it("the landing page, and downloads work for everyone", async () => {
     for (const ua of [IOS, ANDROID, DESKTOP]) { const r = await get("/", ua); assert.equal(r.statusCode, 200); assert.match(r.body, /Download the app \(APK\)/); assert.match(r.body, /href="\/attendee"/); }
     assert.equal((await get("/downloads/qff-2026.apk", ANDROID)).headers["content-type"], "application/vnd.android.package-archive");
-    const old = await get("/download/qiskit-fallfest-2026.apk", ANDROID); assert.equal(old.statusCode, 301); assert.equal(old.headers.location, "/downloads/qff-2026.apk");
     assert.equal((await get("/download", ANDROID)).headers.location, "/");
     assert.match((await get("/robots.txt", DESKTOP)).body, /Disallow: \/attendee/);
     assert.equal((await get("/admin", DESKTOP)).statusCode, 200); assert.equal((await get("/checkin", DESKTOP)).statusCode, 200);
@@ -409,11 +408,12 @@ describe("web push endpoints", () => {
 describe("addresses: one canonical URL per page, proper 404s", () => {
   const ios = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
   const get = (url: string, headers: Record<string, string> = {}) => app.inject({ method: "GET", url, headers: { "user-agent": ios, ...headers } });
-  it("duplicates and older addresses redirect permanently to the canonical one", async () => {
-    for (const [from, to] of [["/admin/", "/admin"], ["/checkin/", "/checkin"], ["/check", "/checkin"], ["/check/", "/checkin"], ["/scan", "/checkin"], ["/index.html", "/"], ["/admin/index.html", "/admin"], ["/checkin/index.html", "/checkin"],
-      ["/user", "/attendee"], ["/user/hub", "/attendee/hub"], ["/user/pass", "/attendee/pass"], ["/user/support", "/attendee/support"], ["/attendee/index.html", "/attendee"], ["/attendee/hub/", "/attendee/hub"], ["/attendee/pass/", "/attendee/pass"], ["/attendee/support/", "/attendee/support"], ["/download", "/"], ["/favicon.ico", "/shared/qiskit.svg"]] as const) {
+  it("duplicate spellings redirect permanently to the canonical address; retired names are simply gone", async () => {
+    for (const [from, to] of [["/admin/", "/admin"], ["/checkin/", "/checkin"], ["/index.html", "/"], ["/admin/index.html", "/admin"], ["/checkin/index.html", "/checkin"],
+      ["/attendee/index.html", "/attendee"], ["/attendee/hub/", "/attendee/hub"], ["/attendee/pass/", "/attendee/pass"], ["/attendee/support/", "/attendee/support"], ["/favicon.ico", "/shared/qiskit.svg"]] as const) {
       const r = await get(from); assert.equal(r.statusCode, 301, from); assert.equal(r.headers.location, to, from);
     }
+    for (const gone of ["/user", "/user/hub", "/check", "/scan", "/download", "/download/qiskit-fallfest-2026.apk"]) assert.equal((await get(gone, { accept: "application/json" })).statusCode, 404, gone);
     assert.equal((await get("/attendee/anything")).statusCode, 302); assert.equal((await get("/attendee/anything")).headers.location, "/attendee");
     for (const ok of ["/", "/admin", "/checkin", "/attendee", "/attendee/hub", "/attendee/pass", "/attendee/support", "/admin/admin.js", "/checkin/checkin.js", "/checkin/vendor/jsQR.js", "/admin/qiskit.svg"]) assert.equal((await get(ok)).statusCode, 200, ok);
   });
