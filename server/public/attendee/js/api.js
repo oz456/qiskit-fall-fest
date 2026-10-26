@@ -26,6 +26,7 @@ async function parse(res) {
   const data = await res.json().catch(() => ({}));
   if (res.ok) return data;
   const err = new ApiError(res.status, data.error || "error", data.message || `Request failed (${res.status})`);
+  err.field = data.field || "";
   if (err.code === "platform_not_supported") hooks.onBlocked();
   if (err.code === "photo_required") hooks.onPhotoRequired();
   throw err;
@@ -69,6 +70,7 @@ export const api = {
   replyTicket: (id, body) => call("POST", `/v1/tickets/${id}/messages`, { body }),
   setSaved: (id, on) => call(on ? "PUT" : "DELETE", `/v1/events/${id}/saved`, on ? {} : undefined),
   uploadPhoto: (blob) => call("PUT", "/v1/me/photo", blob),
+  saveDetails: (d) => call("PUT", "/v1/me/details", d),
   passCodes: () => call("GET", "/v1/pass/codes"),
   putPush: (sub) => call("PUT", "/v1/me/push-token", sub),
   delPush: (token) => call("DELETE", `/v1/me/push-token?token=${encodeURIComponent(token)}`),

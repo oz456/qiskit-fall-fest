@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { migrate, openDb, type Db } from "../src/db.ts";
 import { buildApp } from "../src/app.ts";
-import { hashPassword, hmac, passPayload } from "../src/lib/crypto.ts";
+import { hashPassword, hmac, passPayload, signJwt } from "../src/lib/crypto.ts";
 import { config } from "../src/config.ts";
 import { exportTables, importTables } from "../src/lib/backup.ts";
 import { outbox } from "../src/lib/push.ts";
@@ -497,6 +497,39 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
     const v = await app.inject({ method: "POST", url: "/v1/auth/verify", remoteAddress: "10.77.0.2", payload: { email: em, code: "135790", deviceId: "srm-device-1" } });
     assert.equal(v.statusCode, 200); assert.equal(v.json().profile.name, "New Student");
     const [u] = await db.query("SELECT kind, source, name_derived FROM users WHERE email=$1", [em]); assert.deepEqual([u!.kind, u!.source, u!.name_derived], ["student", "srm", true]);
+  });
+  it("an SRM person is asked for academic details once; outside people never are; an organiser can clear them", async () => {
+    const em = "details_student@srmap.edu.in";
+    await db.query("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3)", [em, hash(em, "246802"), new Date(Date.now() + 600_000)]);
+    const v = await app.inject({ method: "POST", url: "/v1/auth/verify", remoteAddress: "10.77.1.1", payload: { email: em, code: "246802", deviceId: "details-device-1" } });
+    const auth = { authorization: "Bearer " + v.json().accessToken };
+    const me = (await app.inject({ method: "GET", url: "/v1/me", headers: auth })).json();
+    assert.equal(me.profile.needsDetails, true); assert.ok(me.detailsOptions.schools.includes("SEAS"));
+    const good = { regNo: "ap25110010123", school: "SEAS", semester: 3, course: "CSE", program: "B.Tech", cgpa: 8.45 };
+    const put = (payload: object) => app.inject({ method: "PUT", url: "/v1/me/details", headers: auth, remoteAddress: "10.77.1.2", payload });
+    for (const bad of [{ ...good, regNo: "12345" }, { ...good, semester: 9 }, { ...good, cgpa: 10.5 }, { ...good, school: "XYZ" }]) assert.equal((await put(bad)).statusCode, 400);
+    assert.equal((await put(good)).statusCode, 200);
+    const after = (await app.inject({ method: "GET", url: "/v1/me", headers: auth })).json();
+    assert.equal(after.profile.needsDetails, false); assert.deepEqual(after.profile.details, { ...good, regNo: "AP25110010123" });
+    assert.equal((await put({ ...good, course: "ECE" })).statusCode, 409, "saved once; later changes go through an organiser");
+    // the same registration number cannot be claimed by a second account
+    const em2 = "details_other@srmap.edu.in";
+    await db.query("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3)", [em2, hash(em2, "135791"), new Date(Date.now() + 600_000)]);
+    const v2 = await app.inject({ method: "POST", url: "/v1/auth/verify", remoteAddress: "10.77.1.3", payload: { email: em2, code: "135791", deviceId: "details-device-2" } });
+    const dup = await app.inject({ method: "PUT", url: "/v1/me/details", headers: { authorization: "Bearer " + v2.json().accessToken }, remoteAddress: "10.77.1.4", payload: good });
+    assert.equal(dup.statusCode, 409); assert.equal(dup.json().error, "reg_no_taken");
+    // organiser: sees them in the list and the export, and can clear them
+    const row = (await admin("GET", "/admin/api/users?q=details_student")).json().rows[0];
+    assert.equal(row.details.school, "SEAS");
+    assert.ok((await admin("GET", "/admin/api/students")).json().rows.some((r: any) => r.email === em && r.cgpa === 8.45));
+    assert.equal((await admin("DELETE", `/admin/api/users/${row.id}/details`)).statusCode, 200);
+    assert.equal((await app.inject({ method: "GET", url: "/v1/me", headers: auth })).json().profile.needsDetails, true);
+    // someone outside SRM is never asked and cannot save them
+    const extId = (await admin("POST", "/admin/api/users", { email: "details_outside@example.org", name: "Outside Guest" })).json().id;
+    const sid = (await db.query("INSERT INTO sessions (user_id, refresh_hash, device_id, expires_at) VALUES ($1,'x','d',now()+interval '1 day') RETURNING id", [extId]))[0]!.id;
+    const t = signJwt({ sub: extId, sid }, config.jwtSecret, 600);
+    assert.equal((await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: "Bearer " + t } })).json().profile.needsDetails, false);
+    assert.equal((await app.inject({ method: "PUT", url: "/v1/me/details", headers: { authorization: "Bearer " + t }, remoteAddress: "10.77.1.5", payload: good })).statusCode, 403);
   });
   it("the website's real name replaces a guessed one, but never a name set by hand", async () => {
     config.website.secret = "sync-test-secret-0123456789";

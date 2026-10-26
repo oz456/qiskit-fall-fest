@@ -114,6 +114,7 @@ struct Ticket: Identifiable, Decodable, Equatable { let id: String; let code: St
 struct Profile: Codable, Equatable {
     let name: String; let email: String; let college: String?; let passCode: String
     var hasPhoto: Bool?
+    var needsDetails: Bool?
     var initials: String {
         let s = name.split(separator: " ").prefix(2).compactMap { $0.first.map { String($0).uppercased() } }.joined()
         return s.isEmpty ? "?" : s
@@ -126,7 +127,8 @@ struct CheckinNotice: Identifiable { let id = UUID(); let title: String; let tim
 
 // ---- API payloads ----
 struct EventsResponse: Decodable { let events: [Event]; let faqs: [Faq]; let settings: [String: String] }
-struct MeResponse: Decodable { let profile: Profile; let checkins: [Checkin] }
+struct DetailsOptions: Decodable, Equatable { let schools: [String]; let programs: [String] }
+struct MeResponse: Decodable { let profile: Profile; let checkins: [Checkin]; let detailsOptions: DetailsOptions? }
 struct VerifyResponse: Decodable { let accessToken: String; let refreshToken: String; let profile: Profile; let passSecret: String }
 struct RefreshResponse: Decodable { let accessToken: String; let refreshToken: String }
 struct MessageResponse: Decodable { let message: String? }

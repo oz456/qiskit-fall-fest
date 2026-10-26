@@ -11,6 +11,7 @@ import { getPhoto, removePhoto } from "../lib/photos.ts";
 import { devicesForAll, devicesForUser, pushInBackground } from "../lib/push.ts";
 import { AnnouncementInput, EventInput, FaqInput, SettingsInput, TicketReply, TicketStatus, UserInput } from "../lib/schemas.ts";
 import { audit, eventDay, eventOut } from "../lib/util.ts";
+import { detailsOut } from "../lib/details.ts";
 
 const Id = z.object({ id: z.string().uuid() });
 
@@ -103,10 +104,10 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const order = f.sort === "name" ? "lower(u.name), u.email" : f.sort === "checkins" ? "checkins DESC, u.created_at DESC" : "u.created_at DESC";
       const [t] = await db.query(`SELECT count(*)::int AS n FROM users u WHERE ${where}`, args);
       const [all] = await db.query("SELECT count(*)::int AS n FROM users");
-      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,
+      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,u.reg_no,u.school,u.semester,u.course,u.program,u.cgpa,u.details_at,
         ${HAS_APP} AS has_app, ${HAS_PHOTO} AS has_photo, (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins
         FROM users u WHERE ${where} ORDER BY ${order} LIMIT ${f.limit} OFFSET ${f.offset}`, args);
-      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins })) };
+      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, details: detailsOut(u), hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins })) };
     });
     // Who is in the app, by how they got in: SRM address, ₹99 pass, ₹499 pass, or neither. Signed in = has a live session.
     api.get("/admin/api/access-summary", async () => {
@@ -193,6 +194,17 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
         });
         await audit(db, req, "user." + b.status, "user", id);
       }
+      return { ok: true };
+    });
+    // Academic details people gave on first sign-in. Clearing them makes the app ask that person again (e.g. a typo).
+    api.get("/admin/api/students", async () => {
+      const rows = await db.query("SELECT name,email,reg_no,school,semester,course,program,cgpa FROM users WHERE details_at IS NOT NULL ORDER BY lower(name)");
+      return { rows: rows.map((u) => ({ name: u.name, email: u.email, regNo: u.reg_no, school: u.school, semester: u.semester, course: u.course, program: u.program, cgpa: Number(u.cgpa) })) };
+    });
+    api.delete("/admin/api/users/:id/details", async (req) => {
+      const { id } = Id.parse(req.params);
+      await db.query("UPDATE users SET reg_no=NULL, school=NULL, semester=NULL, course=NULL, program=NULL, cgpa=NULL, details_at=NULL WHERE id=$1", [id]);
+      await audit(db, req, "user.reset_details", "user", id);
       return { ok: true };
     });
     api.post("/admin/api/users/:id/reset-device", async (req) => { // frees the pass for a new phone (e.g. lost device)

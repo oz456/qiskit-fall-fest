@@ -147,4 +147,22 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
 
     const real = b.errors; assert.deepEqual(real, [], "no JavaScript errors anywhere in the journey");
   });
+  it("an SRM person fills in the one-time details form before the selfie; it is never asked again", async () => {
+    await db.query("INSERT INTO users (email,name,college,pass_code,pass_secret) VALUES ('details_web@srmap.edu.in','Details Web','SRM University-AP','QFF-8888',$1)", [Buffer.alloc(32, 7)]);
+    await b.device("ios"); await b.goto(base + "/attendee");
+    assert.ok(await b.until(`!!document.querySelector('.signin')`));
+    await b.type("input[type=email]", "details_web@srmap.edu.in"); await code("details_web@srmap.edu.in", "112233"); await b.tap(".form .btn");
+    assert.ok(await b.until(`!!document.querySelector('.codes')`)); await b.type(".codes input", "112233");
+    assert.ok(await b.until(`!!document.querySelector('.details')`), "details come first");
+    assert.equal(await b.ev(`!!document.querySelector('.selfie, .tabbar')`), false);
+    const fill = (name: string, v: string) => `(() => { const e = document.querySelector('[name=${name}]'); e.value = ${JSON.stringify(v)}; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); })()`;
+    await b.ev(fill("regNo", "ap25110010999")); await b.ev(fill("school", "SEAS")); await b.ev(fill("semester", "3")); await b.ev(fill("program", "B.Tech")); await b.ev(fill("course", "CSE")); await b.ev(fill("cgpa", "11"));
+    await b.ev(`document.querySelector('.details form, form.details').requestSubmit()`);
+    assert.ok(await b.until(`/0 to 10/.test(document.querySelector('.err')?.textContent || '')`), "a bad CGPA is explained");
+    await b.ev(fill("cgpa", "8.5")); await b.ev(`document.querySelector('form.details').requestSubmit()`);
+    assert.ok(await b.until(`!!document.querySelector('.selfie')`, 10000), "then the selfie");
+    const [u] = await db.query("SELECT reg_no, school, semester, cgpa FROM users WHERE email='details_web@srmap.edu.in'");
+    assert.deepEqual([u!.reg_no, u!.school, u!.semester, Number(u!.cgpa)], ["AP25110010999", "SEAS", 3, 8.5]);
+    await b.goto(base + "/attendee"); assert.ok(await b.until(`!!document.querySelector('.selfie')`, 10000)); assert.equal(await b.ev(`!!document.querySelector('.details')`), false, "not asked again");
+  });
 });

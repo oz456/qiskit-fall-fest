@@ -9,6 +9,7 @@ import { otpMail, sendMail } from "../lib/mail.ts";
 import { sanitizeJpeg, savePhoto } from "../lib/photos.ts";
 import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
+import { Details, detailsOut, PROGRAMS, SCHOOLS } from "../lib/details.ts";
 import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
 import { randomBytes } from "node:crypto";
 
@@ -163,8 +164,8 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       const [s] = await db.query("SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.status='active'", [p.sid]);
       if (!s) return reply.code(401).send({ error: "unauthorized" });
       req.uid = p.sub; req.sid = p.sid;
-      // The selfie is mandatory: until it exists the only things an attendee can do are read their profile, upload the photo, or sign out.
-      if (!/^\/v1\/(me|me\/photo|auth\/logout)(\?|$)/.test(req.url)) {
+      // The selfie is mandatory: until it exists the only things an attendee can do are read their profile, save their details, upload the photo, or sign out.
+      if (!/^\/v1\/(me|me\/photo|me\/details|auth\/logout)(\?|$)/.test(req.url)) {
         const [ph] = await db.query("SELECT 1 FROM user_photos WHERE user_id=$1", [req.uid]);
         if (!ph) return reply.code(403).send({ error: "photo_required", message: "Add your selfie to continue." });
       }
@@ -189,9 +190,30 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     });
 
     api.get("/v1/me", async (req) => {
-      const [u] = await db.query("SELECT name,email,college,pass_code, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
+      const [u] = await db.query("SELECT name,email,college,pass_code,reg_no,school,semester,course,program,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
       const checkins = await db.query("SELECT scope, scanned_at FROM checkins WHERE user_id=$1", [req.uid]);
-      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo }, checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString() })) };
+      // only SRM-AP addresses are asked for academic details, and only until they have been saved once
+      const needsDetails = isSrmEmail(u!.email) && !u!.details_at;
+      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, needsDetails, details: detailsOut(u!) },
+        ...(needsDetails ? { detailsOptions: { schools: SCHOOLS, programs: PROGRAMS } } : {}),
+        checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString() })) };
+    });
+
+    // First sign-in of an SRM-AP person: academic details, saved once. Later changes go through an organiser.
+    api.put("/v1/me/details", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async (req, reply) => {
+      const [u] = await db.query("SELECT email, details_at FROM users WHERE id=$1", [req.uid]);
+      if (!isSrmEmail(u!.email)) return reply.code(403).send({ error: "not_needed", message: "These details are only for SRM University-AP students." });
+      if (u!.details_at) return reply.code(409).send({ error: "already_set", message: "Your details are already saved. Ask an organiser to change them." });
+      const parsed = Details.safeParse(req.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_details", message: parsed.error.issues[0]?.message ?? "Please check your details.", field: String(parsed.error.issues[0]?.path[0] ?? "") });
+      const d = parsed.data;
+      try {
+        await db.query("UPDATE users SET reg_no=$2, school=$3, semester=$4, course=$5, program=$6, cgpa=$7, details_at=now() WHERE id=$1 AND details_at IS NULL", [req.uid, d.regNo, d.school, d.semester, d.course, d.program, d.cgpa]);
+      } catch (e: any) {
+        if (e?.code === "23505") return reply.code(409).send({ error: "reg_no_taken", message: "That registration number is already used by another account. Check it, or contact the organisers.", field: "regNo" });
+        throw e;
+      }
+      return { ok: true };
     });
 
     // One selfie per attendee, taken on first sign-in so door staff can match the face to the pass. Only an admin can reset it.

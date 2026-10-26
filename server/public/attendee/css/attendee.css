@@ -243,3 +243,12 @@ body.kb .tabbar,body.kb .toast{display:none}
 .devphone iframe{display:block;width:100%;height:100%;border:0}
 .dialog.center{align-items:center;text-align:center}.dialog.center h2{color:var(--ink)}.dialog.center .actions{align-self:stretch}
 .fold{display:flex;align-items:center;justify-content:space-between;width:calc(100% - 48px);margin:28px 24px 10px;padding:6px 0;text-align:left}.fold .icon{width:18px;height:18px;color:var(--muted);transition:transform .2s}.fold.open .icon{transform:rotate(90deg)}
+/* one-time details (SRM-AP people) */
+.details{min-height:100dvh;padding:max(24px,var(--sat)) 28px max(24px,var(--sab));display:flex;flex-direction:column;gap:14px}
+.details .intro{display:flex;flex-direction:column;gap:8px}
+.details .fl{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.details .field{height:52px}
+.details .field select{flex:1;min-width:0;border:0;outline:0;background:none;font-size:16px;height:100%;appearance:none;-webkit-appearance:none}
+.details .field.bad{border-color:var(--pri)}
+.details .err{color:var(--pri);font-size:13px}
+.details .row2{display:flex;gap:12px}.details .row2>*{flex:1;min-width:0}

@@ -10,7 +10,7 @@ Admin: `/admin`. Door scanner: `/checkin/` (a different login, give only this on
 ## Attendees
 - People who register on the main website appear here by themselves within about 10 minutes (see docs/WEBSITE-SYNC.md). Only listed emails can sign in.
 - **Add attendee**: name, email, college. Use it for anyone who isn't on the website.
-- **Click an attendee** to see their selfie, block/unblock them, reset their device (lost phone), reset their selfie (they must retake it) or delete them.
+- **Click an attendee** to see their selfie, block/unblock them, reset their device (lost phone), reset their selfie (they must retake it), clear their academic details (they are asked again) or delete them. SRM-AP people give registration number, school, semester, course, program and CGPA once on first sign-in; **Download student details** on the Attendees page exports them as CSV.
 - **Import CSV**: columns `email,name,college` (the window has a **Download template** button). Existing emails are skipped, not duplicated.
 
 ## Door scanner (`/checkin`)

@@ -40,6 +40,10 @@ class AppState(context: Context) {
     var offline by mutableStateOf(false); private set
     /** First sign-in: the attendee has no selfie on file yet. Door staff compare faces, so we ask once. */
     var needsSelfie by mutableStateOf(prefs.getBoolean("needs_selfie", false)); private set
+    /** First sign-in of an SRM-AP person: academic details are asked once. Other attendees are never asked. */
+    var needsDetails by mutableStateOf(prefs.getBoolean("needs_details", false)); private set
+    var detailsSchools by mutableStateOf(listOf("SEAS", "ESLA", "PSB", "Other")); private set
+    var detailsPrograms by mutableStateOf(listOf("Other")); private set
     var message by mutableStateOf<String?>(null)
     var nowMs by mutableLongStateOf(System.currentTimeMillis())
     private var seenAnnouncement by mutableStateOf(prefs.getString("seen_ann", null))
@@ -60,7 +64,7 @@ class AppState(context: Context) {
     /** "ticket" / "announcement" when the user tapped a notification; the UI consumes it and sets it back to null. */
     var pendingOpen by mutableStateOf<String?>(null)
     /** Ask once, right after sign-in + selfie, on Android 13+ (older versions allow notifications without asking). */
-    fun shouldAskNotifications(): Boolean = signedIn && !needsSelfie && !prefs.getBoolean("notif_asked", false) && android.os.Build.VERSION.SDK_INT >= 33 && !Push.enabled(appContext)
+    fun shouldAskNotifications(): Boolean = signedIn && !needsSelfie && !needsDetails && !prefs.getBoolean("notif_asked", false) && android.os.Build.VERSION.SDK_INT >= 33 && !Push.enabled(appContext)
     fun markNotificationsAsked() { prefs.edit().putBoolean("notif_asked", true).apply() }
     fun notificationsChanged() { notifEnabled = Push.enabled(appContext); syncPush() }
     /** Registers this phone's Firebase token with the server when notifications are allowed. Safe to call any time; it only sends when something changed. */
@@ -105,8 +109,9 @@ class AppState(context: Context) {
         secure.put("refresh", r.str("refreshToken")); secure.put("pass_secret", r.str("passSecret"))
         val p = r.getJSONObject("profile")
         // Learn whether a selfie exists BEFORE showing the app, so first sign-in goes straight to the selfie step.
-        val hasPhoto = runCatching { (api.call("GET", "/v1/me", null, accessToken) as JSONObject).getJSONObject("profile").optBoolean("hasPhoto", true) }.getOrDefault(true)
-        needsSelfie = !hasPhoto
+        val me0 = runCatching { api.call("GET", "/v1/me", null, accessToken) as JSONObject }.getOrNull()
+        needsSelfie = me0?.getJSONObject("profile")?.optBoolean("hasPhoto", true) == false
+        if (me0 != null) applyDetailsState(me0)
         prefs.edit().putString("profile", p.toString()).putBoolean("needs_selfie", needsSelfie).apply()
         profile = Profile(p.str("name"), p.str("email"), p.strOrNull("college"), p.str("passCode"))
         refresh()
@@ -124,7 +129,7 @@ class AppState(context: Context) {
         wipe()
     }
     private fun wipe() {
-        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null
+        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null
         profile = null; events = emptyList(); announcements = emptyList(); tickets = emptyList(); checkins = emptyMap()
     }
 
@@ -162,6 +167,7 @@ class AppState(context: Context) {
                 (authed("GET", "/v1/me") as JSONObject).let { me ->
                     applyCheckins(me)
                     me.getJSONObject("profile").let { p -> val fresh = Profile(p.str("name"), p.str("email"), p.strOrNull("college"), p.str("passCode")); if (fresh != profile) { profile = fresh; prefs.edit().putString("profile", p.toString()).apply() } } // a name fixed by the team shows up without signing in again
+                    applyDetailsState(me)
                     val missing = !me.getJSONObject("profile").optBoolean("hasPhoto", true)
                     if (missing != needsSelfie) { needsSelfie = missing; prefs.edit().putBoolean("needs_selfie", missing).apply() }
                 }
@@ -203,6 +209,23 @@ class AppState(context: Context) {
             catch (x: ApiException) { patch(e.id) { it.withUser(saved = !on) }; message = x.message } // the server answered: say what it said
             catch (x: Exception) { patch(e.id) { it.withUser(saved = !on) }; android.util.Log.w("QFF", "save failed", x); message = "Couldn't save. Check your connection." }
         }
+    }
+
+    private fun applyDetailsState(me: JSONObject) {
+        val need = me.getJSONObject("profile").optBoolean("needsDetails", false)
+        if (need != needsDetails) { needsDetails = need; prefs.edit().putBoolean("needs_details", need).apply() }
+        me.optJSONObject("detailsOptions")?.let { o ->
+            o.optJSONArray("schools")?.let { a -> detailsSchools = (0 until a.length()).map { a.getString(it) } }
+            o.optJSONArray("programs")?.let { a -> detailsPrograms = (0 until a.length()).map { a.getString(it) } }
+        }
+    }
+
+    /** One-time academic details (SRM-AP people). Throws ApiException with a readable message; its code says which field is wrong. */
+    suspend fun saveDetails(regNo: String, school: String, semester: Int, course: String, program: String, cgpa: Double) {
+        try { authed("PUT", "/v1/me/details", JSONObject().put("regNo", regNo).put("school", school).put("semester", semester).put("course", course).put("program", program).put("cgpa", cgpa)) }
+        catch (e: ApiException) { if (e.http != 409 || e.code != "already_set") throw e }
+        needsDetails = false; prefs.edit().putBoolean("needs_details", false).apply()
+        refresh()
     }
 
     /** One-time selfie upload (JPEG). Throws ApiException with a readable message on failure. */

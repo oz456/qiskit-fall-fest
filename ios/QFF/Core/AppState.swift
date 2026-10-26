@@ -32,6 +32,9 @@ final class AppState: ObservableObject {
     @Published var seenTickets: [String: Double] = (UserDefaults.standard.dictionary(forKey: "seen_tickets") as? [String: Double]) ?? [:]
     /// First sign-in: no selfie on file yet. Door staff compare faces, so we ask once.
     @Published var needsSelfie = UserDefaults.standard.bool(forKey: "needs_selfie")
+    /// First sign-in of an SRM-AP person: academic details are asked once. Other attendees are never asked.
+    @Published var needsDetails = UserDefaults.standard.bool(forKey: "needs_details")
+    @Published var detailsOptions = DetailsOptions(schools: ["SEAS", "ESLA", "PSB", "Other"], programs: ["Other"])
 
     let api: API
     let isPreview: Bool
@@ -103,6 +106,7 @@ final class AppState: ObservableObject {
         let me: MeResponse? = try? await api.call("GET", "/v1/me", token: r.accessToken)
         needsSelfie = me?.profile.hasPhoto == false
         defaults.set(needsSelfie, forKey: "needs_selfie")
+        if let me { applyDetailsState(me) }
         defaults.set(try? JSONEncoder().encode(r.profile), forKey: "profile")
         profile = r.profile
         Haptics.success()
@@ -123,9 +127,9 @@ final class AppState: ObservableObject {
     private func wipe() {
         accessToken = nil; passSecret = nil
         keychain.wipe()
-        for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "seen_tickets", "push_registered", "notif_asked", "seen_checkins"] { defaults.removeObject(forKey: k) }
+        for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "needs_details", "seen_tickets", "push_registered", "notif_asked", "seen_checkins"] { defaults.removeObject(forKey: k) }
         seenTickets = [:]; announcedCheckins = []; checkinNotice = nil
-        needsSelfie = false
+        needsSelfie = false; needsDetails = false
         profile = nil; events = []; announcements = []; tickets = []; checkins = [:]; faqs = []; settings = [:]
     }
 
@@ -178,6 +182,7 @@ final class AppState: ObservableObject {
             let me: MeResponse = try await authed("GET", "/v1/me")
             applyCheckins(me)
             if me.profile != profile { profile = me.profile; if let d = try? JSONEncoder().encode(me.profile) { defaults.set(d, forKey: "profile") } } // a name fixed by the team shows up without signing in again
+            applyDetailsState(me)
             if let has = me.profile.hasPhoto, needsSelfie == has { needsSelfie = !has; defaults.set(needsSelfie, forKey: "needs_selfie") }
             offline = false
             Task { [self] in await refreshNotifStatus() }
@@ -187,10 +192,10 @@ final class AppState: ObservableObject {
         catch { offline = true }
     }
 
-    private func authedData(_ method: String, _ path: String) async throws -> Data {
+    private func authedData(_ method: String, _ path: String, body: [String: Any]? = nil) async throws -> Data {
         let first = try await currentToken()
-        do { return try await api.data(method, path, token: first) }
-        catch let e as APIError where e.http == 401 { return try await api.data(method, path, token: try await refreshToken()) }
+        do { return try await api.data(method, path, body: body, token: first) }
+        catch let e as APIError where e.http == 401 { return try await api.data(method, path, body: body, token: try await refreshToken()) }
     }
 
     private func loadCache() {
@@ -214,6 +219,23 @@ final class AppState: ObservableObject {
             catch let x as APIError { patch(e.id) { $0.saved = !on }; message = x.message } // the server answered: say what it said
             catch { patch(e.id) { $0.saved = !on }; message = "Couldn't save. Check your connection." }
         }
+    }
+
+    private func applyDetailsState(_ me: MeResponse) {
+        let need = me.profile.needsDetails ?? false
+        if need != needsDetails { needsDetails = need; defaults.set(need, forKey: "needs_details") }
+        if let o = me.detailsOptions { detailsOptions = o }
+    }
+
+    /// One-time academic details (SRM-AP people). Throws APIError with a readable message.
+    func saveDetails(regNo: String, school: String, semester: Int, course: String, program: String, cgpa: Double) async throws {
+        if !isPreview {
+            let body: [String: Any] = ["regNo": regNo, "school": school, "semester": semester, "course": course, "program": program, "cgpa": cgpa]
+            do { _ = try await authedData("PUT", "/v1/me/details", body: body) }
+            catch let e as APIError where e.http == 409 && e.code == "already_set" { }
+        }
+        needsDetails = false; defaults.set(false, forKey: "needs_details")
+        if !isPreview { Task { [self] in await refresh() } }
     }
 
     /// One-time selfie upload (JPEG). A 409 means the server already has one, which is fine.

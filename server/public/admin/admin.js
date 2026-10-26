@@ -139,7 +139,7 @@ async function people(m) {
   const PAGE = 200; let shown = [];
   const out = h("div", { class: "card" });
   const syncBox = h("div", { class: "card" });
-  m.append(head("Attendees", h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), syncBox, h("div", { class: "row", style: "flex-wrap:wrap;gap:10px" }, q, kind, selfie, app, status, checked, source, passSel, sort, h("button", { class: "btn ghost sm", onclick: () => { for (const x of [q, kind, selfie, app, status, checked, source]) x.value = ""; sort.value = "newest"; load(true); } }, "Clear filters")), count, out);
+  m.append(head("Attendees", h("button", { class: "btn ghost", onclick: guard(exportStudents) }, "Download student details"), h("button", { class: "btn ghost", onclick: importCsv }, "Import CSV"), h("button", { class: "btn", onclick: addUser }, "Add attendee")), syncBox, h("div", { class: "row", style: "flex-wrap:wrap;gap:10px" }, q, kind, selfie, app, status, checked, source, passSel, sort, h("button", { class: "btn ghost sm", onclick: () => { for (const x of [q, kind, selfie, app, status, checked, source]) x.value = ""; sort.value = "newest"; load(true); } }, "Clear filters")), count, out);
   const KIND = { student: "SRM student", faculty: "SRM faculty", unclear: "SRM", external: "Outside SRM" };
   async function drawSync() {
     const s = await api("GET", "/sync"), access = await api("GET", "/access-summary"); clear(syncBox);
@@ -179,12 +179,21 @@ async function people(m) {
         u.hasPhoto ? h("img", { class: "avatar", alt: "", src: `/admin/api/users/${u.id}/photo` }) : h("div", { class: "avatar none" }, u.name.split(/\s+/).slice(0, 2).map((x) => x[0]).join("").toUpperCase()),
         h("div", { class: "grow" }, h("h2", { style: "margin:0 0 4px" }, u.name), h("div", { class: "muted" }, u.email), h("div", { class: "muted" }, [u.passCode, u.college].filter(Boolean).join(" · ")),
           h("div", { style: "margin-top:10px" }, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), " ", h("span", { class: "pill" }, u.hasApp ? "SIGNED IN" : "NOT SIGNED IN"), " ", u.checkins ? h("span", { class: "pill" }, `${u.checkins} CHECK-IN${u.checkins > 1 ? "S" : ""}`) : null))),
+      u.details ? h("div", { class: "muted", style: "margin:12px 0" }, [u.details.regNo, u.details.school, "Sem " + u.details.semester, u.details.program + " " + u.details.course, "CGPA " + u.details.cgpa.toFixed(2)].join(" · ")) : null,
       h("div", { class: "row" },
         act(u.status === "active" ? "Block" : "Unblock", "ghost", guard(async () => { await api("PATCH", "/users/" + u.id, { status: u.status === "active" ? "blocked" : "active" }); done("Updated"); })),
         act("Reset device", "ghost", () => confirmDo("Sign " + u.name + " out of their phone so they can log in on a new one?", async () => { await api("POST", `/users/${u.id}/reset-device`); done("Device reset"); })),
+        u.details && act("Reset details", "ghost", () => confirmDo("Clear " + u.name + "’s academic details? They will be asked for them again next time they open the app.", async () => { await api("DELETE", `/users/${u.id}/details`); done("Details cleared"); })),
         u.hasPhoto && act("Reset selfie", "ghost", () => confirmDo("Delete " + u.name + "’s selfie? They will be asked for a new one next time they open the app.", async () => { await api("DELETE", `/users/${u.id}/photo`); done("Selfie removed"); })),
         act("Delete", "danger right", () => confirmDo("Delete " + u.name + " and all their data?", async () => { await api("DELETE", "/users/" + u.id); done("Deleted"); }))));
     const bg = modal("Attendee", body);
+  }
+  async function exportStudents() {
+    const r = await api("GET", "/students");
+    const safe = (c) => (/^[=+\-@\t\r]/.test(String(c)) ? "'" + c : String(c));
+    const lines = ["name,email,registration_no,school,semester,course,program,cgpa", ...r.rows.map((x) => [x.name, x.email, x.regNo, x.school, x.semester, x.course, x.program, x.cgpa.toFixed(2)].map((c) => '"' + safe(c).replace(/"/g, '""') + '"').join(","))];
+    h("a", { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })), download: "student-details.csv" }).click();
+    toast(r.rows.length + " students");
   }
   async function addUser() {
     const n = h("input", { required: true, maxlength: 100 }), e = h("input", { type: "email", required: true }), c = h("input", { maxlength: 150 });
