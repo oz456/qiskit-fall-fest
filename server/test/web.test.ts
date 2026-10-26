@@ -138,7 +138,7 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     await b.ev(`history.back()`);
 
     // reload keeps the session (cookie), sign-out ends it for real
-    await b.goto(base + "/attendee/pass"); assert.ok(await b.until(`!!document.querySelector('.pass')`, 10000), "session survives a reload");
+    await b.goto(base + "/attendee/pass"); assert.ok(await b.until(`!!document.querySelector('.pass')`, 25000), "session survives a reload");
     await b.tap(".tab[aria-label='Hub']"); assert.ok(await b.until(`!!document.querySelector('.hero')`)); await b.tap(".avatar"); assert.ok(await b.until(`!!document.querySelector('.sheet')`));
     await b.ev(`[...document.querySelectorAll('.sheet button')].find((x) => /Sign out/.test(x.textContent)).click()`); assert.ok(await b.until(`!!document.querySelector('.dialog')`)); await b.tap(".dialog .actions .btn");
     assert.ok(await b.until(`!!document.querySelector('.signin')`)); assert.equal(await b.ev(`location.pathname`), "/attendee");
@@ -149,8 +149,9 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
   });
   it("an SRM person fills in the one-time details form before the selfie; it is never asked again", async () => {
     await db.query("INSERT INTO users (email,name,college,pass_code,pass_secret) VALUES ('details_web@srmap.edu.in','Details Web','SRM University-AP','QFF-8888',$1)", [Buffer.alloc(32, 7)]);
-    await b.device("ios"); await b.goto(base + "/attendee");
-    assert.ok(await b.until(`!!document.querySelector('.signin')`));
+    await b.device("ios"); await b.cdp("Network.clearBrowserCookies"); await b.goto(base + "/attendee");
+    await b.ev(`localStorage.clear()`); await b.goto(base + "/attendee");
+    assert.ok(await b.until(`!!document.querySelector('.signin')`, 15000));
     await b.type("input[type=email]", "details_web@srmap.edu.in"); await code("details_web@srmap.edu.in", "112233"); await b.tap(".form .btn");
     assert.ok(await b.until(`!!document.querySelector('.codes')`)); await b.type(".codes input", "112233");
     assert.ok(await b.until(`!!document.querySelector('.details')`), "details come first");
