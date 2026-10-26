@@ -260,7 +260,7 @@ async function attendance(m) {
   const out = h("div", { class: "card" }), chips = h("div", { class: "chips" });
   const dayLabel = (d) => new Date(d + "T00:00:00Z").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   const label = (x) => x.scope.startsWith("day:") ? ["Campus entry", dayLabel(x.scope.slice(4))] : ["Event", x.title || "Deleted event"];
-  m.append(head("Attendance"), h("p", { class: "muted" }, "Who the door scanners checked in, at what time, and which volunteer scanned them. Campus entry counts people once per day at the gate; an event counts people at that session."), chips, out);
+  m.append(head("Attendance"), h("p", { class: "muted" }, "Who the door scanners checked in, at what time, and which volunteer (by name and ID) scanned them. Campus entry counts people once per day at the gate; an event counts people at that session."), chips, out);
   function drawChips() {
     clear(chips);
     sum.summary.forEach((x) => { const [kind, name] = label(x); chips.append(h("button", { class: "chip" + (x.scope === scope ? " on" : ""), onclick: () => { scope = x.scope; drawChips(); load(); } }, h("small", {}, kind), h("b", {}, name), h("span", {}, x.count + " in"))); });
@@ -270,8 +270,11 @@ async function attendance(m) {
     const r = await api("GET", "/attendance?scope=" + encodeURIComponent(scope));
     const safe = (c) => (/^[=+\-@\t\r]/.test(String(c)) ? "'" + c : String(c)); /* a name like =HYPERLINK(...) must not run as a formula in Excel */
     const csv = () => { const lines = ["name,email,college,pass,checked_in_at,scanned_by_name,scanned_by_id", ...r.rows.map((x) => [x.name, x.email, x.college || "", x.passCode, x.at, x.scannedByName || "", x.scannedById || ""].map((c) => '"' + safe(c).replace(/"/g, '""') + '"').join(","))]; const a = h("a", { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })), download: "attendance.csv" }); a.click(); };
+    const tally = new Map(); for (const x of r.rows) { const k = x.scannedById ? (x.scannedByName || x.scannedById) : "Not recorded (earlier scans)"; tally.set(k, (tally.get(k) || 0) + 1); }
+    const by = h("div", { class: "muted", style: "margin-bottom:12px" }, "Scanned by: " + [...tally].sort((a, b) => b[1] - a[1]).map(([k, n]) => k + " " + n).join(" · "));
     out.append(h("div", { class: "row", style: "margin-bottom:12px" }, h("b", {}, r.rows.length + " checked in"), h("button", { class: "btn ghost sm right", onclick: csv }, "Download CSV")),
-      h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Time", "Scanned by"].map((x) => h("th", {}, x))), r.rows.map((x) => h("tr", {}, h("td", {}, x.name, h("div", { class: "muted small" }, x.college || "")), h("td", {}, x.email), h("td", {}, x.passCode), h("td", {}, fmt(x.at, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", second: "2-digit" })), h("td", {}, x.scannedById ? [x.scannedByName || x.scannedById, h("div", { class: "muted small" }, x.scannedByName ? x.scannedById : "")] : "—")))));
+      by, h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Time", "Scanned by", "Volunteer ID"].map((x) => h("th", {}, x))), r.rows.map((x) => h("tr", {}, h("td", {}, x.name, h("div", { class: "muted small" }, x.college || "")), h("td", {}, x.email), h("td", {}, x.passCode), h("td", {}, fmt(x.at, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", second: "2-digit" })),
+        h("td", {}, x.scannedById ? h("b", {}, x.scannedByName || x.scannedById) : h("span", { class: "muted" }, "Not recorded")), h("td", {}, x.scannedById || "—")))));
   }
   if (!sum.summary.length) { out.append(h("p", { class: "muted" }, "No check-ins yet. They appear here as soon as the door scanners record entries.")); return; }
   drawChips(); await load();
