@@ -199,7 +199,7 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     // Academic details people gave on first sign-in. Clearing them makes the app ask that person again (e.g. a typo).
     api.get("/admin/api/students", async () => {
       const rows = await db.query("SELECT name,email,reg_no,school,semester,course,program,cgpa FROM users WHERE details_at IS NOT NULL ORDER BY lower(name)");
-      return { rows: rows.map((u) => ({ name: u.name, email: u.email, regNo: u.reg_no, school: u.school, semester: u.semester, course: u.course, program: u.program, cgpa: Number(u.cgpa) })) };
+      return { rows: rows.map((u) => ({ name: u.name, email: u.email, regNo: u.reg_no, school: u.school, semester: u.semester, course: u.course, program: u.program, cgpa: u.cgpa === null ? null : Number(u.cgpa) })) };
     });
     api.delete("/admin/api/users/:id/details", async (req) => {
       const { id } = Id.parse(req.params);

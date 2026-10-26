@@ -9,7 +9,7 @@ import { otpMail, sendMail } from "../lib/mail.ts";
 import { sanitizeJpeg, savePhoto } from "../lib/photos.ts";
 import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
-import { Details, detailsOut, PROGRAMS, SCHOOLS } from "../lib/details.ts";
+import { cgpaMissing, Details, detailsOut, PROGRAMS, SCHOOLS } from "../lib/details.ts";
 import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
 import { randomBytes } from "node:crypto";
 
@@ -207,6 +207,7 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       const parsed = Details.safeParse(req.body);
       if (!parsed.success) return reply.code(400).send({ error: "invalid_details", message: parsed.error.issues[0]?.message ?? "Please check your details.", field: String(parsed.error.issues[0]?.path[0] ?? "") });
       const d = parsed.data;
+      const miss = cgpaMissing(d); if (miss) return reply.code(400).send({ error: "invalid_details", message: miss, field: "cgpa" });
       try {
         await db.query("UPDATE users SET reg_no=$2, school=$3, semester=$4, course=$5, program=$6, cgpa=$7, details_at=now() WHERE id=$1 AND details_at IS NULL", [req.uid, d.regNo, d.school, d.semester, d.course, d.program, d.cgpa]);
       } catch (e: any) {

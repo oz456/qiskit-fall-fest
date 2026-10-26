@@ -14,7 +14,7 @@ export function detailsView({ onDone, onSignOut }) {
   const semester = select("semester", [1, 2, 3, 4, 5, 6, 7, 8], "Semester");
   const program = select("program", opts.programs, "Program");
   const course = input({ name: "course", placeholder: "e.g. CSE, ECE, Data Science", maxlength: 60 });
-  const cgpa = input({ name: "cgpa", placeholder: "e.g. 8.45", inputmode: "decimal", maxlength: 5 });
+  const cgpa = input({ name: "cgpa", placeholder: "e.g. 8.45, or NA", inputmode: "text", autocapitalize: "characters", maxlength: 5 });
   const wrap = (label, el, field) => h("label", { class: "fl" }, label, h("div", { class: "field" + (errField === field ? " bad" : "") }, el));
   const root = h("div", { class: "details" });
   const msg = h("div", { class: "err", role: "alert" });
@@ -22,8 +22,8 @@ export function detailsView({ onDone, onSignOut }) {
 
   async function save(ev) {
     ev.preventDefault();
-    const n = Number(cgpa.value.trim());
-    if (!cgpa.value.trim() || !Number.isFinite(n)) { errField = "cgpa"; errText = "Enter your CGPA as a number from 0 to 10."; return draw(); }
+    const raw = cgpa.value.trim().replace(",", "."), na = /^n\/?a$/i.test(raw), n = na ? null : Number(raw);
+    if (!raw || (!na && !Number.isFinite(n))) { errField = "cgpa"; errText = "Enter your CGPA as a number from 0 to 10, or NA if you are in the first semester."; return draw(); }
     saving = true; errField = errText = ""; draw();
     try { await api.saveDetails({ regNo: regNo.value.trim(), school: school.value, semester: Number(semester.value), course: course.value.trim(), program: program.value, cgpa: n }); }
     catch (e) {
@@ -42,7 +42,7 @@ export function detailsView({ onDone, onSignOut }) {
   const form = h("form", { class: "details", style: { padding: 0, minHeight: 0 }, onsubmit: save },
     wrap("Registration number", regNo, "regNo"), wrap("School", school, "school"),
     h("div", { class: "row2" }, wrap("Semester", semester, "semester"), wrap("Program", program, "program")),
-    wrap("Course", course, "course"), wrap("CGPA", cgpa, "cgpa"), msg, submit);
+    wrap("Course", course, "course"), wrap("CGPA", cgpa, "cgpa"), h("p", { class: "small muted", style: { margin: "-6px 0 0" } }, "First semester? You don’t have a CGPA yet. Enter NA (or 0)."), msg, submit);
   root.append(
     h("div", { class: "intro" }, h("div", { class: "label" }, "One-time setup"), h("h1", { class: "h1", style: { fontSize: "30px", lineHeight: "34px" } }, "Tell us about yourself"),
       h("p", { class: "body muted" }, "We only ask this once. It helps the organisers with attendance and certificates.")),

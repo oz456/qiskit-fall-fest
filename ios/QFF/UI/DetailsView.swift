@@ -29,7 +29,8 @@ struct DetailsView: View {
                     picker("Program", $program, app.detailsOptions.programs, "Program")
                 }
                 field("Course") { TextField("e.g. CSE, ECE, Data Science", text: $course).onChange(of: course) { v in course = String(v.prefix(60)); error = nil } }
-                field("CGPA") { TextField("e.g. 8.45", text: $cgpa).keyboardType(.decimalPad).onChange(of: cgpa) { v in cgpa = String(v.prefix(5)); error = nil } }
+                field("CGPA") { TextField("e.g. 8.45, or NA", text: $cgpa).textInputAutocapitalization(.characters).autocorrectionDisabled().onChange(of: cgpa) { v in cgpa = String(v.prefix(5)); error = nil } }
+                Text("First semester? You don’t have a CGPA yet. Enter NA (or 0).").font(T.small).foregroundStyle(P.muted)
                 if let error { Text(error).font(T.small).foregroundStyle(P.danger) }
                 PrimaryButton(title: "CONTINUE", loading: saving) { save() }.frame(maxWidth: .infinity)
                 Button("Not you? Sign out") { app.signOut() }.font(T.small).foregroundStyle(P.muted).frame(maxWidth: .infinity).padding(.top, 6)
@@ -69,13 +70,15 @@ struct DetailsView: View {
     }
 
     private func save() {
-        let g = Double(cgpa.trimmingCharacters(in: .whitespaces))
+        let raw = cgpa.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        let na = raw.uppercased() == "NA" || raw.uppercased() == "N/A"
+        let g = na ? nil : Double(raw)
         if regNo.trimmingCharacters(in: .whitespaces).isEmpty { error = "Enter your registration number, like AP25110010123."; return }
         if school.isEmpty { error = "Choose your school."; return }
         if semester.isEmpty { error = "Choose your semester."; return }
         if program.isEmpty { error = "Choose your program."; return }
         if course.trimmingCharacters(in: .whitespaces).count < 2 { error = "Enter your course, like CSE."; return }
-        guard let g, g >= 0, g <= 10 else { error = "Enter your CGPA as a number from 0 to 10."; return }
+        if !na { guard let g, g >= 0, g <= 10 else { error = "Enter your CGPA as a number from 0 to 10, or NA if you are in the first semester."; return } }
         saving = true; error = nil
         Task {
             do { try await app.saveDetails(regNo: regNo.trimmingCharacters(in: .whitespaces), school: school, semester: Int(semester) ?? 1, course: course.trimmingCharacters(in: .whitespaces), program: program, cgpa: g) }

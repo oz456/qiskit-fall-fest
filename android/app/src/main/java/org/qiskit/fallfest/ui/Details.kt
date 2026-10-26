@@ -39,14 +39,16 @@ fun DetailsScreen(app: AppState) {
     val scope = rememberCoroutineScope()
 
     fun save() {
-        val g = cgpa.trim().toDoubleOrNull()
+        val raw = cgpa.trim().replace(',', '.')
+        val na = raw.equals("NA", true) || raw.equals("N/A", true)
+        val g = if (na) null else raw.toDoubleOrNull()
         when {
             regNo.isBlank() -> error = "Enter your registration number, like AP25110010123."
             school.isEmpty() -> error = "Choose your school."
             semester.isEmpty() -> error = "Choose your semester."
             program.isEmpty() -> error = "Choose your program."
             course.trim().length < 2 -> error = "Enter your course, like CSE."
-            g == null || g < 0 || g > 10 -> error = "Enter your CGPA as a number from 0 to 10."
+            !na && (g == null || g < 0 || g > 10) -> error = "Enter your CGPA as a number from 0 to 10, or NA if you are in the first semester."
             else -> {
                 loading = true; error = null
                 scope.launch {
@@ -70,7 +72,8 @@ fun DetailsScreen(app: AppState) {
             Box(Modifier.weight(1f)) { DetailPicker("Program", program, app.detailsPrograms, "Program") { program = it; error = null } }
         }
         DetailField("Course", course, { course = it.take(60); error = null }, "e.g. CSE, ECE, Data Science")
-        DetailField("CGPA", cgpa, { cgpa = it.take(5); error = null }, "e.g. 8.45", number = true)
+        DetailField("CGPA", cgpa, { cgpa = it.take(5); error = null }, "e.g. 8.45, or NA")
+        Text("First semester? You don’t have a CGPA yet. Enter NA (or 0).", style = T.small, color = P.muted)
         if (error != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(Icons.Outlined.ErrorOutline, null, tint = P.danger, modifier = Modifier.size(16.dp)); Text(error.orEmpty(), style = T.small, color = P.danger)
         }

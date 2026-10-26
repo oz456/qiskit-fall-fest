@@ -221,8 +221,8 @@ class AppState(context: Context) {
     }
 
     /** One-time academic details (SRM-AP people). Throws ApiException with a readable message; its code says which field is wrong. */
-    suspend fun saveDetails(regNo: String, school: String, semester: Int, course: String, program: String, cgpa: Double) {
-        try { authed("PUT", "/v1/me/details", JSONObject().put("regNo", regNo).put("school", school).put("semester", semester).put("course", course).put("program", program).put("cgpa", cgpa)) }
+    suspend fun saveDetails(regNo: String, school: String, semester: Int, course: String, program: String, cgpa: Double?) {
+        try { authed("PUT", "/v1/me/details", JSONObject().put("regNo", regNo).put("school", school).put("semester", semester).put("course", course).put("program", program).put("cgpa", cgpa ?: "NA")) }
         catch (e: ApiException) { if (e.http != 409 || e.code != "already_set") throw e }
         needsDetails = false; prefs.edit().putBoolean("needs_details", false).apply()
         refresh()

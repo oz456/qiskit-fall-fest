@@ -228,9 +228,9 @@ final class AppState: ObservableObject {
     }
 
     /// One-time academic details (SRM-AP people). Throws APIError with a readable message.
-    func saveDetails(regNo: String, school: String, semester: Int, course: String, program: String, cgpa: Double) async throws {
+    func saveDetails(regNo: String, school: String, semester: Int, course: String, program: String, cgpa: Double?) async throws {
         if !isPreview {
-            let body: [String: Any] = ["regNo": regNo, "school": school, "semester": semester, "course": course, "program": program, "cgpa": cgpa]
+            let body: [String: Any] = ["regNo": regNo, "school": school, "semester": semester, "course": course, "program": program, "cgpa": cgpa ?? "NA"]
             do { _ = try await authedData("PUT", "/v1/me/details", body: body) }
             catch let e as APIError where e.http == 409 && e.code == "already_set" { }
         }

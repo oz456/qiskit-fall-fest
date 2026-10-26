@@ -518,6 +518,13 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
     const v2 = await app.inject({ method: "POST", url: "/v1/auth/verify", remoteAddress: "10.77.1.3", payload: { email: em2, code: "135791", deviceId: "details-device-2" } });
     const dup = await app.inject({ method: "PUT", url: "/v1/me/details", headers: { authorization: "Bearer " + v2.json().accessToken }, remoteAddress: "10.77.1.4", payload: good });
     assert.equal(dup.statusCode, 409); assert.equal(dup.json().error, "reg_no_taken");
+    // first-semester students have no CGPA: NA is fine in semester 1 only; a comma decimal is understood
+    const as2 = (payload: object) => app.inject({ method: "PUT", url: "/v1/me/details", headers: { authorization: "Bearer " + v2.json().accessToken }, remoteAddress: "10.77.1.6", payload });
+    const naBad = await as2({ ...good, regNo: "AP25110010555", semester: 3, cgpa: "NA" }); assert.equal(naBad.statusCode, 400); assert.match(naBad.json().message, /first semester/);
+    assert.equal((await as2({ ...good, regNo: "AP25110010555", semester: 1, cgpa: "NA" })).statusCode, 200);
+    assert.equal((await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: "Bearer " + v2.json().accessToken } })).json().profile.details.cgpa, null);
+    assert.ok((await admin("GET", "/admin/api/students")).json().rows.some((r: any) => r.email === em2 && r.cgpa === null));
+    assert.equal(Number((await db.query("SELECT cgpa FROM users WHERE email=$1", [em]))[0]!.cgpa), 8.45);
     // organiser: sees them in the list and the export, and can clear them
     const row = (await admin("GET", "/admin/api/users?q=details_student")).json().rows[0];
     assert.equal(row.details.school, "SEAS");
