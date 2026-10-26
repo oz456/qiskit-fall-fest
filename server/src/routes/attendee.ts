@@ -63,11 +63,11 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     if ((!user && !isSrmEmail(email)) || lacksPass(user, email)) return noAccessReply(reply, email);
     if (user && user.status !== "active") return reply.code(403).send({ error: "account_inactive", message: "This account isn't active. Please contact the organisers." });
     const [{ n }] = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '10 minutes'", [email]);
-    if (n >= 3) return reply.code(429).send({ error: "too_many_codes", message: "You've requested several codes already. Use the latest one in your inbox (check spam), or try again in 10 minutes." });
+    if (n >= 5) return reply.code(429).send({ error: "too_many_codes", message: "You've requested several codes already. Use the latest one in your inbox (check spam), or try again in 10 minutes." });
     // Budgets that don't depend on the caller's IP: per attendee per day, and for the whole system per hour (keeps the mail quota for real use).
     const [{ d }] = await db.query<{ d: number }>("SELECT count(*)::int AS d FROM otp_codes WHERE lower(email)=$1 AND created_at > now() - interval '24 hours'", [email]);
     const [{ h }] = await db.query<{ h: number }>("SELECT count(*)::int AS h FROM otp_codes WHERE created_at > now() - interval '1 hour'");
-    if (d >= 12 || h >= 900) return reply.code(429).send({ error: "too_many_codes", message: "Too many sign-in requests right now. Please try again in a little while." });
+    if (d >= 30 || h >= 900) return reply.code(429).send({ error: "too_many_codes", message: "Too many sign-in requests right now. Please try again in a little while." });
     const code = otpCode();
     const [row] = await db.query<{ id: string }>("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3) RETURNING id", [email, otpHash(email, code), new Date(Date.now() + OTP_TTL_MS)]);
     try { await sendMail(otpMail(email, code)); }

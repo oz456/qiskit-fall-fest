@@ -608,6 +608,15 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok");
     const att = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(scope)}`)).json(); assert.equal(att.rows.length, 1); assert.equal(att.rows[0].name, "Ext Person");
   });
+  it("too many code requests are refused, and an organiser can free that person at once", async () => {
+    const em = "limited_student@srmap.edu.in"; let last = 0;
+    for (let i = 0; i < 6; i++) last = (await app.inject({ method: "POST", url: "/v1/auth/request-code", remoteAddress: "10.88.0." + i, payload: { email: em } })).statusCode;
+    assert.equal(last, 429, "the sixth request inside ten minutes is refused");
+    await db.query("INSERT INTO users (email,name,college,pass_code,pass_secret) VALUES ($1,'Limited Student','SRM University-AP','QFF-9191',$2) ON CONFLICT DO NOTHING", [em, Buffer.alloc(32, 5)]);
+    const id = (await db.query("SELECT id FROM users WHERE email=$1", [em]))[0]!.id;
+    assert.equal((await admin("POST", `/admin/api/users/${id}/reset-login-limit`)).json().ok, true);
+    assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", remoteAddress: "10.88.1.1", payload: { email: em } })).statusCode, 200);
+  });
   it("the admin can correct a person's name", async () => {
     const id = (await admin("POST", "/admin/api/users", { email: "rename@example.org", name: "0Day" })).json().id;
     assert.equal((await admin("PATCH", `/admin/api/users/${id}`, { name: "Krish" })).statusCode, 200);

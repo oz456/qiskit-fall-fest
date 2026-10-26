@@ -58,6 +58,12 @@ fun SelfieScreen(app: AppState) {
     var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
     var asked by remember { mutableStateOf(false) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it; asked = true }
+    // coming back from Settings (or an "only this time" permission that lapsed): look at the permission again, otherwise the screen stays stuck
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, ev -> if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED }
+        lifecycleOwner.lifecycle.addObserver(obs); onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
     LaunchedEffect(Unit) { if (!granted) ask.launch(Manifest.permission.CAMERA) }
 
     var capture by remember { mutableStateOf<ImageCapture?>(null) }
@@ -81,7 +87,7 @@ fun SelfieScreen(app: AppState) {
             when {
                 shown != null -> androidx.compose.foundation.Image(shown.asImageBitmap(), "Your selfie", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 granted -> {
-                    CameraPreview({ capture = it }, Modifier.fillMaxSize())
+                    CameraPreview({ capture = it; error = if (it == null) "Couldn’t open the camera. Close other apps that use it, then reopen QFF." else null }, Modifier.fillMaxSize())
                     Box(Modifier.fillMaxWidth(0.62f).aspectRatio(0.78f).border(2.dp, Color.White.copy(alpha = .7f), RoundedCornerShape(percent = 50)))
                 }
                 else -> Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -146,19 +152,22 @@ fun SelfieScreen(app: AppState) {
 }
 
 @Composable
-private fun CameraPreview(onReady: (ImageCapture) -> Unit, modifier: Modifier) {
+private fun CameraPreview(onReady: (ImageCapture?) -> Unit, modifier: Modifier) {
     val owner = LocalLifecycleOwner.current
     AndroidView(modifier = modifier, factory = { c ->
         PreviewView(c).apply { scaleType = PreviewView.ScaleType.FILL_CENTER; implementationMode = PreviewView.ImplementationMode.COMPATIBLE }.also { pv ->
             val future = ProcessCameraProvider.getInstance(c)
             future.addListener({
-                val provider = future.get()
-                val preview = Preview.Builder().build().also { it.surfaceProvider = pv.surfaceProvider }
-                val ic = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
-                provider.unbindAll()
-                try { provider.bindToLifecycle(owner, CameraSelector.DEFAULT_FRONT_CAMERA, preview, ic) }
-                catch (_: Exception) { runCatching { provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, ic) } }
-                onReady(ic)
+                val ready = runCatching {
+                    val provider = future.get()
+                    val preview = Preview.Builder().build().also { it.surfaceProvider = pv.surfaceProvider }
+                    val ic = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
+                    provider.unbindAll()
+                    try { provider.bindToLifecycle(owner, CameraSelector.DEFAULT_FRONT_CAMERA, preview, ic) }
+                    catch (_: Exception) { provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, ic) }
+                    ic
+                }.getOrNull()
+                onReady(ready)
             }, ContextCompat.getMainExecutor(c))
         }
     })

@@ -207,6 +207,13 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       await audit(db, req, "user.reset_details", "user", id);
       return { ok: true };
     });
+    // Frees someone who hit the sign-in limits (too many codes requested, or too many wrong codes) without waiting for them to cool off.
+    api.post("/admin/api/users/:id/reset-login-limit", async (req) => {
+      const { id } = Id.parse(req.params);
+      const [u] = await db.query("SELECT email FROM users WHERE id=$1", [id]);
+      if (u) { await db.query("DELETE FROM otp_codes WHERE lower(email)=lower($1)", [u.email]); await audit(db, req, "user.reset_login_limit", "user", id); }
+      return { ok: !!u };
+    });
     api.post("/admin/api/users/:id/reset-device", async (req) => { // frees the pass for a new phone (e.g. lost device)
       const { id } = Id.parse(req.params);
       await db.query("UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", [id]);

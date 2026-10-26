@@ -182,6 +182,7 @@ async function people(m) {
       u.details ? h("div", { class: "muted", style: "margin:12px 0" }, [u.details.regNo, u.details.school, "Sem " + u.details.semester, u.details.program + " " + u.details.course, "CGPA " + (u.details.cgpa === null ? "NA" : u.details.cgpa.toFixed(2))].join(" · ")) : null,
       h("div", { class: "row" },
         act(u.status === "active" ? "Block" : "Unblock", "ghost", guard(async () => { await api("PATCH", "/users/" + u.id, { status: u.status === "active" ? "blocked" : "active" }); done("Updated"); })),
+        act("Reset sign-in limit", "ghost", guard(async () => { await api("POST", `/users/${u.id}/reset-login-limit`); done("They can request a new code now"); })),
         act("Reset device", "ghost", () => confirmDo("Sign " + u.name + " out of their phone so they can log in on a new one?", async () => { await api("POST", `/users/${u.id}/reset-device`); done("Device reset"); })),
         u.details && act("Reset details", "ghost", () => confirmDo("Clear " + u.name + "’s academic details? They will be asked for them again next time they open the app.", async () => { await api("DELETE", `/users/${u.id}/details`); done("Details cleared"); })),
         u.hasPhoto && act("Reset selfie", "ghost", () => confirmDo("Delete " + u.name + "’s selfie? They will be asked for a new one next time they open the app.", async () => { await api("DELETE", `/users/${u.id}/photo`); done("Selfie removed"); })),
