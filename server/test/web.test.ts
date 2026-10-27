@@ -152,6 +152,7 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
 
     // reload keeps the session (cookie), sign-out ends it for real
     await b.goto(base + "/attendee/pass"); assert.ok(await b.until(`!!document.querySelector('.pass')`, 25000), "session survives a reload");
+    assert.equal(await b.ev(`/\\bnull\\b|\\bundefined\\b/.test(document.body.innerText)`), false, "no stray null/undefined text on the pass screen");
     await b.tap(".tab[aria-label='Hub']"); assert.ok(await b.until(`!!document.querySelector('.hero')`)); await b.tap(".avatar"); assert.ok(await b.until(`!!document.querySelector('.sheet')`));
     await b.ev(`[...document.querySelectorAll('.sheet button')].find((x) => /Sign out/.test(x.textContent)).click()`); assert.ok(await b.until(`!!document.querySelector('.dialog')`)); await b.tap(".dialog .actions .btn");
     assert.ok(await b.until(`!!document.querySelector('.signin')`)); assert.equal(await b.ev(`location.pathname`), "/attendee");

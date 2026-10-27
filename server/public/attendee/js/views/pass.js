@@ -52,7 +52,7 @@ export function passView({ open }) {
       h("span", { class: "label" }, `Attended events (${att.length})`), icon("chevR"));
     const attendedBox = !attendedOpen ? null : att.length ? h("div", { class: "list" }, att.map(attRow))
       : h("div", { class: "empty", style: { padding: "24px 40px" } }, h("p", { class: "body muted" }, "Events you attend appear here after the team scans your pass at the door."));
-    listBox.replaceChildren(...savedBox, head, attendedBox);
+    listBox.replaceChildren(...[...savedBox, head, attendedBox].filter(Boolean));
   }
   const un = subscribe(update); update();
   const poll = setInterval(() => { if (!document.hidden) pollCheckins(); }, 4000); // a door scan shows up within seconds

@@ -2,6 +2,10 @@
 // The strict CSP forbids inline style attributes, so dynamic styling goes through element.style (CSSOM) only.
 const SVG = "http://www.w3.org/2000/svg";
 
+// replaceChildren turns a null/false child into the text "null"/"false"; the screens pass optional pieces as null, so drop them here once for all.
+const nativeReplace = Element.prototype.replaceChildren;
+Element.prototype.replaceChildren = function (...kids) { return nativeReplace.apply(this, kids.flat(Infinity).filter((k) => k != null && k !== false)); };
+
 export function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
