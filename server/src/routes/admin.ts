@@ -116,10 +116,18 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
         count(*) FILTER (WHERE EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL))::int AS signed_in,
         count(*) FILTER (WHERE lower(u.email) LIKE '%@srmap.edu.in')::int AS srm,
         count(*) FILTER (WHERE ${OUT} AND u.pass_tier='general')::int AS outside_general,
-        count(*) FILTER (WHERE ${OUT} AND u.pass_tier='flagship')::int AS outside_flagship
+        count(*) FILTER (WHERE ${OUT} AND u.pass_tier='flagship')::int AS outside_flagship,
+        count(*) FILTER (WHERE lower(u.email) LIKE '%@srmap.edu.in' AND u.pass_tier IS NOT NULL)::int AS srm_with_pass,
+        count(*) FILTER (WHERE ${OUT} AND u.says_srm)::int AS says_srm,
+        count(*) FILTER (WHERE ${OUT} AND u.says_srm AND u.pass_tier='flagship')::int AS says_srm_flagship,
+        count(*) FILTER (WHERE ${OUT} AND u.says_srm AND u.pass_tier='general')::int AS says_srm_general,
+        count(*) FILTER (WHERE ${OUT} AND NOT u.says_srm AND u.pass_tier='flagship')::int AS other_flagship,
+        count(*) FILTER (WHERE ${OUT} AND NOT u.says_srm AND u.pass_tier='general')::int AS other_general,
+        count(*) FILTER (WHERE ${OUT} AND u.pass_tier IS NULL)::int AS outside_no_pass,
+        count(*) FILTER (WHERE (lower(u.email) LIKE '%@srmap.edu.in' OR u.says_srm) AND u.details_at IS NOT NULL)::int AS details_given
         FROM users u`);
       const [sync] = await db.query("SELECT value FROM settings WHERE key='passes_synced_at'");
-      return { total: r!.total, signedIn: r!.signed_in, srm: r!.srm, outsideGeneral: r!.outside_general, outsideFlagship: r!.outside_flagship, passesSyncedAt: sync?.value ?? null };
+      return { total: r!.total, signedIn: r!.signed_in, srm: r!.srm, outsideGeneral: r!.outside_general, outsideFlagship: r!.outside_flagship, srmWithPass: r!.srm_with_pass, saysSrm: r!.says_srm, saysSrmFlagship: r!.says_srm_flagship, saysSrmGeneral: r!.says_srm_general, otherFlagship: r!.other_flagship, otherGeneral: r!.other_general, outsideNoPass: r!.outside_no_pass, detailsGiven: r!.details_given, passesSyncedAt: sync?.value ?? null };
     });
     // Outside people whose payment is waiting for review or was rejected (they see the matching message at sign-in).
     api.get("/admin/api/pass-claims-waiting", async () => (await db.query("SELECT email, status, updated_at FROM pass_claim_status ORDER BY status, email")).map((r) => ({ email: r.email, status: r.status, at: new Date(r.updated_at).toISOString() })));

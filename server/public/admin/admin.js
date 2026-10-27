@@ -146,7 +146,12 @@ async function people(m) {
     const last = s.runs.find((r) => r.status !== "running"), when = (iso) => new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     syncBox.append(h("h3", {}, "Website sync"),
       h("p", { class: "muted small" }, s.configured ? `People who register on ${s.websiteUrl.replace(/^https?:\/\//, "")} appear here automatically (${s.fromWebsite} so far, ${s.total} in total). Checked every 10 minutes and whenever someone registers.` : "Not connected: the sync key is not set on the server."),
-      access && h("p", { class: "small" }, `${access.total.toLocaleString()} in the app: ${access.srm.toLocaleString()} with an SRM email · ${access.outsideFlagship.toLocaleString()} outside SRM with the ₹499 pass · ${access.outsideGeneral.toLocaleString()} outside SRM with the ₹99 pass · ${access.signedIn.toLocaleString()} signed in`),
+      access && h("div", { class: "small" },
+        h("p", { style: "margin:0 0 6px" }, `${access.total.toLocaleString()} in the app · ${access.signedIn.toLocaleString()} signed in`),
+        h("p", { style: "margin:0 0 4px" }, h("b", {}, "SRM-AP students "), `${(access.srm + access.saysSrm).toLocaleString()}: ${access.srm.toLocaleString()} with an SRM email (${access.srmWithPass.toLocaleString()} with a pass, ${(access.srm - access.srmWithPass).toLocaleString()} without) + ${access.saysSrm.toLocaleString()} with a personal email that says SRM-AP (${access.saysSrmFlagship} with the ₹499 pass, ${access.saysSrmGeneral} with the ₹99 pass; self-reported)`),
+        h("p", { style: "margin:0 0 4px" }, h("b", {}, "Other colleges "), `${(access.otherFlagship + access.otherGeneral).toLocaleString()}: ${access.otherFlagship.toLocaleString()} with the ₹499 pass, ${access.otherGeneral.toLocaleString()} with the ₹99 pass`),
+        access.outsideNoPass ? h("p", { style: "margin:0 0 4px" }, h("b", {}, "No pass "), `${access.outsideNoPass} outside accounts (added by hand, or waiting for review)`) : "",
+        h("p", { style: "margin:0 0 4px" }, h("b", {}, "Academic details given "), `${access.detailsGiven.toLocaleString()} of ${(access.srm + access.saysSrm).toLocaleString()} SRM-AP students`)),
       last && h("p", { class: "small" }, `Last run ${when(last.at)} · ${last.status === "ok" ? `saw ${last.seen}, added ${last.created}, updated ${last.updated}` : "failed: " + (last.error || "")}`),
       h("div", { class: "row" },
         h("button", { class: "btn ghost", disabled: !s.configured, onclick: guard(async () => { const r = await api("POST", "/sync/run"); toast(r.message); await drawSync(); await load(); }) }, "Sync now"),
