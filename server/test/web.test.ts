@@ -74,6 +74,7 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
   });
 
   it("iPhone: landing page shows the web-app button, then sign in -> selfie -> hub -> QR that scans at the door -> support -> sign out", async () => {
+    await db.query("UPDATE users SET pass_tier='flagship' WHERE email='web@example.org'");   // a ₹499 holder: My Pass shows the Hackathon registration card
     await b.device("ios"); await b.goto(base + "/");
     assert.ok(await b.until(`!!document.querySelector('a.webapp')`)); assert.match(await b.ev(`document.querySelector('#ios').textContent`), /isn’t on the App Store yet/);
     await b.tap("a.webapp"); assert.ok(await b.until(`location.pathname === '/attendee' && !!document.querySelector('.signin')`));
@@ -174,6 +175,8 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     // reload keeps the session (cookie), sign-out ends it for real
     await b.goto(base + "/attendee/pass"); assert.ok(await b.until(`!!document.querySelector('.pass')`, 25000), "session survives a reload");
     assert.equal(await b.ev(`/\\bnull\\b|\\bundefined\\b/.test(document.body.innerText)`), false, "no stray null/undefined text on the pass screen");
+    assert.ok(await b.until(`/REGISTERED EVENTS/i.test(document.body.innerText) && /You are registered for the Hackathon/.test(document.body.innerText)`), "flagship holders see the Hackathon card on My Pass");
+    assert.equal(await b.ev(`(() => { const t = document.body.innerText, i = t.indexOf('REGISTERED EVENTS'), j = t.search(/Saved events|Events you save/i); return i > 0 && j > i; })()`), true, "the card sits above Saved events");
     await b.tap(".tab[aria-label='Hub']"); assert.ok(await b.until(`!!document.querySelector('.hero')`)); await b.tap(".avatar"); assert.ok(await b.until(`!!document.querySelector('.sheet')`));
     await b.ev(`[...document.querySelectorAll('.sheet button')].find((x) => /Sign out/.test(x.textContent)).click()`); assert.ok(await b.until(`!!document.querySelector('.dialog')`)); await b.tap(".dialog .actions .btn");
     assert.ok(await b.until(`!!document.querySelector('.signin')`)); assert.equal(await b.ev(`location.pathname`), "/attendee");

@@ -116,6 +116,7 @@ struct Profile: Codable, Equatable {
     var hasPhoto: Bool?
     var needsDetails: Bool?
     var needsExtra: Bool?
+    var flagship: Bool?
     var initials: String {
         let s = name.split(separator: " ").prefix(2).compactMap { $0.first.map { String($0).uppercased() } }.joined()
         return s.isEmpty ? "?" : s

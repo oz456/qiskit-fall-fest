@@ -30,6 +30,21 @@ struct PassView: View {
                     .font(T.small).foregroundStyle(P.muted).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                     .padding(.horizontal, 24).padding(.top, 14)
 
+                if app.profile?.flagship == true {
+                    SectionLabel(text: "REGISTERED EVENTS").padding(.horizontal, 24).padding(.top, 32).padding(.bottom, 8)
+                    Card {
+                        HStack(spacing: 14) {
+                            IconBubble(symbol: "chevron.left.forwardslash.chevron.right", size: 50, tint: P.mintInk, bg: P.mint)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("You are registered for the Hackathon").font(T.title).foregroundStyle(P.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                                Text("Included in your Flagship Pass").font(T.small).foregroundStyle(P.muted).lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(18)
+                    }
+                    .padding(.horizontal, 24).padding(.vertical, 6)
+                }
                 if !saved.isEmpty {
                     SectionLabel(text: "SAVED EVENTS").padding(.horizontal, 24).padding(.top, 32).padding(.bottom, 8)
                     ForEach(saved) { e in EventRow(event: e, day: nil, trailing: true).padding(.horizontal, 24).padding(.vertical, 6) }

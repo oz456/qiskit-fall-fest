@@ -505,7 +505,7 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
     const v = await app.inject({ method: "POST", url: "/v1/auth/verify", remoteAddress: "10.77.1.1", payload: { email: em, code: "246802", deviceId: "details-device-1" } });
     const auth = { authorization: "Bearer " + v.json().accessToken };
     const me = (await app.inject({ method: "GET", url: "/v1/me", headers: auth })).json();
-    assert.equal(me.profile.needsDetails, true); assert.ok(me.detailsOptions.schools.includes("SEAS"));
+    assert.equal(me.profile.needsDetails, true); assert.ok(me.detailsOptions.schools.includes("SEAS")); assert.equal(me.profile.flagship, false, "no ₹499 pass: no Hackathon card");
     const good = { regNo: "ap25110010123", school: "SEAS", semester: 3, course: "CSE", program: "B.Tech", cgpa: 8.45 };
     const put = (payload: object) => app.inject({ method: "PUT", url: "/v1/me/details", headers: auth, remoteAddress: "10.77.1.2", payload });
     for (const bad of [{ ...good, regNo: "12345" }, { ...good, semester: 9 }, { ...good, cgpa: 10.5 }, { ...good, school: "XYZ" }]) assert.equal((await put(bad)).statusCode, 400);

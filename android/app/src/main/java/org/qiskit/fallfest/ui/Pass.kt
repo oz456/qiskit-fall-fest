@@ -81,6 +81,21 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
             Spacer(Modifier.height(14.dp))
             Text("QR appears when you tap. It refreshes every 30 seconds.", style = T.small, color = P.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
         }
+        if (app.flagship) {
+            val hack = app.events.firstOrNull { it.track == org.qiskit.fallfest.Track.Hackathon }
+            item { SectionLabel("REGISTERED EVENTS", Modifier.padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 8.dp)) }
+            item {
+                Card(Modifier.padding(horizontal = 24.dp, vertical = 6.dp).fillMaxWidth(), RoundedCornerShape(24.dp), onClick = { hack?.let(onOpen) }) {
+                    Row(Modifier.padding(horizontal = 18.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        IconBubble(org.qiskit.fallfest.Track.Hackathon.icon, 50.dp, P.mintInk, P.mint)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("You are registered for the Hackathon", style = T.title, color = P.ink, maxLines = 2)
+                            Text("Included in your Flagship Pass", style = T.small, color = P.muted, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
         if (saved.isNotEmpty()) {
             item { SectionLabel("SAVED EVENTS", Modifier.padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 8.dp)) }
             items(saved, key = { it.id }) { EventRow(it, app, null, Modifier.animateItem().padding(horizontal = 24.dp, vertical = 6.dp), onOpen) }

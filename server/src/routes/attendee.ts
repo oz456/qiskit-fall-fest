@@ -190,13 +190,13 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     });
 
     api.get("/v1/me", async (req) => {
-      const [u] = await db.query("SELECT name,email,college,pass_code,says_srm,reg_no,school,semester,course,program,section,gender,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
+      const [u] = await db.query("SELECT name,email,college,pass_code,says_srm,pass_tier,reg_no,school,semester,course,program,section,gender,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
       const checkins = await db.query(`SELECT c.scope, c.scanned_at, (e.collect_od AND c.od_from IS NULL) AS ask_od
         FROM checkins c LEFT JOIN events e ON c.scope = 'event:' || e.id::text WHERE c.user_id=$1`, [req.uid]);
       // only SRM-AP addresses are asked for academic details, and only until they have been saved once
       const needsDetails = (isSrmEmail(u!.email) || u!.says_srm) && !u!.details_at;
       const extra = (isSrmEmail(u!.email) || u!.says_srm) && needsExtra(u!); // saved before section and gender existed: only those two are asked
-      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, needsDetails, needsExtra: extra, details: detailsOut(u!) },
+      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, flagship: u!.pass_tier === "flagship", needsDetails, needsExtra: extra, details: detailsOut(u!) },
         ...(needsDetails || extra ? { detailsOptions: { schools: SCHOOLS, programs: PROGRAMS, genders: GENDERS } } : {}),
         checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString(), askOd: c.ask_od === true })) };
     });

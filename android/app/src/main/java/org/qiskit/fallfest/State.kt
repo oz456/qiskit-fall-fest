@@ -47,6 +47,8 @@ class AppState(context: Context) {
     var needsDetails by mutableStateOf(prefs.getBoolean("needs_details", false)); private set
     /** Saved before section and gender existed: only those two are asked. */
     var needsExtra by mutableStateOf(prefs.getBoolean("needs_extra", false)); private set
+    /** Holds the ₹499 Flagship Pass: registered for the Hackathon (the only flagship event). */
+    var flagship by mutableStateOf(prefs.getBoolean("flagship", false)); private set
     var detailsGenders by mutableStateOf(listOf("Male", "Female")); private set
     var detailsSchools by mutableStateOf(listOf("SEAS", "ESLA", "PSB", "Other")); private set
     var detailsPrograms by mutableStateOf(listOf("Other")); private set
@@ -135,7 +137,7 @@ class AppState(context: Context) {
         wipe()
     }
     private fun wipe() {
-        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null; odPending = emptyList(); odDismissed = emptySet()
+        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; flagship = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null; odPending = emptyList(); odDismissed = emptySet()
         profile = null; events = emptyList(); announcements = emptyList(); tickets = emptyList(); checkins = emptyMap()
     }
 
@@ -220,6 +222,8 @@ class AppState(context: Context) {
     private fun applyDetailsState(me: JSONObject) {
         val need = me.getJSONObject("profile").optBoolean("needsDetails", false)
         if (need != needsDetails) { needsDetails = need; prefs.edit().putBoolean("needs_details", need).apply() }
+        val fl = me.getJSONObject("profile").optBoolean("flagship", false)
+        if (fl != flagship) { flagship = fl; prefs.edit().putBoolean("flagship", fl).apply() }
         val extra = me.getJSONObject("profile").optBoolean("needsExtra", false)
         if (extra != needsExtra) { needsExtra = extra; prefs.edit().putBoolean("needs_extra", extra).apply() }
         me.optJSONObject("detailsOptions")?.let { o ->
