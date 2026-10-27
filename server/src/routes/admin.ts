@@ -64,19 +64,19 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     api.get("/admin/api/events", async () => {
       const rows = await db.query(`SELECT e.*,
         (SELECT count(*)::int FROM user_events r WHERE r.event_id=e.id AND r.kind='saved') AS saved FROM events e ORDER BY starts_at, title`);
-      return rows.map((r) => eventOut(r, { saved: r.saved }));
+      return rows.map((r) => eventOut(r, { saved: r.saved, collectOd: r.collect_od }));
     });
     api.post("/admin/api/events", async (req, reply) => {
       const b = EventInput.parse(req.body);
-      const [r] = await db.query("INSERT INTO events (title,description,track,location,speaker,starts_at,ends_at,published) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id",
-        [b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.published]);
+      const [r] = await db.query("INSERT INTO events (title,description,track,location,speaker,starts_at,ends_at,published,collect_od) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id",
+        [b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.published, b.collectOd]);
       await audit(db, req, "event.create", "event", r!.id, { title: b.title });
       return reply.code(201).send({ id: r!.id });
     });
     api.put("/admin/api/events/:id", async (req, reply) => {
       const { id } = Id.parse(req.params); const b = EventInput.parse(req.body);
-      const r = await db.query("UPDATE events SET title=$2,description=$3,track=$4,location=$5,speaker=$6,starts_at=$7,ends_at=$8,published=$9,updated_at=now() WHERE id=$1 RETURNING id",
-        [id, b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.published]);
+      const r = await db.query("UPDATE events SET title=$2,description=$3,track=$4,location=$5,speaker=$6,starts_at=$7,ends_at=$8,published=$9,collect_od=$10,updated_at=now() WHERE id=$1 RETURNING id",
+        [id, b.title, b.description, b.track, b.location, b.speaker, b.startsAt, b.endsAt, b.published, b.collectOd]);
       if (!r[0]) return reply.code(404).send({ error: "not_found" });
       await audit(db, req, "event.update", "event", id, { title: b.title });
       return { ok: true };
@@ -326,10 +326,10 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     // ---- attendance (read-only view of what the /check scanners recorded) ----
     api.get("/admin/api/attendance", async (req) => {
       const { scope } = z.object({ scope: z.string().max(60).optional() }).parse(req.query);
-      const summary = await db.query("SELECT c.scope, e.title, count(*)::int AS n, max(c.scanned_at) AS last FROM checkins c LEFT JOIN events e ON c.scope = 'event:' || e.id::text GROUP BY c.scope, e.title ORDER BY c.scope"
+      const summary = await db.query("SELECT c.scope, e.title, coalesce(bool_or(e.collect_od), false) AS od, count(*)::int AS n, max(c.scanned_at) AS last FROM checkins c LEFT JOIN events e ON c.scope = 'event:' || e.id::text GROUP BY c.scope, e.title ORDER BY c.scope"
 );
-      const rows = scope ? await db.query(`SELECT u.name, u.email, u.college, u.pass_code, c.scanned_at, c.scanned_by FROM checkins c JOIN users u ON u.id=c.user_id WHERE c.scope=$1 ORDER BY c.scanned_at DESC LIMIT 2000`, [scope]) : [];
-      return { summary: summary.map((r) => ({ scope: r.scope, title: r.title ?? null, count: r.n, last: new Date(r.last).toISOString() })), rows: rows.map((r) => ({ name: r.name, email: r.email, college: r.college, passCode: r.pass_code, at: new Date(r.scanned_at).toISOString(), scannedById: r.scanned_by ?? null, scannedByName: r.scanned_by ? config.checkNames[r.scanned_by] ?? null : null })) };
+      const rows = scope ? await db.query(`SELECT u.name, u.email, u.college, u.pass_code, c.scanned_at, c.scanned_by, c.od_from, c.od_until, c.od_hours FROM checkins c JOIN users u ON u.id=c.user_id WHERE c.scope=$1 ORDER BY c.scanned_at DESC LIMIT 2000`, [scope]) : [];
+      return { summary: summary.map((r) => ({ scope: r.scope, title: r.title ?? null, collectOd: r.od === true, count: r.n, last: new Date(r.last).toISOString() })), rows: rows.map((r) => ({ name: r.name, email: r.email, college: r.college, passCode: r.pass_code, at: new Date(r.scanned_at).toISOString(), odFrom: r.od_from ?? null, odUntil: r.od_until ?? null, odHours: r.od_hours === null ? null : Number(r.od_hours), scannedById: r.scanned_by ?? null, scannedByName: r.scanned_by ? config.checkNames[r.scanned_by] ?? null : null })) };
     });
 
     api.get("/admin/api/audit", async () => (await db.query("SELECT id, at, action, entity, entity_id, detail, ip FROM audit_log ORDER BY id DESC LIMIT 200")).map((a) => ({ ...a, at: new Date(a.at).toISOString() })));

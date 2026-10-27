@@ -97,7 +97,7 @@ async function events(m) {
   if (!list.length) m.append(h("p", { class: "muted" }, "No events yet."));
 }
 function editEvent(e) {
-  const v = e || { title: "", description: "", track: "Main", location: "", speaker: "", startsAt: null, endsAt: null, published: true };
+  const v = e || { title: "", description: "", track: "Main", location: "", speaker: "", startsAt: null, endsAt: null, published: true, collectOd: false };
   const f = {
     title: h("input", { value: v.title, maxlength: 120, required: true }),
     track: h("select", {}, ["Main", "Workshop", "Talk", "Hackathon", "Social", "Competition"].map((t) => h("option", { value: t, selected: t === v.track }, t))),
@@ -106,11 +106,12 @@ function editEvent(e) {
     location: h("input", { value: v.location, maxlength: 120 }), speaker: h("input", { value: v.speaker, maxlength: 120 }),
     desc: h("textarea", { maxlength: 2000 }, v.description),
     pub: h("input", { type: "checkbox", checked: v.published }),
+    od: h("input", { type: "checkbox", checked: !!v.collectOd }),
   };
   const body = h("form", { onsubmit: guard(async (ev) => {
     ev.preventDefault();
     const payload = { title: f.title.value, track: f.track.value, location: f.location.value, speaker: f.speaker.value, description: f.desc.value,
-      startsAt: localToIso(f.start.value), endsAt: localToIso(f.end.value), published: f.pub.checked };
+      startsAt: localToIso(f.start.value), endsAt: localToIso(f.end.value), published: f.pub.checked, collectOd: f.od.checked };
     if (new Date(payload.endsAt) <= new Date(payload.startsAt)) throw new Error("End must be after start");
     await api(e ? "PUT" : "POST", "/events" + (e ? "/" + e.id : ""), payload);
     bg.remove(); toast("Saved"); route();
@@ -119,7 +120,7 @@ function editEvent(e) {
     h("div", { class: "grid g2" }, field("Starts (" + TZ + ")", f.start), field("Ends (" + TZ + ")", f.end)),
     h("p", { class: "muted small" }, "For a multi-day event (e.g. a hackathon), set the end on a later day. It will appear on every day it spans."),
     field("Speaker / host", f.speaker), field("Description", f.desc),
-    h("div", {}, h("label", {}, "Options"), h("label", { class: "check" }, f.pub, "Visible in the app")),
+    h("div", {}, h("label", {}, "Options"), h("label", { class: "check" }, f.pub, "Visible in the app"), h("label", { class: "check" }, f.od, "Ask for OD details (from time, until time, hours) when someone is checked in at the door")),
     h("div", { class: "row" }, h("button", { class: "btn" }, "Save"), e && h("button", { type: "button", class: "btn danger right", onclick: () => confirmDo("Delete this event? Saved links are removed too.", async () => { await api("DELETE", "/events/" + e.id); bg.remove(); route(); }) }, "Delete")));
   const bg = modal(e ? "Edit event" : "New event", body);
 }
@@ -281,13 +282,14 @@ async function attendance(m) {
   async function load() {
     clear(out); if (!scope) return;
     const r = await api("GET", "/attendance?scope=" + encodeURIComponent(scope));
+    const od = !!sum.summary.find((x) => x.scope === scope)?.collectOd;   // OD columns only for events that collect them
     const safe = (c) => (/^[=+\-@\t\r]/.test(String(c)) ? "'" + c : String(c)); /* a name like =HYPERLINK(...) must not run as a formula in Excel */
-    const csv = () => { const lines = ["name,email,college,pass,checked_in_at,scanned_by_name,scanned_by_id", ...r.rows.map((x) => [x.name, x.email, x.college || "", x.passCode, x.at, x.scannedByName || "", x.scannedById || ""].map((c) => '"' + safe(c).replace(/"/g, '""') + '"').join(","))]; const a = h("a", { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })), download: "attendance.csv" }); a.click(); };
+    const csv = () => { const lines = ["name,email,college,pass,checked_in_at,scanned_by_name,scanned_by_id" + (od ? ",od_from,od_until,od_hours" : ""), ...r.rows.map((x) => [x.name, x.email, x.college || "", x.passCode, x.at, x.scannedByName || "", x.scannedById || "", ...(od ? [x.odFrom || "", x.odUntil || "", x.odHours === null ? "" : x.odHours] : [])].map((c) => '"' + safe(c).replace(/"/g, '""') + '"').join(","))]; const a = h("a", { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })), download: "attendance.csv" }); a.click(); };
     const tally = new Map(); for (const x of r.rows) { const k = x.scannedById ? (x.scannedByName || x.scannedById) : "Not recorded (earlier scans)"; tally.set(k, (tally.get(k) || 0) + 1); }
     const by = h("div", { class: "muted", style: "margin-bottom:12px" }, "Scanned by: " + [...tally].sort((a, b) => b[1] - a[1]).map(([k, n]) => k + " " + n).join(" · "));
     out.append(h("div", { class: "row", style: "margin-bottom:12px" }, h("b", {}, r.rows.length + " checked in"), h("button", { class: "btn ghost sm right", onclick: csv }, "Download CSV")),
-      by, h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Time", "Scanned by", "Volunteer ID"].map((x) => h("th", {}, x))), r.rows.map((x) => h("tr", {}, h("td", {}, x.name, h("div", { class: "muted small" }, x.college || "")), h("td", {}, x.email), h("td", {}, x.passCode), h("td", {}, fmt(x.at, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", second: "2-digit" })),
-        h("td", {}, x.scannedById ? h("b", {}, x.scannedByName || x.scannedById) : h("span", { class: "muted" }, "Not recorded")), h("td", {}, x.scannedById || "—")))));
+      by, h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Time", "Scanned by", "Volunteer ID", ...(od ? ["OD from", "OD until", "Hours"] : [])].map((x) => h("th", {}, x))), r.rows.map((x) => h("tr", {}, h("td", {}, x.name, h("div", { class: "muted small" }, x.college || "")), h("td", {}, x.email), h("td", {}, x.passCode), h("td", {}, fmt(x.at, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", second: "2-digit" })),
+        h("td", {}, x.scannedById ? h("b", {}, x.scannedByName || x.scannedById) : h("span", { class: "muted" }, "Not recorded")), h("td", {}, x.scannedById || "—"), ...(od ? [h("td", {}, x.odFrom || "—"), h("td", {}, x.odUntil || "—"), h("td", {}, x.odHours === null ? "—" : String(x.odHours))] : [])))));
   }
   if (!sum.summary.length) { out.append(h("p", { class: "muted" }, "No check-ins yet. They appear here as soon as the door scanners record entries.")); return; }
   drawChips(); await load();

@@ -85,16 +85,44 @@ async function boot() {
     const actions = r.result === "verify"
       ? h("div", { class: "actions" },
           h("button", { class: "btn reject", onclick: () => decide(r, "reject") }, "Reject"),
-          h("button", { class: "btn confirm", onclick: () => decide(r, "confirm") }, "Confirm entry"))
+          h("button", { class: "btn confirm", onclick: () => (r.collectOd ? askOd(r) : decide(r, "confirm")) }, "Confirm entry"))
       : h("div", { class: "actions" }, h("button", { class: "btn dismiss", onclick: closeSheet }, "Done"));
     sheet.append(h("div", { class: "panel " + tone }, h("div", { class: "who" }, body), actions));
     sheet.className = "sheet show";
     beep(r.result === "verify" ? "warn" : bad ? "bad" : "warn");
     if (r.result !== "verify") dismissT = setTimeout(closeSheet, 6000);
   }
-  async function decide(r, decision) {
+  // events that collect OD details: after the face check, the volunteer fills three fields with the student (or skips)
+  function askOd(r) {
+    clearTimeout(dismissT);
+    const from = h("input", { type: "time", required: true, "aria-label": "OD from" }), until = h("input", { type: "time", required: true, "aria-label": "OD until" });
+    const hours = h("input", { type: "number", inputmode: "decimal", min: "0.25", max: "24", step: "0.25", placeholder: "e.g. 2", "aria-label": "Number of hours" });
+    let hoursEdited = false; hours.oninput = () => { hoursEdited = true; };
+    const auto = () => {
+      if (hoursEdited || !from.value || !until.value) return;
+      const mins = (+until.value.slice(0, 2) * 60 + +until.value.slice(3)) - (+from.value.slice(0, 2) * 60 + +from.value.slice(3));
+      if (mins > 0) hours.value = String(Math.round(mins / 15) / 4);
+    };
+    from.onchange = until.onchange = auto;
+    const err = h("div", { class: "warnbox", hidden: true });
+    const save = () => {
+      const n = Number(hours.value);
+      if (!from.value || !until.value) return show("Fill both times.");
+      if (until.value <= from.value) return show("OD until time must be after OD from time.");
+      if (!(n > 0) || n > 24) return show("Enter the number of hours (more than 0, at most 24).");
+      decide(r, "confirm", { from: from.value, until: until.value, hours: n });
+    };
+    const show = (m) => { err.textContent = m; err.hidden = false; };
+    clear(sheet);
+    sheet.append(h("div", { class: "panel go" }, h("div", { class: "who" },
+      h("div", { class: "name" }, r.who.name), h("div", { class: "muted" }, "OD details for this event"),
+      h("label", { class: "odf" }, "OD from time", from), h("label", { class: "odf" }, "OD until time", until), h("label", { class: "odf" }, "Number of hours", hours), err),
+      h("div", { class: "actions" }, h("button", { class: "btn reject", onclick: () => decide(r, "confirm") }, "Skip"), h("button", { class: "btn confirm", onclick: save }, "Save and check in"))));
+    sheet.className = "sheet show";
+  }
+  async function decide(r, decision, od) {
     try {
-      const d = await api("POST", "/confirm", { ticket: r.ticket, decision });
+      const d = await api("POST", "/confirm", { ticket: r.ticket, decision, ...(od ? { od } : {}) });
       closeSheet();
       if (d.result === "ok") { flash("✔ " + r.who.name + " checked in", "ok"); beep("ok"); refresh(); }
       else if (d.result === "rejected") flash("Entry rejected", "bad");

@@ -26,3 +26,6 @@ Admin: `/admin`. Door scanner: `/checkin/` (a different login, give only this on
 - **Content**: festival name/venue/first and last day (drives the countdown and the scanner's days), support note, FAQs.
 - **Attendance**: pick *Campus entry* or an event; download the list as CSV.
 - **Activity** (bottom of the menu): every admin change and failed login.
+
+## OD details at the door
+On the Events page, tick **Ask for OD details** on an event. When a volunteer scans someone into that event and taps Confirm entry, a form asks for OD from time, OD until time and number of hours (hours are worked out from the two times and can be corrected; Skip checks the person in without them). The answers are saved with that check-in and show only on the Attendance page (extra columns and in the CSV) for that event. Other events and campus entry never ask.

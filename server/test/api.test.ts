@@ -668,6 +668,30 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     assert.equal((await db.query("SELECT name FROM users WHERE id=$1", [id]))[0]!.name, "Krish");
     assert.equal((await admin("PATCH", `/admin/api/users/${id}`, {})).statusCode >= 400, true, "an empty change is refused");
   });
+  it("OD details are asked and kept only for events that collect them, and show on the attendance page only", async () => {
+    const mkEvent = async (title: string, collectOd: boolean) => (await admin("POST", "/admin/api/events", { title, track: "Workshop", startsAt: new Date().toISOString(), endsAt: new Date(Date.now() + 7200_000).toISOString(), collectOd })).json().id as string;
+    const withOd = await mkEvent("OD Workshop", true), without = await mkEvent("Plain Workshop", false);
+    assert.equal((await admin("GET", "/admin/api/events")).json().find((e: any) => e.id === withOd).collectOd, true);
+    const mkUser = async (email: string) => (await db.query("INSERT INTO users (email,name,pass_code,pass_secret,source,kind) VALUES ($1,'OD Person',$2,$3,'admin','student') RETURNING id,pass_code,pass_secret", [email, "QFF-" + Math.floor(10000 + Math.random() * 89999), randomBytes(32)]))[0]!;
+    const scanOf = async (u: any, scope: string) => (await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(u.pass_secret), u.pass_code), scope })).json();
+    const a = await mkUser("od.a@example.org"), b = await mkUser("od.b@example.org"), c = await mkUser("od.c@example.org");
+    const va = await scanOf(a, `event:${withOd}`); assert.equal(va.collectOd, true, "this event asks");
+    assert.equal((await scanOf(b, `event:${without}`)).collectOd, false, "another event does not");
+    assert.equal((await scanOf(b, "day:2026-10-26")).collectOd, false, "campus entry never does");
+    // bad values are refused (nothing is checked in), good ones are saved with the check-in
+    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: va.ticket, decision: "confirm", od: { from: "11:00", until: "10:00", hours: 1 } })).statusCode, 400);
+    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: va.ticket, decision: "confirm", od: { from: "10:00", until: "12:30", hours: 30 } })).statusCode, 400);
+    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: va.ticket, decision: "confirm", od: { from: "10:00", until: "12:30", hours: 2.5 } })).json().result, "ok");
+    // skipping is fine, and a stray OD value on an event that does not collect it is dropped
+    const vc = await scanOf(c, `event:${withOd}`); assert.equal((await check("POST", "/checkin/api/confirm", { ticket: vc.ticket, decision: "confirm" })).json().result, "ok");
+    const vb = await scanOf(b, `event:${without}`); assert.equal((await check("POST", "/checkin/api/confirm", { ticket: vb.ticket, decision: "confirm", od: { from: "09:00", until: "10:00", hours: 1 } })).json().result, "ok");
+    const att = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(`event:${withOd}`)}`)).json();
+    const ra = att.rows.find((r: any) => r.email === "od.a@example.org"), rc = att.rows.find((r: any) => r.email === "od.c@example.org");
+    assert.deepEqual([ra.odFrom, ra.odUntil, ra.odHours], ["10:00", "12:30", 2.5]); assert.deepEqual([rc.odFrom, rc.odUntil, rc.odHours], [null, null, null]);
+    const plain = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(`event:${without}`)}`)).json();
+    assert.equal(plain.rows[0].odFrom, null, "an event that does not collect OD stores none");
+    const sum = (await admin("GET", "/admin/api/attendance")).json().summary; assert.equal(sum.find((x: any) => x.scope === `event:${withOd}`).collectOd, true); assert.equal(sum.find((x: any) => x.scope === `event:${without}`).collectOd, false);
+  });
   it("there is no search-and-check-in: a live QR is the only way in", async () => {
     assert.equal((await check("GET", "/checkin/api/lookup?q=finalist")).statusCode, 404);
     assert.equal((await check("POST", "/checkin/api/scan-manual", { userId: "a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d", scope: "day:2026-10-26" })).statusCode, 404);

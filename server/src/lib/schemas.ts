@@ -12,6 +12,7 @@ export const EventInput = z.object({
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
   published: z.boolean().default(true),
+  collectOd: z.boolean().default(false),
 }).refine((v) => new Date(v.endsAt) > new Date(v.startsAt), { message: "End must be after start", path: ["endsAt"] });
 
 export const UserInput = z.object({ email: Email, name: text(100).min(1), college: text(150).nullable().default(null) });
