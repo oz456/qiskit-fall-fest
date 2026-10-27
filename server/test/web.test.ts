@@ -48,6 +48,19 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     assert.ok(await b.until(`!!document.querySelector('.dialog')`)); assert.equal(await b.ev(`!!document.querySelector('.signin')`), false);
   });
 
+  it("when Android is allowed, an Android phone opens the app (sign-in screen), and the landing page offers both the APK and the web app", async () => {
+    const was = config.webAppPlatforms; config.webAppPlatforms = ["ios", "android"];
+    try {
+      await b.device("android"); await b.goto(base + "/attendee");
+      assert.ok(await b.until(`!!document.querySelector('.signin')`, 15000), "the sign-in screen, not the popup");
+      assert.equal(await b.ev(`!!document.querySelector('.dialog')`), false);
+      assert.equal(await b.ev(`fetch('/v1/auth/request-code',{method:'POST',headers:{'x-qff-client':'web','content-type':'application/json'},body:'{"email":"nobody@example.org"}'}).then(r=>r.status)`), 404, "the API answers (not 403)");
+      await b.goto(base + "/");
+      assert.ok(await b.until(`!!document.querySelector('#android .btn.alt')`));
+      assert.deepEqual(await b.ev(`[...document.querySelectorAll('#android .pair .btn')].map((a) => a.getAttribute('href'))`), ["/downloads/qff-2026.apk", "/attendee"], "APK first, web app second");
+      assert.equal(await b.ev(`(() => { const [a, c] = [...document.querySelectorAll('#android .pair .btn')].map((x) => x.getBoundingClientRect()); return Math.abs(a.width - c.width) < 1 && Math.abs(a.height - c.height) < 2; })()`), true, "both buttons are the same size");
+    } finally { config.webAppPlatforms = was; }
+  });
   it("when desktop is allowed, a laptop sees the app inside a phone-sized frame and can sign in there; Android stays blocked", async () => {
     const was = config.webAppPlatforms; config.webAppPlatforms = ["ios", "desktop"];
     try {

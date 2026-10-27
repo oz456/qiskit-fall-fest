@@ -58,7 +58,7 @@ export async function call(method, path, body, { auth = true, retried = false } 
 export const api = {
   requestCode: (email) => call("POST", "/v1/auth/request-code", { email: email.trim().toLowerCase() }, { auth: false }),
   async verify(email, code) {
-    const r = await call("POST", "/v1/auth/verify", { email: email.trim().toLowerCase(), code, deviceId: deviceId(), deviceName: "Web (iPhone)" }, { auth: false });
+    const r = await call("POST", "/v1/auth/verify", { email: email.trim().toLowerCase(), code, deviceId: deviceId(), deviceName: /android/i.test(navigator.userAgent) ? "Web (Android)" : "Web (iPhone)" }, { auth: false });
     access = r.accessToken; return r;
   },
   async logout() { access = null; try { await send("POST", "/v1/auth/web-logout", {}, false); } catch { /* the cookie is cleared server-side when reachable */ } },

@@ -18,9 +18,9 @@ let signedIn = false, view = null, viewKey = "", tabbar = null;
 
 const platform = detectPlatform();
 // desktop browsers only get this far when the server allows them (WEB_APP_PLATFORMS has "desktop"): they see the app in a phone-sized frame
-const desktopOk = document.body.dataset.desktop === "1";
+const desktopOk = document.body.dataset.desktop === "1", androidOk = document.body.dataset.android === "1";
 if (platform === "desktop" && desktopOk && window.top === window) showDesktopFrame(h);
-else if (platform !== "ios" && !(platform === "desktop" && desktopOk)) { showGate(platform, h, document.getElementById("layer")); }
+else if (platform !== "ios" && !(platform === "desktop" && desktopOk) && !(platform === "android" && androidOk)) { showGate(platform, h, document.getElementById("layer")); }
 else boot();
 
 storeHooks.onCheckin = (n) => {

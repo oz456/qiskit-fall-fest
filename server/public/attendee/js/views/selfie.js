@@ -16,13 +16,13 @@ export function selfieView({ onDone, onSignOut }) {
 
   async function startCamera() {
     camError = null; ready = false; draw();
-    if (!navigator.mediaDevices?.getUserMedia) { camError = { title: "Camera not available", text: "This browser can’t open the camera. Open the page in Safari on your iPhone." }; return draw(); }
+    if (!navigator.mediaDevices?.getUserMedia) { camError = { title: "Camera not available", text: /android/i.test(navigator.userAgent) ? "This browser can’t open the camera. Open the page in Chrome." : "This browser can’t open the camera. Open the page in Safari on your iPhone." }; return draw(); }
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1080 }, height: { ideal: 1440 } }, audio: false });
       video.srcObject = stream; await video.play().catch(() => {}); ready = true; draw();
     } catch (e) {
       camError = e && (e.name === "NotAllowedError" || e.name === "SecurityError")
-        ? { title: "Camera access is off", text: "Allow the camera for this page: in Safari tap aA → Website Settings → Camera → Allow, then try again." }
+        ? { title: "Camera access is off", text: /android/i.test(navigator.userAgent) ? "Allow the camera for this site: tap the lock icon next to the address, choose Permissions → Camera → Allow, then try again. If you opened this link inside another app (WhatsApp, Instagram), open it in Chrome instead." : "Allow the camera for this page: in Safari tap aA → Website Settings → Camera → Allow, then try again." }
         : { title: "Couldn’t open the camera", text: "Close other apps that use the camera, then try again." };
       draw();
     }

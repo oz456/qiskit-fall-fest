@@ -35,7 +35,7 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
   app.addHook("onRequest", async (req, reply) => {
     if (!isWeb(req) || !req.url.startsWith("/v1/")) return;
     if (!webAppAllowed(detectPlatform(req.headers["user-agent"], req.headers["sec-ch-ua-platform"] as string | undefined))) {
-      return reply.code(403).send({ error: "platform_not_supported", message: "The web app is only available on iPhone. Android has its own app: see the downloads page." });
+      return reply.code(403).send({ error: "platform_not_supported", message: "The web app isn't available on this device. Android also has its own app: see the downloads page." });
     }
     const origin = req.headers.origin;
     if (origin && req.method !== "GET" && req.method !== "HEAD") { let oh = ""; try { oh = new URL(origin).host; } catch {} if (oh !== req.headers.host) return reply.code(403).send({ error: "origin", message: "Cross-site request refused." }); }

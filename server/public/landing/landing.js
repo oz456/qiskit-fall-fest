@@ -8,8 +8,8 @@ if (from.get("from") === "user") {
   const n = document.getElementById("notice");
   n.hidden = false;
   n.textContent = from.get("platform") === "android"
-    ? "The web app isn’t available on Android. Install the Android app below instead."
-    : "The web app is for iPhone. Install the Android app below, or open this page on your iPhone.";
+    ? "The web app isn’t available on Android right now. Install the Android app below instead."
+    : "The web app can’t open on this device. On Android, use the buttons below. On iPhone, open this page in Safari.";
 }
 
 fetch("/downloads/qff-2026.apk.sha256").then((r) => r.text()).then((t) => { document.getElementById("sha").textContent = t.trim(); })

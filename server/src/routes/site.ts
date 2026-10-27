@@ -27,7 +27,7 @@ export async function siteRoutes(app: FastifyInstance) {
   await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "shared"), prefix: "/shared/", decorateReply: false, setHeaders: longCache }); });
   await app.register(async (s) => { await s.register(fstatic, { root: join(pub, "downloads"), prefix: "/downloads/", decorateReply: false, setHeaders: (res: any, path: string) => { noCache(res); if (path.endsWith(".apk")) res.header("Content-Disposition", 'attachment; filename="qff-2026.apk"'); } }); });
 
-  // ---- the attendee web app (/attendee): iPhone/iPad only ----
+  // ---- the attendee web app (/attendee): who may open it is WEB_APP_PLATFORMS ----
   const attendeeRoot = join(pub, "attendee");
   await app.register(async (s) => {
     s.addHook("onRequest", async (req, reply) => {
@@ -40,7 +40,7 @@ export async function siteRoutes(app: FastifyInstance) {
     await s.register(fstatic, { root: attendeeRoot, prefix: "/", index: false, decorateReply: false, setHeaders: (res: any, path: string) => (/\.(ttf|png|svg)$/.test(path) ? longCache(res) : noCache(res)) });
     // when desktop browsers are allowed (WEB_APP_PLATFORMS), the shell says so, so the page may show itself in a phone-sized frame; otherwise it keeps blocking them
     const shellHtml = readFileSync(join(attendeeRoot, "index.html"), "utf8");
-    const shell = async (_req: any, reply: any) => reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(config.webAppPlatforms.includes("desktop") ? shellHtml.replace("<body>", '<body data-desktop="1">') : shellHtml);
+    const shell = async (_req: any, reply: any) => reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(shellHtml.replace("<body>", `<body${config.webAppPlatforms.includes("desktop") ? ' data-desktop="1"' : ""}${config.webAppPlatforms.includes("android") ? ' data-android="1"' : ""}>`));
     s.get("/", shell);
     // the app's own screens all load the same shell; /attendee/hub/ and /attendee/index.html collapse to one address; anything else under /attendee goes to the app's front door
     for (const tab of ["hub", "pass", "support"]) { s.get(`/${tab}`, shell); s.get(`/${tab}/`, async (_req, reply) => reply.redirect(`/attendee/${tab}`, 301)); }

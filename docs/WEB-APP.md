@@ -16,7 +16,7 @@ Plan: no Google Play / App Store accounts. **Android** installs the APK from the
 - `/downloads/qff-2026.apk` is served as an attachment; the matching `.sha256` sits next to it.
 
 ## Who may use `/attendee`
-**Only iPhones** (`WEB_APP_PLATFORMS`, default `ios`). The check runs in three places:
+**Whoever `WEB_APP_PLATFORMS` allows** (comma list of `ios`, `android`, `desktop`; the code default is `ios`, production runs `ios,android,desktop`). On Android the root page shows the APK download and the web app as two equal buttons. The check runs in three places:
 1. **Server, on every `/attendee/**` request** (page, scripts, fonts, manifest, even missing files): Android/desktop get a small HTML popup, no app code at all, with a button to `/`.
 2. **Server, on every API call from the web app** (`x-qff-client: web`): 403 `platform_not_supported`.
 3. **Browser**: the page re-checks user-agent, `navigator.platform` and client hints and shows the same popup.
