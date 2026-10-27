@@ -61,7 +61,7 @@ export function passView({ open }) {
     listBox.replaceChildren(...[...savedBox, head, attendedBox].filter(Boolean));
   }
   const un = subscribe(update); update();
-  const poll = setInterval(() => { if (!document.hidden) pollCheckins(); }, 4000); // a door scan shows up within seconds
+  const poll = setInterval(() => { if (!document.hidden) pollCheckins(); }, 2000); // a door scan shows up within a couple of seconds
   return { el: root, refresh: loadAll, destroy() { un(); clearInterval(poll); } };
 }
 

@@ -92,7 +92,7 @@ function applyCheckins(list) {
   if (!fresh.length) return;
   fresh.forEach((c) => seen.add(c.scope)); write("qff.checkSeen", [...seen]);
   const newest = fresh.filter((c) => S.now - Date.parse(c.at) < 15 * 60000).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
-  if (newest) hooks.onCheckin(checkinLabel(newest.scope, newest.at));
+  if (newest) hooks.onCheckin(checkinLabel(newest.scope, newest.at), !!newest.askOd);
 }
 /** Light check for a new door scan: only /v1/me. Called every few seconds while My Pass is open. */
 export async function pollCheckins() {

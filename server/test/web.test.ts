@@ -148,9 +148,9 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     // an event that collects OD details: after the door check-in, the STUDENT is asked in the app (not the volunteer)
     const odEv = (await db.query("INSERT INTO events (title,description,track,location,starts_at,ends_at,collect_od) VALUES ('OD Session','x','Workshop','SRM',now(),now() + interval '2 hours', true) RETURNING id"))[0]!.id;
     await db.query("INSERT INTO checkins (user_id, scope) SELECT id, $1 FROM users WHERE email='web@example.org'", ["event:" + odEv]);
-    assert.ok(await b.until(`!!document.querySelector('.dialog') && /checked in/i.test(document.querySelector('.dialog').textContent)`, 25000), "popup for the OD event");
-    await b.tap(".dialog .btn"); assert.ok(await b.until(`!document.querySelector('.dialog')`));
-    assert.ok(await b.until(`!!document.querySelector('.sheet [name=odFrom]')`, 15000), "the OD form opens in the student's app");
+    assert.ok(await b.until(`!!document.querySelector('.sheet [name=odFrom]')`, 15000), "the OD form opens straight away in the student's app");
+    assert.match(await b.ev(`document.querySelector('.sheet').textContent`), /You’re checked in/, "headed with the check-in confirmation, with no popup first");
+    assert.equal(await b.ev(`!!document.querySelector('.dialog')`), false);
     const setv = (name: string, v: string) => b.ev(`(() => { const e = document.querySelector('[name=${name}]'); e.value = '${v}'; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); })()`);
     await setv("odFrom", "10:00"); await setv("odUntil", "12:30");
     assert.equal(await b.ev(`document.querySelector('[name=odHours]').value`), "2.5", "hours are worked out from the two times");

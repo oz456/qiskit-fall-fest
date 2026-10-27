@@ -20,8 +20,8 @@ struct OdView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("OD details").font(Fonts.display(28, 700, style: .title1)).foregroundStyle(P.ink)
-            Text(app.events.first { $0.id == eventId }.map { "You were checked in at \($0.title). Tell us your OD times." } ?? "You were checked in. Tell us your OD times.").font(T.body).foregroundStyle(P.muted)
+            Text("You’re checked in").font(Fonts.display(28, 700, style: .title1)).foregroundStyle(P.ink)
+            Text(app.events.first { $0.id == eventId }.map { "\($0.title). Now tell us your OD details." } ?? "Now tell us your OD details.").font(T.body).foregroundStyle(P.muted)
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) { Text("OD from time").font(T.small).foregroundStyle(P.muted)
                     DatePicker("", selection: $from, displayedComponents: .hourAndMinute).labelsHidden().onChange(of: from) { _ in fromSet = true; error = nil; auto() } }

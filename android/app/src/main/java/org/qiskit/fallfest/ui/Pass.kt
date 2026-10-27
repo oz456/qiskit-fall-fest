@@ -66,7 +66,7 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
     SecureWindow((LocalContext.current as? Activity)?.window)
     val saved = app.events.filter { it.saved }
     val attended = app.checkins.entries.sortedByDescending { it.value }.map { app.checkinLabel(it.key, it.value) to it.key.removePrefix("event:").takeIf { k -> it.key.startsWith("event:") } }
-    LaunchedEffect(Unit) { while (true) { delay(4000); app.pollCheckins() } } // a door scan shows up within seconds
+    LaunchedEffect(Unit) { while (true) { delay(2000); app.pollCheckins() } } // a door scan shows up within a couple of seconds
     val (payload, progress) = rememberLivePass(app)
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 130.dp)) {

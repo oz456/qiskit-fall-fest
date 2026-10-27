@@ -686,7 +686,12 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
       assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok"); return v; };
     const a = await mkUser("od.a@example.org"), c = await mkUser("od.c@example.org");
     assert.equal((await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(a.pass_secret), a.pass_code), scope: `event:${withOd}` })).json().collectOd, true, "the volunteer is only told that the student will be asked");
+    await db.query("INSERT INTO push_tokens (token,user_id,platform) VALUES ($1,$2,'android')", ["od-token-" + "x".repeat(40), a.id]);
+    outbox.length = 0;
     await scanIn(a, `event:${withOd}`); await scanIn(c, `event:${without}`);
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(outbox.length, 1, "an OD check-in nudges the student's phone at once (and only that one)");
+    assert.match(outbox[0]!.push.body, /OD Workshop/); assert.equal(outbox[0]!.push.title, "You’re checked in");
     const me = async (u: any) => (await app.inject({ method: "GET", url: "/v1/me", headers: u.auth })).json().checkins as any[];
     assert.equal((await me(a))[0].askOd, true, "checked in at an OD event with nothing given yet: the app asks");
     assert.equal((await me(c))[0].askOd, false, "an event that does not collect OD never asks");
@@ -700,6 +705,10 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     assert.equal((await me(a))[0].askOd, false, "no longer asked");
     const att = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(`event:${withOd}`)}`)).json();
     const ra = att.rows.find((r: any) => r.email === "od.a@example.org");
+    assert.equal(ra.details, null, "a person without academic details shows none");
+    await db.query("UPDATE users SET reg_no='AP25110010556', school='SEAS', semester=3, section='S12', gender='Female', course='CSE', program='B.Tech', cgpa=8.5, details_at=now() WHERE id=$1", [a.id]);
+    const withDetails = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(`event:${withOd}`)}`)).json().rows.find((r: any) => r.email === "od.a@example.org");
+    assert.deepEqual(withDetails.details, { regNo: "AP25110010556", school: "SEAS", semester: 3, section: "S12", gender: "Female", course: "CSE", program: "B.Tech", cgpa: 8.5 }, "the SRM-AP details show on the attendance page");
     assert.deepEqual([ra.odFrom, ra.odUntil, ra.odHours], ["10:00", "12:30", 2.5]);
     assert.equal((await admin("POST", `/admin/api/attendance/${ra.id}/clear-od`)).statusCode, 200);
     assert.equal((await me(a))[0].askOd, true, "an organiser cleared a wrong entry: the student can fill it in again");

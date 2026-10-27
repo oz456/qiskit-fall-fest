@@ -7,6 +7,7 @@ import { PASS_STEP_SEC, passMac, safeEqual, signJwt, verifyJwt } from "../lib/cr
 import { getPhoto } from "../lib/photos.ts";
 import { staffAuth } from "../lib/staff.ts";
 import { audit, eventDay } from "../lib/util.ts";
+import { devicesForUser, pushInBackground } from "../lib/push.ts";
 
 const Scope = z.string().regex(/^(day:\d{4}-\d{2}-\d{2}|event:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/);
 
@@ -85,6 +86,11 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
       if (b.decision === "reject") { await audit(db, req, "check.rejected", "user", t.uid, { scope: t.scope }); return { result: "rejected", message: "Entry rejected." }; }
       const ins = await db.query("INSERT INTO checkins (user_id,scope,scanned_by) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING scanned_at", [t.uid, t.scope, (req as any).staffUser ?? null]);
       if (!ins[0]) return { result: "duplicate", message: "Already checked in." };
+      // an OD event: nudge the student's phone straight away, so the OD form reaches them even if the app is closed
+      if (await collectsOd(t.scope)) {
+        const [ev] = await db.query("SELECT title FROM events WHERE id=$1", [t.scope.slice(6)]);
+        pushInBackground(db, await devicesForUser(db, t.uid), { title: "You’re checked in", body: `Open the app and add your OD details for ${ev?.title ?? "this event"}.`, type: "announcement", id: `od-${t.scope.slice(6)}` }, req.log);
+      }
       return { result: "ok", message: "Checked in." };
     });
 

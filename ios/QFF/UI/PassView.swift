@@ -92,7 +92,7 @@ struct PassView: View {
             .padding(.bottom, 24)
         }
         .background(Backdrop())
-        .task { while !Task.isCancelled { try? await Task.sleep(nanoseconds: 4_000_000_000); await app.pollCheckins() } } // a door scan shows up within seconds
+        .task { while !Task.isCancelled { try? await Task.sleep(nanoseconds: 2_000_000_000); await app.pollCheckins() } } // a door scan shows up within seconds
         .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in captured = UIScreen.main.isCaptured }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in app.message = "Screenshots won't scan — the code changes every 30 seconds." }
         .fullScreenCover(isPresented: $fullQR) { FullQR(hidden: hidden) { fullQR = false }.environmentObject(app) }

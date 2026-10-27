@@ -279,6 +279,7 @@ class AppState(context: Context) {
         announcedCheckins = announcedCheckins + fresh.map { it.key }
         prefs.edit().putStringSet("seen_checkins", announcedCheckins).apply()
         val newest = fresh.filter { Duration.between(it.value, Instant.now()).toMinutes() < 15 }.maxByOrNull { it.value } ?: return
+        if (newest.key.removePrefix("event:") in odPending) return   // an OD event: the OD form (headed "You’re checked in") opens straight away
         checkinNotice = checkinLabel(newest.key, newest.value)
     }
     /** OD details (from, until as HH:MM, hours) for an event the student was checked in at. A 409 means they were already saved. */

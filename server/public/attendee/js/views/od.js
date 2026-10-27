@@ -34,8 +34,8 @@ export function openOd(eventId, { onLater } = {}) {
     }
     draw();
     return [
-      h("h2", { class: "h1" }, "OD details"),
-      h("p", { class: "body muted" }, ev ? `You were checked in at ${ev.title}. Tell us your OD times.` : "You were checked in. Tell us your OD times."),
+      h("h2", { class: "h1" }, "You’re checked in"),
+      h("p", { class: "body muted" }, ev ? `${ev.title}. Now tell us your OD details.` : "Now tell us your OD details."),
       h("div", { class: "odgrid" }, h("label", { class: "fl" }, "OD from time", h("div", { class: "field" }, from)), h("label", { class: "fl" }, "OD until time", h("div", { class: "field" }, until))),
       h("label", { class: "fl" }, "Number of hours", h("div", { class: "field" }, hours)),
       err, submit];

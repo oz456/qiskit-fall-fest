@@ -25,8 +25,9 @@ if (platform === "desktop" && desktopOk && window.top === window) showDesktopFra
 else if (platform !== "ios" && !(platform === "desktop" && desktopOk) && !(platform === "android" && androidOk)) { showGate(platform, h, document.getElementById("layer")); }
 else boot();
 
-storeHooks.onCheckin = (n) => {
+storeHooks.onCheckin = (n, askOd) => {
   document.querySelector(".qrfull")?.click();   // close the full-screen QR: the scan is done
+  if (askOd) return;   // an OD event: the OD form (headed "You’re checked in") opens straight away instead of a popup first
   const done = () => scrim.remove();
   const scrim = h("div", { class: "dialogscrim" }, h("div", { class: "dialog center", role: "alertdialog", "aria-modal": "true" },
     bubble("check", 72, true), h("h2", {}, "You’re checked in"), h("div", { class: "title" }, n.title), h("p", { class: "muted" }, n.time),
@@ -68,7 +69,7 @@ subscribe(() => {
   if (!signedIn || S.needsSelfie || S.needsDetails || S.needsExtra) return;
   if (tabbar) drawTabs(currentTab());
   const next = (S.odPending || []).find((id) => !odAsked.has(id));
-  if (next && !document.querySelector(".dialogscrim, .sheet.show, .sheet")) { odAsked.add(next); setTimeout(() => openOd(next), 600); }
+  if (next && !document.querySelector(".dialogscrim, .sheet.show, .sheet")) { odAsked.add(next); setTimeout(() => openOd(next), 100); }
 });
 
 async function onSignedIn() {

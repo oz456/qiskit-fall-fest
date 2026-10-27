@@ -299,7 +299,7 @@ final class AppState: ObservableObject {
         guard !fresh.isEmpty else { return }
         announcedCheckins.formUnion(fresh.keys)
         defaults.set(Array(announcedCheckins), forKey: "seen_checkins")
-        if let newest = fresh.filter({ Date().timeIntervalSince($0.value) < 15 * 60 }).max(by: { $0.value < $1.value }) { checkinNotice = checkinLabel(newest.key, newest.value) }
+        if let newest = fresh.filter({ Date().timeIntervalSince($0.value) < 15 * 60 }).max(by: { $0.value < $1.value }), !odPending.contains(String(newest.key.dropFirst(6))) { checkinNotice = checkinLabel(newest.key, newest.value) }   // an OD event opens the OD form straight away
     }
     /// OD details (from / until as HH:MM, hours) for an event the student was checked in at. A 409 means they were already saved.
     func saveOd(eventId: String, from: String, until: String, hours: Double) async throws {

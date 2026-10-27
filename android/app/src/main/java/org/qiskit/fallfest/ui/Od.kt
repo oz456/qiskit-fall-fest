@@ -52,10 +52,10 @@ fun OdDialog(app: AppState, eventId: String) {
     }
     AlertDialog(
         onDismissRequest = { app.odDismissed = app.odDismissed + eventId }, containerColor = P.bg,
-        title = { Text("OD details", style = T.h2, color = P.ink) },
+        title = { Text("You’re checked in", style = T.h2, color = P.ink) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(if (title != null) "You were checked in at $title. Tell us your OD times." else "You were checked in. Tell us your OD times.", style = T.body, color = P.muted)
+                Text(if (title != null) "$title. Now tell us your OD details." else "Now tell us your OD details.", style = T.body, color = P.muted)
                 OdBox("OD from time", from.ifEmpty { "Choose time" }, from.isEmpty()) { pick { from = it } }
                 OdBox("OD until time", until.ifEmpty { "Choose time" }, until.isEmpty()) { pick { until = it } }
                 Text("Number of hours", style = T.small, color = P.muted)
