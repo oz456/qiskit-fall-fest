@@ -106,7 +106,8 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     const sid = await db.tx(async (q) => {
       const used = await q.query("UPDATE otp_codes SET consumed_at = now() WHERE id=$1 AND consumed_at IS NULL RETURNING id", [otp.id]);
       if (!used[0]) return null; // lost a race with another request using the same code
-      await q.query("UPDATE sessions SET revoked_at = now() WHERE user_id=$1 AND revoked_at IS NULL", [user.id]); // one device per account
+      const ended = await q.query("UPDATE sessions SET revoked_at = now() WHERE user_id=$1 AND revoked_at IS NULL RETURNING id", [user.id]); // one device per account
+      if (ended.length) req.log.info({ uid: user.id, ended: ended.length, why: "signed_in_elsewhere" }, "older sessions ended by a new sign-in");
       await q.query("UPDATE users SET pass_secret=$2 WHERE id=$1", [user.id, secret]);
       const [s] = await q.query("INSERT INTO sessions (user_id, refresh_hash, device_id, device_name, expires_at) VALUES ($1,$2,$3,$4,$5) RETURNING id",
         [user.id, sha256(refresh), b.deviceId, b.deviceName ?? null, new Date(Date.now() + REFRESH_TTL_MS)]);
@@ -131,10 +132,18 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     const [s] = await db.query("SELECT * FROM sessions WHERE refresh_hash=$1 OR prev_refresh_hash=$1", [h]);
     const deny = () => { if (web) reply.clearCookie(RT_COOKIE, { path: "/v1/auth" }); return reply.code(401).send({ error: "invalid_session", message: "Please sign in again." }); };
     if (!s || s.revoked_at || new Date(s.expires_at) < new Date()) return deny();
-    if (s.refresh_hash !== h && web && Date.now() - new Date(s.last_used_at).getTime() < 20_000) { // two tabs sharing one cookie raced: the other tab already rotated it, so just hand out an access token
-      return { accessToken: signJwt({ sub: s.user_id, sid: s.id }, config.jwtSecret, ACCESS_TTL), expiresIn: ACCESS_TTL };
+    const replayed = s.refresh_hash !== h;
+    if (replayed && Date.now() - new Date(s.last_used_at).getTime() < 20_000) {
+      // a retry of a renewal whose answer never arrived (shaky mobile data), or two tabs sharing one cookie: not theft.
+      if (web) return { accessToken: signJwt({ sub: s.user_id, sid: s.id }, config.jwtSecret, ACCESS_TTL), expiresIn: ACCESS_TTL };  // the other tab already rotated the cookie
+      const [live] = await db.query("SELECT status FROM users WHERE id=$1", [s.user_id]);
+      if (!live || live.status !== "active") return deny();
+      const again = randomToken(32);   // the app never saw the last new token: hand out a fresh one and keep the old one valid for the next retry
+      await db.query("UPDATE sessions SET refresh_hash=$2, prev_refresh_hash=$3, last_used_at=now() WHERE id=$1", [s.id, sha256(again), h]);
+      return { accessToken: signJwt({ sub: s.user_id, sid: s.id }, config.jwtSecret, ACCESS_TTL), expiresIn: ACCESS_TTL, refreshToken: again };
     }
-    if (s.refresh_hash !== h) { // an already-rotated token was replayed: assume theft, kill the session
+    if (replayed) { // an already-rotated token was replayed long after: assume theft, kill the session
+      req.log.warn({ uid: s.user_id, sid: s.id, why: "refresh_replay" }, "session ended");
       await db.query("UPDATE sessions SET revoked_at = now() WHERE id=$1", [s.id]);
       return deny();
     }

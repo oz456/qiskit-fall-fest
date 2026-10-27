@@ -157,12 +157,18 @@ describe("attendee flow", () => {
     assert.equal((await app.inject({ url: "/v1/me", headers: h })).statusCode, 401, "old device must be revoked");
     tokens = r2.json();
   });
-  it("refresh rotates and replay revokes the session", async () => {
-    const r1 = await app.inject({ method: "POST", url: "/v1/auth/refresh", payload: { refreshToken: tokens.refreshToken } });
+  it("refresh rotates; a retry right after a lost answer is tolerated; a late replay revokes the session", async () => {
+    const refresh = (t: string) => app.inject({ method: "POST", url: "/v1/auth/refresh", payload: { refreshToken: t } });
+    const r1 = await refresh(tokens.refreshToken);
     assert.equal(r1.statusCode, 200);
-    const replay = await app.inject({ method: "POST", url: "/v1/auth/refresh", payload: { refreshToken: tokens.refreshToken } });
+    // the answer to r1 never reached the phone, so the app asks again with the old token: that is not theft
+    const retry = await refresh(tokens.refreshToken); assert.equal(retry.statusCode, 200); assert.ok(retry.json().refreshToken, "the app gets a fresh token to carry on with");
+    const next = await refresh(retry.json().refreshToken); assert.equal(next.statusCode, 200, "and the fresh token works");
+    // the same old token long after it was replaced: assume it was stolen and end the session
+    await db.query("UPDATE sessions SET last_used_at = now() - interval '2 minutes' WHERE revoked_at IS NULL");
+    const replay = await refresh(retry.json().refreshToken);   // a token that was replaced one rotation ago
     assert.equal(replay.statusCode, 401);
-    const again = await app.inject({ method: "POST", url: "/v1/auth/refresh", payload: { refreshToken: r1.json().refreshToken } });
+    const again = await refresh(next.json().refreshToken);
     assert.equal(again.statusCode, 401, "session killed after replay");
     // sign back in for later tests
     await db.query("DELETE FROM otp_codes");
