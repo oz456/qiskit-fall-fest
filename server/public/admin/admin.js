@@ -143,14 +143,26 @@ async function people(m) {
   const KIND = { student: "SRM student", faculty: "SRM faculty", unclear: "SRM", external: "Outside SRM" };
   async function drawSync() {
     const s = await api("GET", "/sync"), access = await api("GET", "/access-summary"); clear(syncBox);
+    // the website's own pass table, counted live: verified passes per tier must equal the people holding that pass here
+    let reconcile = "";
+    try {
+      const rep = await api("GET", "/pass-report");
+      if (rep.ok && Array.isArray(rep.claims)) {
+        const web = (tier) => rep.claims.filter((c) => c.tier === tier && c.status === "verified").reduce((n, c) => n + c.count, 0);
+        const mine = { general_offline: access.srmGeneral + access.outsideGeneral, flagship_offline: access.srmFlagship + access.outsideFlagship };
+        const part = (label, tier) => `${label}: app ${mine[tier]} · website ${web(tier)} ${mine[tier] === web(tier) ? "✓" : "(differs by " + Math.abs(mine[tier] - web(tier)) + ")"}`;
+        reconcile = `verified passes, ${part("₹99", "general_offline")} · ${part("₹499", "flagship_offline")}. A difference of a few can just be someone approved in the last 10 minutes.`;
+      }
+    } catch { /* the website did not answer: leave the line out */ }
     const last = s.runs.find((r) => r.status !== "running"), when = (iso) => new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     syncBox.append(h("h3", {}, "Website sync"),
       h("p", { class: "muted small" }, s.configured ? `People who register on ${s.websiteUrl.replace(/^https?:\/\//, "")} appear here automatically (${s.fromWebsite} so far, ${s.total} in total). Checked every 10 minutes and whenever someone registers.` : "Not connected: the sync key is not set on the server."),
       access && h("div", { class: "small" },
         h("p", { style: "margin:0 0 6px" }, `${access.total.toLocaleString()} in the app · ${access.signedIn.toLocaleString()} signed in`),
-        h("p", { style: "margin:0 0 4px" }, h("b", {}, "SRM-AP students "), `${(access.srm + access.saysSrm).toLocaleString()}: ${access.srm.toLocaleString()} with an SRM email (${access.srmWithPass.toLocaleString()} with a pass, ${(access.srm - access.srmWithPass).toLocaleString()} without) + ${access.saysSrm.toLocaleString()} with a personal email that says SRM-AP (${access.saysSrmFlagship} with the ₹499 pass, ${access.saysSrmGeneral} with the ₹99 pass; self-reported)`),
+        h("p", { style: "margin:0 0 4px" }, h("b", {}, "SRM-AP students "), `${(access.srm + access.saysSrm).toLocaleString()}: ${access.srm.toLocaleString()} with an SRM email (${access.srmWithPass.toLocaleString()} with a pass, ${(access.srm - access.srmWithPass).toLocaleString()} without) + ${access.saysSrm.toLocaleString()} with a personal email that says SRM-AP (${access.saysSrmFlagship} with the ₹499 pass, ${access.saysSrmGeneral} with the ₹99 pass${access.saysSrmNoPass ? `, ${access.saysSrmNoPass} without a pass` : ""}; self-reported)`),
         h("p", { style: "margin:0 0 4px" }, h("b", {}, "Other colleges "), `${(access.otherFlagship + access.otherGeneral).toLocaleString()}: ${access.otherFlagship.toLocaleString()} with the ₹499 pass, ${access.otherGeneral.toLocaleString()} with the ₹99 pass`),
-        access.outsideNoPass ? h("p", { style: "margin:0 0 4px" }, h("b", {}, "No pass "), `${access.outsideNoPass} outside accounts (added by hand, or waiting for review)`) : "",
+        access.outsideNoPass ? h("p", { style: "margin:0 0 4px" }, h("b", {}, "No pass "), `${access.outsideNoPass} outside accounts (added by hand, or payment not verified)`) : "",
+        reconcile ? h("p", { style: "margin:0 0 4px" }, h("b", {}, "Matches the website? "), reconcile) : "",
         h("p", { style: "margin:0 0 4px" }, h("b", {}, "Academic details given "), `${access.detailsGiven.toLocaleString()} of ${(access.srm + access.saysSrm).toLocaleString()} SRM-AP students`)),
       last && h("p", { class: "small" }, `Last run ${when(last.at)} · ${last.status === "ok" ? `saw ${last.seen}, added ${last.created}, updated ${last.updated}` : "failed: " + (last.error || "")}`),
       h("div", { class: "row" },

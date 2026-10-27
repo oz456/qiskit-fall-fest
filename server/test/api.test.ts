@@ -554,7 +554,9 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
     const r = await ask("failed.payer@gmail.com", 2); assert.equal(r.statusCode, 403); assert.equal(r.json().error, "payment_rejected"); assert.match(r.json().message, /verification failed[\s\S]*contact the organisers/i);
     assert.equal((await ask("never.paid@gmail.com", 3)).json().error, "not_registered");
     const waiting = (await admin("GET", "/admin/api/pass-claims-waiting")).json(); assert.ok(waiting.some((w: any) => w.email === "waiting.payer@gmail.com" && w.status === "pending") && waiting.some((w: any) => w.email === "failed.payer@gmail.com" && w.status === "rejected"));
-    const acc = (await admin("GET", "/admin/api/access-summary")).json(); assert.equal(typeof acc.outsideGeneral, "number"); assert.equal(typeof acc.outsideFlagship, "number"); for (const k of ["srmWithPass", "saysSrm", "otherFlagship", "otherGeneral", "outsideNoPass", "detailsGiven"]) assert.equal(typeof acc[k], "number", k); assert.equal("outsideWithoutPass" in acc, false);
+    const acc = (await admin("GET", "/admin/api/access-summary")).json(); assert.equal(typeof acc.outsideGeneral, "number"); assert.equal(typeof acc.outsideFlagship, "number"); for (const k of ["srmWithPass", "saysSrm", "otherFlagship", "otherGeneral", "outsideNoPass", "saysSrmNoPass", "srmGeneral", "srmFlagship", "detailsGiven"]) assert.equal(typeof acc[k], "number", k); assert.equal("outsideWithoutPass" in acc, false);
+    assert.equal(acc.srm + acc.saysSrm + acc.otherFlagship + acc.otherGeneral + acc.outsideNoPass, acc.total, "every person is counted in exactly one group");
+    assert.equal(acc.srmGeneral + acc.srmFlagship, acc.srmWithPass); assert.equal(acc.saysSrmFlagship + acc.saysSrmGeneral + acc.saysSrmNoPass, acc.saysSrm);
   });
   it("the sync stores pending/rejected claims for the sign-in message and never lets those people in", async () => {
     config.website.secret = "sync-test-secret-0123456789";
