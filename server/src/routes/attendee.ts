@@ -9,7 +9,7 @@ import { otpMail, sendMail } from "../lib/mail.ts";
 import { sanitizeJpeg, savePhoto } from "../lib/photos.ts";
 import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
-import { cgpaMissing, Details, detailsOut, PROGRAMS, SCHOOLS } from "../lib/details.ts";
+import { cgpaMissing, Details, detailsOut, Extra, GENDERS, needsExtra, PROGRAMS, SCHOOLS } from "../lib/details.ts";
 import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
 import { randomBytes } from "node:crypto";
 
@@ -190,26 +190,34 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     });
 
     api.get("/v1/me", async (req) => {
-      const [u] = await db.query("SELECT name,email,college,pass_code,says_srm,reg_no,school,semester,course,program,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
+      const [u] = await db.query("SELECT name,email,college,pass_code,says_srm,reg_no,school,semester,course,program,section,gender,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
       const checkins = await db.query("SELECT scope, scanned_at FROM checkins WHERE user_id=$1", [req.uid]);
       // only SRM-AP addresses are asked for academic details, and only until they have been saved once
       const needsDetails = (isSrmEmail(u!.email) || u!.says_srm) && !u!.details_at;
-      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, needsDetails, details: detailsOut(u!) },
-        ...(needsDetails ? { detailsOptions: { schools: SCHOOLS, programs: PROGRAMS } } : {}),
+      const extra = (isSrmEmail(u!.email) || u!.says_srm) && needsExtra(u!); // saved before section and gender existed: only those two are asked
+      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, needsDetails, needsExtra: extra, details: detailsOut(u!) },
+        ...(needsDetails || extra ? { detailsOptions: { schools: SCHOOLS, programs: PROGRAMS, genders: GENDERS } } : {}),
         checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString() })) };
     });
 
     // First sign-in of an SRM-AP person: academic details, saved once. Later changes go through an organiser.
     api.put("/v1/me/details", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async (req, reply) => {
-      const [u] = await db.query("SELECT email, says_srm, details_at FROM users WHERE id=$1", [req.uid]);
+      const [u] = await db.query("SELECT email, says_srm, details_at, section, gender FROM users WHERE id=$1", [req.uid]);
       if (!isSrmEmail(u!.email) && !u!.says_srm) return reply.code(403).send({ error: "not_needed", message: "These details are only for SRM University-AP students." });
+      const b0 = (req.body ?? {}) as Record<string, unknown>;
+      if (u!.details_at && needsExtra(u!) && ("section" in b0 || "gender" in b0)) { // earlier details are kept; only the missing section / gender are filled in
+        const x = Extra.safeParse(req.body);
+        if (!x.success) return reply.code(400).send({ error: "invalid_details", message: x.error.issues[0]?.message ?? "Please check your details.", field: String(x.error.issues[0]?.path[0] ?? "") });
+        await db.query("UPDATE users SET section=COALESCE(section,$2), gender=COALESCE(gender,$3) WHERE id=$1", [req.uid, x.data.section, x.data.gender]);
+        return { ok: true };
+      }
       if (u!.details_at) return reply.code(409).send({ error: "already_set", message: "Your details are already saved. Ask an organiser to change them." });
       const parsed = Details.safeParse(req.body);
       if (!parsed.success) return reply.code(400).send({ error: "invalid_details", message: parsed.error.issues[0]?.message ?? "Please check your details.", field: String(parsed.error.issues[0]?.path[0] ?? "") });
       const d = parsed.data;
       const miss = cgpaMissing(d); if (miss) return reply.code(400).send({ error: "invalid_details", message: miss, field: "cgpa" });
       try {
-        await db.query("UPDATE users SET reg_no=$2, school=$3, semester=$4, course=$5, program=$6, cgpa=$7, details_at=now() WHERE id=$1 AND details_at IS NULL", [req.uid, d.regNo, d.school, d.semester, d.course, d.program, d.cgpa]);
+        await db.query("UPDATE users SET reg_no=$2, school=$3, semester=$4, course=$5, program=$6, cgpa=$7, section=$8, gender=$9, details_at=now() WHERE id=$1 AND details_at IS NULL", [req.uid, d.regNo, d.school, d.semester, d.course, d.program, d.cgpa, d.section ?? null, d.gender ?? null]);
       } catch (e: any) {
         if (e?.code === "23505") return reply.code(409).send({ error: "reg_no_taken", message: "That registration number is already used by another account. Check it, or contact the organisers.", field: "regNo" });
         throw e;

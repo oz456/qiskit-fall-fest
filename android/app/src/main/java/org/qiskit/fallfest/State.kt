@@ -42,6 +42,9 @@ class AppState(context: Context) {
     var needsSelfie by mutableStateOf(prefs.getBoolean("needs_selfie", false)); private set
     /** First sign-in of an SRM-AP person: academic details are asked once. Other attendees are never asked. */
     var needsDetails by mutableStateOf(prefs.getBoolean("needs_details", false)); private set
+    /** Saved before section and gender existed: only those two are asked. */
+    var needsExtra by mutableStateOf(prefs.getBoolean("needs_extra", false)); private set
+    var detailsGenders by mutableStateOf(listOf("Male", "Female")); private set
     var detailsSchools by mutableStateOf(listOf("SEAS", "ESLA", "PSB", "Other")); private set
     var detailsPrograms by mutableStateOf(listOf("Other")); private set
     var message by mutableStateOf<String?>(null)
@@ -64,7 +67,7 @@ class AppState(context: Context) {
     /** "ticket" / "announcement" when the user tapped a notification; the UI consumes it and sets it back to null. */
     var pendingOpen by mutableStateOf<String?>(null)
     /** Ask once, right after sign-in + selfie, on Android 13+ (older versions allow notifications without asking). */
-    fun shouldAskNotifications(): Boolean = signedIn && !needsSelfie && !needsDetails && !prefs.getBoolean("notif_asked", false) && android.os.Build.VERSION.SDK_INT >= 33 && !Push.enabled(appContext)
+    fun shouldAskNotifications(): Boolean = signedIn && !needsSelfie && !needsDetails && !needsExtra && !prefs.getBoolean("notif_asked", false) && android.os.Build.VERSION.SDK_INT >= 33 && !Push.enabled(appContext)
     fun markNotificationsAsked() { prefs.edit().putBoolean("notif_asked", true).apply() }
     fun notificationsChanged() { notifEnabled = Push.enabled(appContext); syncPush() }
     /** Registers this phone's Firebase token with the server when notifications are allowed. Safe to call any time; it only sends when something changed. */
@@ -129,7 +132,7 @@ class AppState(context: Context) {
         wipe()
     }
     private fun wipe() {
-        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null
+        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null
         profile = null; events = emptyList(); announcements = emptyList(); tickets = emptyList(); checkins = emptyMap()
     }
 
@@ -214,17 +217,28 @@ class AppState(context: Context) {
     private fun applyDetailsState(me: JSONObject) {
         val need = me.getJSONObject("profile").optBoolean("needsDetails", false)
         if (need != needsDetails) { needsDetails = need; prefs.edit().putBoolean("needs_details", need).apply() }
+        val extra = me.getJSONObject("profile").optBoolean("needsExtra", false)
+        if (extra != needsExtra) { needsExtra = extra; prefs.edit().putBoolean("needs_extra", extra).apply() }
         me.optJSONObject("detailsOptions")?.let { o ->
             o.optJSONArray("schools")?.let { a -> detailsSchools = (0 until a.length()).map { a.getString(it) } }
+            o.optJSONArray("genders")?.let { a -> detailsGenders = (0 until a.length()).map { a.getString(it) } }
             o.optJSONArray("programs")?.let { a -> detailsPrograms = (0 until a.length()).map { a.getString(it) } }
         }
     }
 
     /** One-time academic details (SRM-AP people). Throws ApiException with a readable message; its code says which field is wrong. */
-    suspend fun saveDetails(regNo: String, school: String, semester: Int, course: String, program: String, cgpa: Double?) {
-        try { authed("PUT", "/v1/me/details", JSONObject().put("regNo", regNo).put("school", school).put("semester", semester).put("course", course).put("program", program).put("cgpa", cgpa ?: "NA")) }
+    suspend fun saveDetails(regNo: String, school: String, semester: Int, course: String, program: String, section: String, gender: String, cgpa: Double?) {
+        try { authed("PUT", "/v1/me/details", JSONObject().put("regNo", regNo).put("school", school).put("semester", semester).put("course", course).put("program", program).put("section", section).put("gender", gender).put("cgpa", cgpa ?: "NA")) }
         catch (e: ApiException) { if (e.http != 409 || e.code != "already_set") throw e }
-        needsDetails = false; prefs.edit().putBoolean("needs_details", false).apply()
+        needsDetails = false; needsExtra = false; prefs.edit().putBoolean("needs_details", false).putBoolean("needs_extra", false).apply()
+        refresh()
+    }
+
+    /** Section and gender for someone who saved their details earlier. */
+    suspend fun saveExtra(section: String, gender: String) {
+        try { authed("PUT", "/v1/me/details", JSONObject().put("section", section).put("gender", gender)) }
+        catch (e: ApiException) { if (e.http != 409 || e.code != "already_set") throw e }
+        needsExtra = false; prefs.edit().putBoolean("needs_extra", false).apply()
         refresh()
     }
 

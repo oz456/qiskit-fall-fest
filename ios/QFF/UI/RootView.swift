@@ -9,7 +9,7 @@ struct RootView: View {
     var body: some View {
         ZStack {
             if app.signedIn {
-                if app.needsDetails { DetailsView().transition(.opacity) }
+                if app.needsDetails || app.needsExtra { DetailsView(extra: !app.needsDetails).transition(.opacity) }
                 else if app.needsSelfie { SelfieView().transition(.opacity) }
                 else { MainView().environmentObject(router).transition(.opacity.combined(with: .scale(scale: 0.98))) }
             } else {

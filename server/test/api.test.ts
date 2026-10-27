@@ -511,8 +511,18 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
     for (const bad of [{ ...good, regNo: "12345" }, { ...good, semester: 9 }, { ...good, cgpa: 10.5 }, { ...good, school: "XYZ" }]) assert.equal((await put(bad)).statusCode, 400);
     assert.equal((await put(good)).statusCode, 200);
     const after = (await app.inject({ method: "GET", url: "/v1/me", headers: auth })).json();
-    assert.equal(after.profile.needsDetails, false); assert.deepEqual(after.profile.details, { ...good, regNo: "AP25110010123" });
+    assert.equal(after.profile.needsDetails, false); assert.deepEqual(after.profile.details, { ...good, regNo: "AP25110010123", section: null, gender: null });
     assert.equal((await put({ ...good, course: "ECE" })).statusCode, 409, "saved once; later changes go through an organiser");
+    // people who saved before section and gender existed are asked for just those two
+    assert.equal(after.profile.needsExtra, true, "saved without section/gender: asked again for those two");
+    assert.equal(after.profile.needsDetails, false);
+    const ex = (payload: object, n: number) => app.inject({ method: "PUT", url: "/v1/me/details", headers: auth, remoteAddress: "10.77.2." + n, payload });
+    assert.equal((await ex({ section: "A", gender: "Other" }, 1)).statusCode, 400, "gender is Male or Female");
+    assert.equal((await ex({ section: "", gender: "Male" }, 2)).statusCode, 400);
+    assert.equal((await ex({ section: "s12", gender: "Female" }, 3)).statusCode, 200);
+    const done = (await app.inject({ method: "GET", url: "/v1/me", headers: auth })).json().profile;
+    assert.equal(done.needsExtra, false); assert.deepEqual([done.details.section, done.details.gender, done.details.course], ["S12", "Female", "CSE"], "earlier details are kept");
+    assert.equal((await ex({ section: "B", gender: "Male" }, 4)).statusCode, 409, "complete details are not overwritten");
     // the same registration number cannot be claimed by a second account
     const em2 = "details_other@srmap.edu.in";
     await db.query("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3)", [em2, hash(em2, "135791"), new Date(Date.now() + 600_000)]);

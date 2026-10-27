@@ -48,7 +48,7 @@ function render() {
     tabbar?.remove(); tabbar = null;
     return setView("signin", () => signInView({ onDone: onSignedIn }));
   }
-  if (S.needsDetails) { tabbar?.remove(); tabbar = null; return setView("details", () => detailsView({ onDone: onDetailsDone, onSignOut: signOut })); }
+  if (S.needsDetails || S.needsExtra) { tabbar?.remove(); tabbar = null; return setView("details" + (S.needsDetails ? "" : "-extra"), () => detailsView({ onDone: onDetailsDone, onSignOut: signOut, extra: !S.needsDetails })); }
   if (S.needsSelfie) { tabbar?.remove(); tabbar = null; return setView("selfie", () => selfieView({ onDone: onSelfieDone, onSignOut: signOut })); }
   if (!/^\/attendee\/(hub|pass|support)\/?$/.test(location.pathname)) history.replaceState({}, "", "/attendee/hub");
   const tab = currentTab();
@@ -62,7 +62,7 @@ function drawTabs(tab) {
   tabbar.replaceChildren(...TABS.map(([key, label, ic]) => h("button", { class: "tab" + (key === tab ? " on" : ""), type: "button", "aria-label": label, "aria-current": key === tab ? "page" : null, onclick: () => key !== tab && go("/attendee/" + key) },
     icon(ic), h("span", {}, label), key === "support" && newReplies() ? h("i", { class: "dot" }) : null)));
 }
-subscribe(() => { if (signedIn && !S.needsSelfie && !S.needsDetails && tabbar) drawTabs(currentTab()); });
+subscribe(() => { if (signedIn && !S.needsSelfie && !S.needsDetails && !S.needsExtra && tabbar) drawTabs(currentTab()); });
 
 async function onSignedIn() {
   signedIn = true; viewKey = ""; await afterAuth();
@@ -70,9 +70,9 @@ async function onSignedIn() {
 async function afterAuth() {
   try { await loadAll(); } catch (e) { toast(e instanceof ApiError ? e.message : "Couldn’t load. Pull down to retry."); }
   render(); openFromHash();
-  if (!S.needsSelfie && !S.needsDetails) { push.maybeAsk(); maybeAskInstall(); }
+  if (!S.needsSelfie && !S.needsDetails && !S.needsExtra) { push.maybeAsk(); maybeAskInstall(); }
 }
-async function onDetailsDone() { S.needsDetails = false; viewKey = ""; await afterAuth(); }
+async function onDetailsDone() { S.needsDetails = false; S.needsExtra = false; viewKey = ""; await afterAuth(); }
 async function onSelfieDone() { S.needsSelfie = false; viewKey = ""; await afterAuth(); }
 
 function endSession() { signedIn = false; viewKey = ""; resetState(); closeAllSheets(); history.replaceState({}, "", "/attendee"); render(); }

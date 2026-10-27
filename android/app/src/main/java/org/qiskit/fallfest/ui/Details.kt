@@ -27,12 +27,14 @@ import org.qiskit.fallfest.AppState
 
 /** First sign-in of an SRM-AP person: academic details, asked once. */
 @Composable
-fun DetailsScreen(app: AppState) {
+fun DetailsScreen(app: AppState, extra: Boolean = false) {
     var regNo by remember { mutableStateOf("") }
     var school by remember { mutableStateOf("") }
     var semester by remember { mutableStateOf("") }
     var program by remember { mutableStateOf("") }
     var course by remember { mutableStateOf("") }
+    var section by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("") }
     var cgpa by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
@@ -42,38 +44,50 @@ fun DetailsScreen(app: AppState) {
         val raw = cgpa.trim().replace(',', '.')
         val na = raw.equals("NA", true) || raw.equals("N/A", true)
         val g = if (na) null else raw.toDoubleOrNull()
-        when {
-            regNo.isBlank() -> error = "Enter your registration number, like AP25110010123."
-            school.isEmpty() -> error = "Choose your school."
-            semester.isEmpty() -> error = "Choose your semester."
-            program.isEmpty() -> error = "Choose your program."
-            course.trim().length < 2 -> error = "Enter your course, like CSE."
-            !na && (g == null || g < 0 || g > 10) -> error = "Enter your CGPA as a number from 0 to 10, or NA if you are in the first semester."
-            else -> {
-                loading = true; error = null
-                scope.launch {
-                    try { app.saveDetails(regNo.trim().uppercase(), school, semester.toInt(), course.trim(), program, g) }
-                    catch (x: ApiException) { error = x.message } catch (_: Exception) { error = "Can't reach the server. Check your connection." }
-                    finally { loading = false }
-                }
+        val sectionOk = Regex("^[A-Za-z0-9][A-Za-z0-9 \\-]{0,11}$").matches(section.trim())
+        val send = {
+            loading = true; error = null
+            scope.launch {
+                try { if (extra) app.saveExtra(section.trim().uppercase(), gender) else app.saveDetails(regNo.trim().uppercase(), school, semester.toInt(), course.trim(), program, section.trim().uppercase(), gender, g) }
+                catch (x: ApiException) { error = x.message } catch (_: Exception) { error = "Can't reach the server. Check your connection." }
+                finally { loading = false }
             }
+        }
+        when {
+            !extra && regNo.isBlank() -> error = "Enter your registration number, like AP25110010123."
+            !extra && school.isEmpty() -> error = "Choose your school."
+            !extra && semester.isEmpty() -> error = "Choose your semester."
+            !extra && program.isEmpty() -> error = "Choose your program."
+            !extra && course.trim().length < 2 -> error = "Enter your course, like CSE."
+            !sectionOk -> error = "Enter your section, like A or S12."
+            gender.isEmpty() -> error = "Choose Male or Female."
+            !extra && !na && (g == null || g < 0 || g > 10) -> error = "Enter your CGPA as a number from 0 to 10, or NA if you are in the first semester."
+            else -> send()
         }
     }
 
     Column(Modifier.fillMaxSize().background(P.bg).statusBarsPadding().navigationBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionLabel("One-time setup")
-        Text("Tell us about yourself", style = T.h1, color = P.ink)
-        Text("We only ask this once. It helps the organisers with attendance and certificates.", style = T.body, color = P.muted)
+        Text(if (extra) "Two more details" else "Tell us about yourself", style = T.h1, color = P.ink)
+        Text(if (extra) "We forgot to ask for these. Your other details are already saved." else "We only ask this once. It helps the organisers with attendance and certificates.", style = T.body, color = P.muted)
         Spacer(Modifier.height(4.dp))
-        DetailField("Registration number", regNo, { regNo = it.uppercase().take(15); error = null }, "AP25110010123", capitalize = true)
-        DetailPicker("School", school, app.detailsSchools, "Choose your school") { school = it; error = null }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.weight(1f)) { DetailPicker("Semester", semester, (1..8).map { it.toString() }, "Semester") { semester = it; error = null } }
-            Box(Modifier.weight(1f)) { DetailPicker("Program", program, app.detailsPrograms, "Program") { program = it; error = null } }
+        if (!extra) {
+            DetailField("Registration number", regNo, { regNo = it.uppercase().take(15); error = null }, "AP25110010123", capitalize = true)
+            DetailPicker("School", school, app.detailsSchools, "Choose your school") { school = it; error = null }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.weight(1f)) { DetailPicker("Semester", semester, (1..8).map { it.toString() }, "Semester") { semester = it; error = null } }
+                Box(Modifier.weight(1f)) { DetailPicker("Program", program, app.detailsPrograms, "Program") { program = it; error = null } }
+            }
+            DetailField("Course", course, { course = it.take(60); error = null }, "e.g. CSE, ECE, Data Science")
         }
-        DetailField("Course", course, { course = it.take(60); error = null }, "e.g. CSE, ECE, Data Science")
-        DetailField("CGPA", cgpa, { cgpa = it.take(5); error = null }, "e.g. 8.45, or NA")
-        Text("First semester? You don’t have a CGPA yet. Enter NA (or 0).", style = T.small, color = P.muted)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.weight(1f)) { DetailField("Section", section, { section = it.uppercase().take(12); error = null }, "e.g. A or S12", capitalize = true) }
+            Box(Modifier.weight(1f)) { DetailPicker("Gender", gender, app.detailsGenders, "Gender") { gender = it; error = null } }
+        }
+        if (!extra) {
+            DetailField("CGPA", cgpa, { cgpa = it.take(5); error = null }, "e.g. 8.45, or NA")
+            Text("First semester? You don’t have a CGPA yet. Enter NA (or 0).", style = T.small, color = P.muted)
+        }
         if (error != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(Icons.Outlined.ErrorOutline, null, tint = P.danger, modifier = Modifier.size(16.dp)); Text(error.orEmpty(), style = T.small, color = P.danger)
         }

@@ -34,7 +34,9 @@ final class AppState: ObservableObject {
     @Published var needsSelfie = UserDefaults.standard.bool(forKey: "needs_selfie")
     /// First sign-in of an SRM-AP person: academic details are asked once. Other attendees are never asked.
     @Published var needsDetails = UserDefaults.standard.bool(forKey: "needs_details")
-    @Published var detailsOptions = DetailsOptions(schools: ["SEAS", "ESLA", "PSB", "Other"], programs: ["Other"])
+    /// Saved before section and gender existed: only those two are asked.
+    @Published var needsExtra = UserDefaults.standard.bool(forKey: "needs_extra")
+    @Published var detailsOptions = DetailsOptions(schools: ["SEAS", "ESLA", "PSB", "Other"], programs: ["Other"], genders: ["Male", "Female"])
 
     let api: API
     let isPreview: Bool
@@ -127,9 +129,9 @@ final class AppState: ObservableObject {
     private func wipe() {
         accessToken = nil; passSecret = nil
         keychain.wipe()
-        for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "needs_details", "seen_tickets", "push_registered", "notif_asked", "seen_checkins"] { defaults.removeObject(forKey: k) }
+        for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "needs_details", "needs_extra", "seen_tickets", "push_registered", "notif_asked", "seen_checkins"] { defaults.removeObject(forKey: k) }
         seenTickets = [:]; announcedCheckins = []; checkinNotice = nil
-        needsSelfie = false; needsDetails = false
+        needsSelfie = false; needsDetails = false; needsExtra = false
         profile = nil; events = []; announcements = []; tickets = []; checkins = [:]; faqs = []; settings = [:]
     }
 
@@ -224,17 +226,29 @@ final class AppState: ObservableObject {
     private func applyDetailsState(_ me: MeResponse) {
         let need = me.profile.needsDetails ?? false
         if need != needsDetails { needsDetails = need; defaults.set(need, forKey: "needs_details") }
+        let extra = me.profile.needsExtra ?? false
+        if extra != needsExtra { needsExtra = extra; defaults.set(extra, forKey: "needs_extra") }
         if let o = me.detailsOptions { detailsOptions = o }
     }
 
     /// One-time academic details (SRM-AP people). Throws APIError with a readable message.
-    func saveDetails(regNo: String, school: String, semester: Int, course: String, program: String, cgpa: Double?) async throws {
+    func saveDetails(regNo: String, school: String, semester: Int, course: String, program: String, section: String, gender: String, cgpa: Double?) async throws {
         if !isPreview {
-            let body: [String: Any] = ["regNo": regNo, "school": school, "semester": semester, "course": course, "program": program, "cgpa": cgpa ?? "NA"]
+            let body: [String: Any] = ["regNo": regNo, "school": school, "semester": semester, "course": course, "program": program, "section": section, "gender": gender, "cgpa": cgpa ?? "NA"]
             do { _ = try await authedData("PUT", "/v1/me/details", body: body) }
             catch let e as APIError where e.http == 409 && e.code == "already_set" { }
         }
-        needsDetails = false; defaults.set(false, forKey: "needs_details")
+        needsDetails = false; needsExtra = false; defaults.set(false, forKey: "needs_details"); defaults.set(false, forKey: "needs_extra")
+        if !isPreview { Task { [self] in await refresh() } }
+    }
+
+    /// Section and gender for someone who saved their details earlier.
+    func saveExtra(section: String, gender: String) async throws {
+        if !isPreview {
+            do { _ = try await authedData("PUT", "/v1/me/details", body: ["section": section, "gender": gender]) }
+            catch let e as APIError where e.http == 409 && e.code == "already_set" { }
+        }
+        needsExtra = false; defaults.set(false, forKey: "needs_extra")
         if !isPreview { Task { [self] in await refresh() } }
     }
 
