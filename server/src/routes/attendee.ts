@@ -190,10 +190,10 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     });
 
     api.get("/v1/me", async (req) => {
-      const [u] = await db.query("SELECT name,email,college,pass_code,reg_no,school,semester,course,program,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
+      const [u] = await db.query("SELECT name,email,college,pass_code,says_srm,reg_no,school,semester,course,program,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
       const checkins = await db.query("SELECT scope, scanned_at FROM checkins WHERE user_id=$1", [req.uid]);
       // only SRM-AP addresses are asked for academic details, and only until they have been saved once
-      const needsDetails = isSrmEmail(u!.email) && !u!.details_at;
+      const needsDetails = (isSrmEmail(u!.email) || u!.says_srm) && !u!.details_at;
       return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, needsDetails, details: detailsOut(u!) },
         ...(needsDetails ? { detailsOptions: { schools: SCHOOLS, programs: PROGRAMS } } : {}),
         checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString() })) };
@@ -201,8 +201,8 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
 
     // First sign-in of an SRM-AP person: academic details, saved once. Later changes go through an organiser.
     api.put("/v1/me/details", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async (req, reply) => {
-      const [u] = await db.query("SELECT email, details_at FROM users WHERE id=$1", [req.uid]);
-      if (!isSrmEmail(u!.email)) return reply.code(403).send({ error: "not_needed", message: "These details are only for SRM University-AP students." });
+      const [u] = await db.query("SELECT email, says_srm, details_at FROM users WHERE id=$1", [req.uid]);
+      if (!isSrmEmail(u!.email) && !u!.says_srm) return reply.code(403).send({ error: "not_needed", message: "These details are only for SRM University-AP students." });
       if (u!.details_at) return reply.code(409).send({ error: "already_set", message: "Your details are already saved. Ask an organiser to change them." });
       const parsed = Details.safeParse(req.body);
       if (!parsed.success) return reply.code(400).send({ error: "invalid_details", message: parsed.error.issues[0]?.message ?? "Please check your details.", field: String(parsed.error.issues[0]?.path[0] ?? "") });

@@ -104,10 +104,10 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const order = f.sort === "name" ? "lower(u.name), u.email" : f.sort === "checkins" ? "checkins DESC, u.created_at DESC" : "u.created_at DESC";
       const [t] = await db.query(`SELECT count(*)::int AS n FROM users u WHERE ${where}`, args);
       const [all] = await db.query("SELECT count(*)::int AS n FROM users");
-      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,u.reg_no,u.school,u.semester,u.course,u.program,u.cgpa,u.details_at,
+      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,u.says_srm,u.reg_no,u.school,u.semester,u.course,u.program,u.cgpa,u.details_at,
         ${HAS_APP} AS has_app, ${HAS_PHOTO} AS has_photo, (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins
         FROM users u WHERE ${where} ORDER BY ${order} LIMIT ${f.limit} OFFSET ${f.offset}`, args);
-      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, details: detailsOut(u), hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins })) };
+      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, saysSrm: u.says_srm, details: detailsOut(u), hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins })) };
     });
     // Who is in the app, by how they got in: SRM address, ₹99 pass, ₹499 pass, or neither. Signed in = has a live session.
     api.get("/admin/api/access-summary", async () => {
@@ -134,6 +134,13 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     api.get("/admin/api/pass-audit", async () => {
       const { baseUrl, secret } = config.website; if (!secret) return { ok: false, message: "Website sync is not configured." };
       const res = await fetch(`${baseUrl}/api/integrations/qff-app/passes?audit=1`, { headers: { Authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(25_000) });
+      if (!res.ok) return { ok: false, message: `The website answered ${res.status}.` };
+      return { ok: true, ...(await res.json() as object) };
+    });
+    // Read-only: personal-address claims whose college says SRM-AP, and claims that mention SRM but name another campus, to check by hand.
+    api.get("/admin/api/srm-audit", async () => {
+      const { baseUrl, secret } = config.website; if (!secret) return { ok: false, message: "Website sync is not configured." };
+      const res = await fetch(`${baseUrl}/api/integrations/qff-app/passes?audit=srm`, { headers: { Authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(25_000) });
       if (!res.ok) return { ok: false, message: `The website answered ${res.status}.` };
       return { ok: true, ...(await res.json() as object) };
     });
@@ -198,8 +205,8 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     // Academic details people gave on first sign-in. Clearing them makes the app ask that person again (e.g. a typo).
     api.get("/admin/api/students", async () => {
-      const rows = await db.query("SELECT name,email,reg_no,school,semester,course,program,cgpa FROM users WHERE details_at IS NOT NULL ORDER BY lower(name)");
-      return { rows: rows.map((u) => ({ name: u.name, email: u.email, regNo: u.reg_no, school: u.school, semester: u.semester, course: u.course, program: u.program, cgpa: u.cgpa === null ? null : Number(u.cgpa) })) };
+      const rows = await db.query("SELECT name,email,says_srm,reg_no,school,semester,course,program,cgpa FROM users WHERE details_at IS NOT NULL ORDER BY lower(name)");
+      return { rows: rows.map((u) => ({ name: u.name, email: u.email, emailType: u.says_srm && !u.email.toLowerCase().endsWith("@srmap.edu.in") ? "personal_says_srm" : "srm_email", regNo: u.reg_no, school: u.school, semester: u.semester, course: u.course, program: u.program, cgpa: u.cgpa === null ? null : Number(u.cgpa) })) };
     });
     api.delete("/admin/api/users/:id/details", async (req) => {
       const { id } = Id.parse(req.params);

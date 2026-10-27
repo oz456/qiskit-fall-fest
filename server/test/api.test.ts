@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { migrate, openDb, type Db } from "../src/db.ts";
 import { buildApp } from "../src/app.ts";
+import { randomBytes } from "node:crypto";
 import { hashPassword, hmac, passPayload, signJwt } from "../src/lib/crypto.ts";
 import { config } from "../src/config.ts";
 import { exportTables, importTables } from "../src/lib/backup.ts";
@@ -565,6 +566,28 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
       const em = (await db.query("SELECT email FROM users WHERE email LIKE '%.payer@gmail.com'")).map((r: any) => r.email); assert.deepEqual(em, ["good.payer@gmail.com"]);
       const st = Object.fromEntries((await db.query("SELECT email,status FROM pass_claim_status")).map((r: any) => [r.email, r.status]));
       assert.deepEqual([st["slow.payer@gmail.com"], st["bad.payer@gmail.com"], st["good.payer@gmail.com"]], ["pending", "rejected", undefined]);
+    } finally { config.website.baseUrl = was; srv.close(); }
+  });
+  it("a personal-email person whose college says SRM-AP is asked for the academic details; other outside people are not", async () => {
+    config.website.secret = "sync-test-secret-0123456789";
+    const feed = { people: [
+      { email: "says.srm@gmail.com", name: "Says Srm", tier: "flagship", status: "verified", srmBasis: "personal_says_srm" },
+      { email: "other.college@gmail.com", name: "Other College", tier: "general", status: "verified", srmBasis: "outside" }], nextCursor: null };
+    const srv = createServer((req, res) => { res.setHeader("content-type", "application/json"); res.end(JSON.stringify(req.url!.includes("/passes") ? feed : { people: [], nextCursor: null })); });
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r)); const was = config.website.baseUrl; config.website.baseUrl = `http://127.0.0.1:${(srv.address() as any).port}`;
+    try {
+      assert.equal((await admin("POST", "/admin/api/sync/run")).json().ok, true);
+      const token = async (em: string) => { const id = (await db.query("SELECT id FROM users WHERE email=$1", [em]))[0]!.id; const sid = (await db.query("INSERT INTO sessions (user_id, refresh_hash, device_id, expires_at) VALUES ($1,$2,'d',now()+interval '1 day') RETURNING id", [id, randomBytes(12).toString("hex")]))[0]!.id; return signJwt({ sub: id, sid }, config.jwtSecret, 600); };
+      const me = async (em: string) => (await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: "Bearer " + (await token(em)) } })).json().profile.needsDetails;
+      assert.equal(await me("says.srm@gmail.com"), true, "self-reported SRM-AP: asked");
+      assert.equal(await me("other.college@gmail.com"), false, "another college: not asked");
+      const put = await app.inject({ method: "PUT", url: "/v1/me/details", headers: { authorization: "Bearer " + (await token("says.srm@gmail.com")) }, remoteAddress: "10.90.0.1", payload: { regNo: "AP25110010777", school: "SEAS", semester: 1, course: "CSE", program: "B.Tech", cgpa: "NA" } });
+      assert.equal(put.statusCode, 200);
+      const row = (await admin("GET", "/admin/api/students")).json().rows.find((r: any) => r.email === "says.srm@gmail.com");
+      assert.equal(row.emailType, "personal_says_srm", "the export keeps the self-reported group apart from SRM addresses");
+      assert.equal((await admin("GET", "/admin/api/users?q=says.srm")).json().rows[0].saysSrm, true);
+      feed.people[0]!.srmBasis = "outside"; assert.equal((await admin("POST", "/admin/api/sync/run")).json().ok, true);
+      assert.equal((await db.query("SELECT says_srm FROM users WHERE email='says.srm@gmail.com'"))[0]!.says_srm, false, "the mark follows the website");
     } finally { config.website.baseUrl = was; srv.close(); }
   });
   it("an outside account whose pass is not (or no longer) verified cannot get a code; verifying it opens the door again", async () => {

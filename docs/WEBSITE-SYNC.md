@@ -21,3 +21,6 @@ The main website (`www.qffsrmap2026.com`, repo `qiskitfallfest-srmap/QisKit-Fall
   `gcloud scheduler jobs create http qff-website-sync --location us-east4 --schedule "*/10 * * * *" --uri https://app.qffsrmap2026.com/integrations/website/reconcile --http-method POST --headers "Authorization=Bearer <key>"`
 - Admin → Attendees → **Website sync** shows the last runs and has a "Sync now" button.
 - To pause: disable the scheduler job, or remove `SYNC_SECRET` (all sync endpoints then answer 401).
+
+## Personal-email SRM-AP students (academic details)
+The one-time details form is asked of every `@srmap.edu.in` address, and also of a person with a verified pass on a personal address whose college (typed on the website) says SRM-AP. The website's passes feed carries `srmBasis` per person (`srm_email`, `personal_says_srm`, `outside`), decided by the website's single `lib/srm-group.ts` (SRM Chennai/IST and other campuses do not count). The sync stores it as `users.says_srm`. It is self-reported, so exports keep it apart (`email_type`), and the admin sees a "SAYS SRM-AP" tag. `GET /admin/api/srm-audit` lists the borderline claims for checking by hand (read-only).

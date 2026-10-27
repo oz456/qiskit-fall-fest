@@ -178,7 +178,7 @@ async function people(m) {
       h("div", { class: "row", style: "gap:18px;align-items:flex-start;flex-wrap:nowrap" },
         u.hasPhoto ? h("img", { class: "avatar", alt: "", src: `/admin/api/users/${u.id}/photo` }) : h("div", { class: "avatar none" }, u.name.split(/\s+/).slice(0, 2).map((x) => x[0]).join("").toUpperCase()),
         h("div", { class: "grow" }, h("h2", { style: "margin:0 0 4px" }, u.name), h("div", { class: "muted" }, u.email), h("div", { class: "muted" }, [u.passCode, u.college].filter(Boolean).join(" · ")),
-          h("div", { style: "margin-top:10px" }, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), " ", h("span", { class: "pill" }, u.hasApp ? "SIGNED IN" : "NOT SIGNED IN"), " ", u.checkins ? h("span", { class: "pill" }, `${u.checkins} CHECK-IN${u.checkins > 1 ? "S" : ""}`) : null))),
+          h("div", { style: "margin-top:10px" }, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), " ", h("span", { class: "pill" }, u.hasApp ? "SIGNED IN" : "NOT SIGNED IN"), u.saysSrm ? " " : "", u.saysSrm ? h("span", { class: "pill", title: "Personal email; the college typed on the website says SRM-AP (self-reported)" }, "SAYS SRM-AP") : "", " ", u.checkins ? h("span", { class: "pill" }, `${u.checkins} CHECK-IN${u.checkins > 1 ? "S" : ""}`) : null))),
       u.details ? h("div", { class: "muted", style: "margin:12px 0" }, [u.details.regNo, u.details.school, "Sem " + u.details.semester, u.details.program + " " + u.details.course, "CGPA " + (u.details.cgpa === null ? "NA" : u.details.cgpa.toFixed(2))].join(" · ")) : null,
       h("div", { class: "row" },
         act(u.status === "active" ? "Block" : "Unblock", "ghost", guard(async () => { await api("PATCH", "/users/" + u.id, { status: u.status === "active" ? "blocked" : "active" }); done("Updated"); })),
@@ -192,7 +192,7 @@ async function people(m) {
   async function exportStudents() {
     const r = await api("GET", "/students");
     const safe = (c) => (/^[=+\-@\t\r]/.test(String(c)) ? "'" + c : String(c));
-    const lines = ["name,email,registration_no,school,semester,course,program,cgpa", ...r.rows.map((x) => [x.name, x.email, x.regNo, x.school, x.semester, x.course, x.program, x.cgpa === null ? "NA" : x.cgpa.toFixed(2)].map((c) => '"' + safe(c).replace(/"/g, '""') + '"').join(","))];
+    const lines = ["name,email,email_type,registration_no,school,semester,course,program,cgpa", ...r.rows.map((x) => [x.name, x.email, x.emailType === "personal_says_srm" ? "personal email, says SRM-AP" : "SRM-AP email", x.regNo, x.school, x.semester, x.course, x.program, x.cgpa === null ? "NA" : x.cgpa.toFixed(2)].map((c) => '"' + safe(c).replace(/"/g, '""') + '"').join(","))];
     h("a", { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })), download: "student-details.csv" }).click();
     toast(r.rows.length + " students");
   }
