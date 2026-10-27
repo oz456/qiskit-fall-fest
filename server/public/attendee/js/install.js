@@ -43,3 +43,19 @@ export function installRow() {
   return h("div", { class: "setrow" }, icon("download"), h("div", { class: "grow" }, h("div", { class: "bodyM" }, "Install the app"), h("div", { class: "small muted" }, "Add QFF 2026 to your home screen")),
     h("button", { class: "link pri", type: "button", onclick: install }, "ADD"));
 }
+
+/** Asked once per device, a moment after someone lands in the app for the first time (never inside the installed app). */
+export function maybeAskInstall() {
+  const KEY = "qff.installAsked";
+  try { if (localStorage.getItem(KEY)) return; } catch { return; }
+  if (!canInstall()) return;
+  setTimeout(() => {
+    if (!canInstall()) return;
+    try { localStorage.setItem(KEY, "1"); } catch { /* ignore */ }
+    openSheet((close) => [
+      h("h2", { class: "h1" }, "Add QFF 2026 to your home screen"),
+      h("p", { class: "body muted" }, "Open your pass, the schedule and support in one tap, like any other app."),
+      button("Add to Home Screen", { onclick: async () => { close(); setTimeout(install, 250); } }),
+      button("Not now", { cls: "ghost", onclick: close })]);
+  }, 1500);
+}

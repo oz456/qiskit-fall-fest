@@ -154,12 +154,7 @@ async function people(m) {
         h("p", { style: "margin:0 0 4px" }, h("b", {}, "Academic details given "), `${access.detailsGiven.toLocaleString()} of ${(access.srm + access.saysSrm).toLocaleString()} SRM-AP students`)),
       last && h("p", { class: "small" }, `Last run ${when(last.at)} · ${last.status === "ok" ? `saw ${last.seen}, added ${last.created}, updated ${last.updated}` : "failed: " + (last.error || "")}`),
       h("div", { class: "row" },
-        h("button", { class: "btn ghost", disabled: !s.configured, onclick: guard(async () => { const r = await api("POST", "/sync/run"); toast(r.message); await drawSync(); await load(); }) }, "Sync now"),
-        h("button", { class: "btn ghost", onclick: guard(async () => {
-          const d = await api("POST", "/cleanup-nonpass", { dryRun: true }); if (!d.ok) return toast(d.message);
-          if (!d.wouldRemove) return toast("Nobody to remove.");
-          confirmDo(`Remove ${d.wouldRemove} outside people who have no ₹99/₹499 pass and never signed in? Anyone who signed in, took a selfie or checked in stays.`, async () => { const r = await api("POST", "/cleanup-nonpass", { dryRun: false }); toast(`Removed ${r.removed}`); await drawSync(); await load(); });
-        }) }, "Remove people without a pass")));
+        h("button", { class: "btn ghost", disabled: !s.configured, onclick: guard(async () => { const r = await api("POST", "/sync/run"); toast(r.message); await drawSync(); await load(); }) }, "Sync now")));
   }
   async function load(reset = true) {
     if (reset) shown = [];

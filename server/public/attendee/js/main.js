@@ -1,6 +1,7 @@
 // QFF 2026 web app: boot, device gate, session, router, tab bar. Routes: /attendee (sign in), /attendee/hub, /attendee/pass, /attendee/support.
 import { ApiError, api, hooks, restoreSession } from "./api.js";
 import * as push from "./push.js";
+import { maybeAskInstall } from "./install.js";
 import { detectPlatform, showDesktopFrame, showGate } from "./platform.js";
 import { S, emit, hooks as storeHooks, loadAll, newReplies, resetState, subscribe } from "./store.js";
 import { bubble, button, clear, closeAllSheets, closeTopSheet, h, icon, pullToRefresh, toast } from "./ui.js";
@@ -69,7 +70,7 @@ async function onSignedIn() {
 async function afterAuth() {
   try { await loadAll(); } catch (e) { toast(e instanceof ApiError ? e.message : "Couldn’t load. Pull down to retry."); }
   render(); openFromHash();
-  if (!S.needsSelfie && !S.needsDetails) push.maybeAsk();
+  if (!S.needsSelfie && !S.needsDetails) { push.maybeAsk(); maybeAskInstall(); }
 }
 async function onDetailsDone() { S.needsDetails = false; viewKey = ""; await afterAuth(); }
 async function onSelfieDone() { S.needsSelfie = false; viewKey = ""; await afterAuth(); }

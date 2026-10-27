@@ -98,6 +98,9 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     assert.ok(await b.until(`!!document.querySelector('.tabbar') && !!document.querySelector('.hero')`, 10000));
     assert.equal((await db.query("SELECT 1 FROM user_photos"))[0] ? 1 : 0, 1, "the selfie reached the server");
     // add-to-home-screen card: iPhone Safari gets the steps (no install button exists there); dismissing hides it
+    assert.ok(await b.until(`!!document.querySelector('.sheet') && /Add QFF 2026 to your home screen/.test(document.querySelector('.sheet').textContent)`, 8000), "the one-time home-screen popup appears after sign-in");
+    await b.ev(`[...document.querySelectorAll('.sheet button')].find((x) => /Not now/.test(x.textContent)).click()`); assert.ok(await b.until(`!document.querySelector('.sheet')`));
+    assert.equal(await b.ev(`localStorage.getItem('qff.installAsked')`), "1", "asked once");
     assert.ok(await b.until(`!!document.querySelector('.install')`), "the home-screen card is offered");
     await b.tap(".install .go"); assert.ok(await b.until(`!!document.querySelector('.sheet .steps')`)); assert.match(await b.ev(`document.querySelector('.sheet .steps').textContent`), /Add to Home Screen/);
     await b.ev(`history.back()`); assert.ok(await b.until(`!document.querySelector('.sheet')`));
