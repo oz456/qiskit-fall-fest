@@ -106,6 +106,7 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(n.title, style = T.title, color = P.ink, maxLines = 2)
                             Text("Checked in · ${n.time}", style = T.small, color = P.muted, maxLines = 1)
+                            if (id != null && id in app.odPending) Text("Add OD details", style = T.small, color = P.primary, modifier = Modifier.pressable(RoundedCornerShape(8.dp)) { app.odDismissed = app.odDismissed - id }.padding(vertical = 4.dp))
                         }
                     }
                 }

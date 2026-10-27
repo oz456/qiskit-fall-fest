@@ -61,6 +61,9 @@ struct PassView: View {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(n.title).font(T.title).foregroundStyle(P.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                                         Text("Checked in · \(n.time)").font(T.small).foregroundStyle(P.muted).lineLimit(1)
+                                        if a.scope.hasPrefix("event:"), app.odPending.contains(String(a.scope.dropFirst(6))) {
+                                            Button("Add OD details") { app.odDismissed.remove(String(a.scope.dropFirst(6))) }.font(T.small).foregroundStyle(P.primary)
+                                        }
                                     }
                                     Spacer(minLength: 0)
                                 }

@@ -259,3 +259,6 @@ body.kb .tabbar,body.kb .toast{display:none}
 .install .go{border:0;border-radius:999px;background:var(--pri);color:var(--onpri);font-weight:800;font-size:13px;padding:10px 14px;white-space:nowrap}
 .install .x{border:0;background:none;color:var(--muted);padding:8px;line-height:0}.install .x .icon{width:18px;height:18px}
 .steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:10px;line-height:1.45}
+/* OD details */
+.odgrid{display:flex;gap:12px}.odgrid>*{flex:1;min-width:0}
+.fl .field input[type=time],.fl .field input[type=number]{flex:1;min-width:0;border:0;outline:0;background:none;font-size:16px;height:100%}

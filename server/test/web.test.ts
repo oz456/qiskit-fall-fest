@@ -144,6 +144,19 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     assert.equal(await b.ev(`document.querySelectorAll('.list').length`), 1, "attended list is folded away at first");
     await b.tap(".fold"); assert.match(await b.ev(`document.querySelector('.screen').textContent`), /Campus entry[\s\S]*Checked in/, "the arrow opens the attended list");
     await b.tap(".fold"); assert.equal(await b.ev(`document.querySelectorAll('.list').length`), 1, "and folds it again");
+    // an event that collects OD details: after the door check-in, the STUDENT is asked in the app (not the volunteer)
+    const odEv = (await db.query("INSERT INTO events (title,description,track,location,starts_at,ends_at,collect_od) VALUES ('OD Session','x','Workshop','SRM',now(),now() + interval '2 hours', true) RETURNING id"))[0]!.id;
+    await db.query("INSERT INTO checkins (user_id, scope) SELECT id, $1 FROM users WHERE email='web@example.org'", ["event:" + odEv]);
+    assert.ok(await b.until(`!!document.querySelector('.dialog') && /checked in/i.test(document.querySelector('.dialog').textContent)`, 25000), "popup for the OD event");
+    await b.tap(".dialog .btn"); assert.ok(await b.until(`!document.querySelector('.dialog')`));
+    assert.ok(await b.until(`!!document.querySelector('.sheet [name=odFrom]')`, 15000), "the OD form opens in the student's app");
+    const setv = (name: string, v: string) => b.ev(`(() => { const e = document.querySelector('[name=${name}]'); e.value = '${v}'; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    await setv("odFrom", "10:00"); await setv("odUntil", "12:30");
+    assert.equal(await b.ev(`document.querySelector('[name=odHours]').value`), "2.5", "hours are worked out from the two times");
+    await b.ev(`[...document.querySelectorAll('.sheet button')].find((x) => /^Save$/.test(x.textContent)).click()`);
+    assert.ok(await b.until(`!document.querySelector('.sheet [name=odFrom]')`, 15000), "saved and closed");
+    const [od] = await db.query("SELECT od_from, od_until, od_hours FROM checkins WHERE scope=$1", ["event:" + odEv]);
+    assert.deepEqual([od!.od_from, od!.od_until, Number(od!.od_hours)], ["10:00", "12:30", 2.5]);
 
     // support: ticket, reply, thread, red dot
     await b.tap(".tab[aria-label='Support']"); assert.ok(await b.until(`location.pathname === '/attendee/support' && !!document.querySelector('.support-opts')`));

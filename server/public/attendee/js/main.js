@@ -8,6 +8,7 @@ import { bubble, button, clear, closeAllSheets, closeTopSheet, h, icon, pullToRe
 import { hubView } from "./views/hub.js";
 import { passView } from "./views/pass.js";
 import { detailsView } from "./views/details.js";
+import { openOd } from "./views/od.js";
 import { selfieView } from "./views/selfie.js";
 import { openAnnouncements, openEventSheet, openProfile } from "./views/sheets.js";
 import { signInView } from "./views/signin.js";
@@ -62,7 +63,13 @@ function drawTabs(tab) {
   tabbar.replaceChildren(...TABS.map(([key, label, ic]) => h("button", { class: "tab" + (key === tab ? " on" : ""), type: "button", "aria-label": label, "aria-current": key === tab ? "page" : null, onclick: () => key !== tab && go("/attendee/" + key) },
     icon(ic), h("span", {}, label), key === "support" && newReplies() ? h("i", { class: "dot" }) : null)));
 }
-subscribe(() => { if (signedIn && !S.needsSelfie && !S.needsDetails && !S.needsExtra && tabbar) drawTabs(currentTab()); });
+const odAsked = new Set();   // asked once per app open; a pending OD stays on My Pass until it is filled in
+subscribe(() => {
+  if (!signedIn || S.needsSelfie || S.needsDetails || S.needsExtra) return;
+  if (tabbar) drawTabs(currentTab());
+  const next = (S.odPending || []).find((id) => !odAsked.has(id));
+  if (next && !document.querySelector(".dialogscrim, .sheet.show, .sheet")) { odAsked.add(next); setTimeout(() => openOd(next), 600); }
+});
 
 async function onSignedIn() {
   signedIn = true; viewKey = ""; await afterAuth();

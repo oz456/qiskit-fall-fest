@@ -92,7 +92,7 @@ async function events(m) {
   m.append(head("Events", h("button", { class: "btn", onclick: () => editEvent() }, "New event")));
   m.append(h("div", { class: "card" }, h("table", {}, h("tr", {}, ["When", "Event", "Track", "Where", "Saved by", ""].map((x) => h("th", {}, x))),
     list.map((e) => h("tr", { class: "click", onclick: () => editEvent(e) },
-      h("td", {}, fmtRange(e.startsAt, e.endsAt)), h("td", { class: "lead" }, h("b", {}, e.title), " ", !e.published && h("span", { class: "pill warn" }, "HIDDEN"), " ", fmt(e.startsAt, { dateStyle: "short" }) !== fmt(e.endsAt, { dateStyle: "short" }) && h("span", { class: "pill" }, "MULTI-DAY")),
+      h("td", {}, fmtRange(e.startsAt, e.endsAt)), h("td", { class: "lead" }, h("b", {}, e.title), " ", !e.published && h("span", { class: "pill warn" }, "HIDDEN"), " ", e.collectOd && h("span", { class: "pill", title: "Students are asked for OD from, until and hours in their app after they are checked in" }, "ASKS OD"), " ", fmt(e.startsAt, { dateStyle: "short" }) !== fmt(e.endsAt, { dateStyle: "short" }) && h("span", { class: "pill" }, "MULTI-DAY")),
       h("td", {}, e.track), h("td", {}, e.location), h("td", {}, String(e.saved)), h("td", { class: "chev" }, "›"))))));
   if (!list.length) m.append(h("p", { class: "muted" }, "No events yet."));
 }
@@ -120,7 +120,8 @@ function editEvent(e) {
     h("div", { class: "grid g2" }, field("Starts (" + TZ + ")", f.start), field("Ends (" + TZ + ")", f.end)),
     h("p", { class: "muted small" }, "For a multi-day event (e.g. a hackathon), set the end on a later day. It will appear on every day it spans."),
     field("Speaker / host", f.speaker), field("Description", f.desc),
-    h("div", {}, h("label", {}, "Options"), h("label", { class: "check" }, f.pub, "Visible in the app"), h("label", { class: "check" }, f.od, "Ask for OD details (from time, until time, hours) when someone is checked in at the door")),
+    h("div", {}, h("label", {}, "Options"), h("label", { class: "check" }, f.pub, "Visible in the app")),
+    h("div", {}, h("label", {}, "OD details"), h("label", { class: "check" }, f.od, "OD needed: after a student is checked in at the door for this event, ask them for OD from time, OD until time and number of hours in their app"), h("p", { class: "muted small" }, "Answers show on the Attendance page for this event only.")),
     h("div", { class: "row" }, h("button", { class: "btn" }, "Save"), e && h("button", { type: "button", class: "btn danger right", onclick: () => confirmDo("Delete this event? Saved links are removed too.", async () => { await api("DELETE", "/events/" + e.id); bg.remove(); route(); }) }, "Delete")));
   const bg = modal(e ? "Edit event" : "New event", body);
 }
@@ -288,8 +289,8 @@ async function attendance(m) {
     const tally = new Map(); for (const x of r.rows) { const k = x.scannedById ? (x.scannedByName || x.scannedById) : "Not recorded (earlier scans)"; tally.set(k, (tally.get(k) || 0) + 1); }
     const by = h("div", { class: "muted", style: "margin-bottom:12px" }, "Scanned by: " + [...tally].sort((a, b) => b[1] - a[1]).map(([k, n]) => k + " " + n).join(" · "));
     out.append(h("div", { class: "row", style: "margin-bottom:12px" }, h("b", {}, r.rows.length + " checked in"), h("button", { class: "btn ghost sm right", onclick: csv }, "Download CSV")),
-      by, h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Time", "Scanned by", "Volunteer ID", ...(od ? ["OD from", "OD until", "Hours"] : [])].map((x) => h("th", {}, x))), r.rows.map((x) => h("tr", {}, h("td", {}, x.name, h("div", { class: "muted small" }, x.college || "")), h("td", {}, x.email), h("td", {}, x.passCode), h("td", {}, fmt(x.at, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", second: "2-digit" })),
-        h("td", {}, x.scannedById ? h("b", {}, x.scannedByName || x.scannedById) : h("span", { class: "muted" }, "Not recorded")), h("td", {}, x.scannedById || "—"), ...(od ? [h("td", {}, x.odFrom || "—"), h("td", {}, x.odUntil || "—"), h("td", {}, x.odHours === null ? "—" : String(x.odHours))] : [])))));
+      by, h("table", {}, h("tr", {}, ["Name", "Email", "Pass", "Time", "Scanned by", "Volunteer ID", ...(od ? ["OD from", "OD until", "Hours", ""] : [])].map((x) => h("th", {}, x))), r.rows.map((x) => h("tr", {}, h("td", {}, x.name, h("div", { class: "muted small" }, x.college || "")), h("td", {}, x.email), h("td", {}, x.passCode), h("td", {}, fmt(x.at, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", second: "2-digit" })),
+        h("td", {}, x.scannedById ? h("b", {}, x.scannedByName || x.scannedById) : h("span", { class: "muted" }, "Not recorded")), h("td", {}, x.scannedById || "—"), ...(od ? [h("td", {}, x.odFrom || "—"), h("td", {}, x.odUntil || "—"), h("td", {}, x.odHours === null ? "—" : String(x.odHours)), h("td", {}, x.odFrom ? h("button", { class: "btn ghost sm", onclick: guard(() => confirmDo("Clear " + x.name + "’s OD details? They can fill them in again from their app.", async () => { await api("POST", `/attendance/${x.id}/clear-od`); toast("Cleared"); load(); })) }, "Clear") : "")] : [])))));
   }
   if (!sum.summary.length) { out.append(h("p", { class: "muted" }, "No check-ins yet. They appear here as soon as the door scanners record entries.")); return; }
   drawChips(); await load();

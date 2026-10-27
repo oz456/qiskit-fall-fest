@@ -71,6 +71,7 @@ export const api = {
   setSaved: (id, on) => call(on ? "PUT" : "DELETE", `/v1/events/${id}/saved`, on ? {} : undefined),
   uploadPhoto: (blob) => call("PUT", "/v1/me/photo", blob),
   saveDetails: (d) => call("PUT", "/v1/me/details", d),
+  saveOd: (d) => call("PUT", "/v1/me/od", d),
   passCodes: () => call("GET", "/v1/pass/codes"),
   putPush: (sub) => call("PUT", "/v1/me/push-token", sub),
   delPush: (token) => call("DELETE", `/v1/me/push-token?token=${encodeURIComponent(token)}`),

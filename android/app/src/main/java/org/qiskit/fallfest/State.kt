@@ -35,6 +35,9 @@ class AppState(context: Context) {
     var checkins by mutableStateOf(emptyMap<String, Instant>()); private set
     /** Set when door staff have just checked this attendee in; the UI shows a popup and clears it. */
     var checkinNotice by mutableStateOf<CheckinNotice?>(null)
+    /** Events (ids) where the student was checked in and still has to give OD details. */
+    var odPending by mutableStateOf<List<String>>(emptyList()); private set
+    var odDismissed by mutableStateOf<Set<String>>(emptySet())
     private var announcedCheckins: Set<String> = prefs.getStringSet("seen_checkins", emptySet()) ?: emptySet()
     var refreshing by mutableStateOf(false); private set
     var offline by mutableStateOf(false); private set
@@ -132,7 +135,7 @@ class AppState(context: Context) {
         wipe()
     }
     private fun wipe() {
-        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null
+        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null; odPending = emptyList(); odDismissed = emptySet()
         profile = null; events = emptyList(); announcements = emptyList(); tickets = emptyList(); checkins = emptyMap()
     }
 
@@ -266,12 +269,20 @@ class AppState(context: Context) {
     private fun applyCheckins(me: JSONObject) {
         val all = me.getJSONArray("checkins").mapObjects { it.str("scope") to Instant.parse(it.str("at")) }.toMap()
         checkins = all
+        odPending = me.getJSONArray("checkins").mapObjects { it }.filter { it.optBoolean("askOd", false) }.map { it.str("scope").removePrefix("event:") }
         val fresh = all.entries.filter { it.key !in announcedCheckins }
         if (fresh.isEmpty()) return
         announcedCheckins = announcedCheckins + fresh.map { it.key }
         prefs.edit().putStringSet("seen_checkins", announcedCheckins).apply()
         val newest = fresh.filter { Duration.between(it.value, Instant.now()).toMinutes() < 15 }.maxByOrNull { it.value } ?: return
         checkinNotice = checkinLabel(newest.key, newest.value)
+    }
+    /** OD details (from, until as HH:MM, hours) for an event the student was checked in at. A 409 means they were already saved. */
+    suspend fun saveOd(eventId: String, from: String, until: String, hours: Double) {
+        try { authed("PUT", "/v1/me/od", JSONObject().put("eventId", eventId).put("from", from).put("until", until).put("hours", hours)) }
+        catch (e: ApiException) { if (e.http != 409) throw e }
+        odPending = odPending - eventId
+        refresh()
     }
     fun checkinLabel(scope: String, at: Instant): CheckinNotice {
         val time = DateTimeFormatter.ofPattern("EEE d MMM, h:mm a").withZone(IST).format(at)

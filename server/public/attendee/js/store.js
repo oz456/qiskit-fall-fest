@@ -15,7 +15,7 @@ const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 
 export const S = {
   profile: read("qff.profile", null), events: [], faqs: [], settings: {}, announcements: [], tickets: [], checkins: {},
-  loading: false, offline: false, needsSelfie: false, loaded: false,
+  loading: false, offline: false, odPending: [], needsSelfie: false, loaded: false,
   seenAnn: read("qff.seenAnn", null), seenTickets: read("qff.seenTickets", {}), now: Date.now(),
 };
 const subs = new Set();
@@ -87,6 +87,7 @@ export const checkinLabel = (scope, at) => ({
 export const hooks = { onCheckin(_notice) {} };
 function applyCheckins(list) {
   S.checkins = Object.fromEntries(list.map((c) => [c.scope, c.at]));
+  S.odPending = list.filter((c) => c.askOd).map((c) => c.scope.slice(6));   // events whose OD details this student still has to give
   const seen = new Set(read("qff.checkSeen", [])), fresh = list.filter((c) => !seen.has(c.scope));
   if (!fresh.length) return;
   fresh.forEach((c) => seen.add(c.scope)); write("qff.checkSeen", [...seen]);
@@ -123,7 +124,7 @@ export async function toggleSaved(ev, toast) {
 }
 
 export function resetState() {
-  Object.assign(S, { profile: null, events: [], faqs: [], settings: {}, announcements: [], tickets: [], checkins: {}, needsSelfie: false, needsDetails: false, needsExtra: false, detailsOptions: null, loaded: false, offline: false, seenAnn: null, seenTickets: {} });
+  Object.assign(S, { profile: null, events: [], faqs: [], settings: {}, announcements: [], tickets: [], checkins: {}, needsSelfie: false, needsDetails: false, needsExtra: false, odPending: [], detailsOptions: null, loaded: false, offline: false, seenAnn: null, seenTickets: {} });
   for (const k of ["qff.profile", "qff.cache", "qff.seenAnn", "qff.seenTickets", "qff.notifAsked", "qff.checkSeen"]) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
   emit();
 }

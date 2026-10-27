@@ -31,3 +31,11 @@ export const needsExtra = (u: Record<string, any>) => !!u.details_at && (!u.sect
 export const cgpaMissing = (d: { semester: number; cgpa: number | null }) => d.cgpa === null && d.semester > 1 ? "Enter your CGPA as a number from 0 to 10. NA is only for the first semester." : null;
 
 export const detailsOut = (u: Record<string, any>) => u.details_at ? { regNo: u.reg_no, school: u.school, semester: u.semester, course: u.course, program: u.program, section: u.section ?? null, gender: u.gender ?? null, cgpa: u.cgpa === null ? null : Number(u.cgpa) } : null;
+
+// OD (on-duty) details: the student fills these in their own app after being checked in at an event that collects them.
+const Clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a time like 10:30.");
+export const OdInput = z.object({
+  eventId: z.string().uuid(),
+  from: Clock, until: Clock,
+  hours: z.number({ message: "Enter the number of hours." }).gt(0, "Hours must be more than 0.").max(24, "Hours cannot be more than 24.").refine((n) => Math.abs(Math.round(n * 100) - n * 100) < 1e-6, "Hours can have at most 2 decimals."),
+}).refine((v) => v.until > v.from, { message: "OD until time must be after OD from time.", path: ["until"] });

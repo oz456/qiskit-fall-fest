@@ -233,6 +233,13 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       if (u) { await db.query("DELETE FROM otp_codes WHERE lower(email)=lower($1)", [u.email]); await audit(db, req, "user.reset_login_limit", "user", id); }
       return { ok: !!u };
     });
+    // A wrong OD entry: clearing it lets the student fill it in again from their app.
+    api.post("/admin/api/attendance/:id/clear-od", async (req) => {
+      const { id } = Id.parse(req.params);
+      await db.query("UPDATE checkins SET od_from=NULL, od_until=NULL, od_hours=NULL WHERE id=$1", [id]);
+      await audit(db, req, "attendance.clear_od", "checkin", id);
+      return { ok: true };
+    });
     api.post("/admin/api/users/:id/reset-device", async (req) => { // frees the pass for a new phone (e.g. lost device)
       const { id } = Id.parse(req.params);
       await db.query("UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", [id]);
@@ -328,8 +335,8 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const { scope } = z.object({ scope: z.string().max(60).optional() }).parse(req.query);
       const summary = await db.query("SELECT c.scope, e.title, coalesce(bool_or(e.collect_od), false) AS od, count(*)::int AS n, max(c.scanned_at) AS last FROM checkins c LEFT JOIN events e ON c.scope = 'event:' || e.id::text GROUP BY c.scope, e.title ORDER BY c.scope"
 );
-      const rows = scope ? await db.query(`SELECT u.name, u.email, u.college, u.pass_code, c.scanned_at, c.scanned_by, c.od_from, c.od_until, c.od_hours FROM checkins c JOIN users u ON u.id=c.user_id WHERE c.scope=$1 ORDER BY c.scanned_at DESC LIMIT 2000`, [scope]) : [];
-      return { summary: summary.map((r) => ({ scope: r.scope, title: r.title ?? null, collectOd: r.od === true, count: r.n, last: new Date(r.last).toISOString() })), rows: rows.map((r) => ({ name: r.name, email: r.email, college: r.college, passCode: r.pass_code, at: new Date(r.scanned_at).toISOString(), odFrom: r.od_from ?? null, odUntil: r.od_until ?? null, odHours: r.od_hours === null ? null : Number(r.od_hours), scannedById: r.scanned_by ?? null, scannedByName: r.scanned_by ? config.checkNames[r.scanned_by] ?? null : null })) };
+      const rows = scope ? await db.query(`SELECT c.id AS checkin_id, u.name, u.email, u.college, u.pass_code, c.scanned_at, c.scanned_by, c.od_from, c.od_until, c.od_hours FROM checkins c JOIN users u ON u.id=c.user_id WHERE c.scope=$1 ORDER BY c.scanned_at DESC LIMIT 2000`, [scope]) : [];
+      return { summary: summary.map((r) => ({ scope: r.scope, title: r.title ?? null, collectOd: r.od === true, count: r.n, last: new Date(r.last).toISOString() })), rows: rows.map((r) => ({ id: r.checkin_id, name: r.name, email: r.email, college: r.college, passCode: r.pass_code, at: new Date(r.scanned_at).toISOString(), odFrom: r.od_from ?? null, odUntil: r.od_until ?? null, odHours: r.od_hours === null ? null : Number(r.od_hours), scannedById: r.scanned_by ?? null, scannedByName: r.scanned_by ? config.checkNames[r.scanned_by] ?? null : null })) };
     });
 
     api.get("/admin/api/audit", async () => (await db.query("SELECT id, at, action, entity, entity_id, detail, ip FROM audit_log ORDER BY id DESC LIMIT 200")).map((a) => ({ ...a, at: new Date(a.at).toISOString() })));

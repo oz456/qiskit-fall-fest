@@ -122,7 +122,9 @@ struct Profile: Codable, Equatable {
     }
     var firstName: String { name.split(separator: " ").first.map(String.init) ?? name }
 }
-struct Checkin: Decodable { let scope: String; let at: Date }
+struct Checkin: Decodable { let scope: String; let at: Date; var askOd: Bool? }
+/// An event whose OD details this student still has to give.
+struct OdTarget: Identifiable { let id: String }
 /// Door staff checked this attendee in: `title` is the event (or "Campus entry"), `time` when.
 struct CheckinNotice: Identifiable { let id = UUID(); let title: String; let time: String }
 

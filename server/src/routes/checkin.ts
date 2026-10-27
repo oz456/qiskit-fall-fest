@@ -8,8 +8,6 @@ import { getPhoto } from "../lib/photos.ts";
 import { staffAuth } from "../lib/staff.ts";
 import { audit, eventDay } from "../lib/util.ts";
 
-const Clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a time like 10:30.");
-const OdInput = z.object({ from: Clock, until: Clock, hours: z.number().gt(0, "Hours must be more than 0.").max(24, "Hours cannot be more than 24.").refine((n) => Math.abs(Math.round(n * 100) - n * 100) < 1e-6, "Hours can have at most 2 decimals.") });
 const Scope = z.string().regex(/^(day:\d{4}-\d{2}-\d{2}|event:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/);
 
 export function checkinRoutes(app: FastifyInstance, db: Db) {
@@ -69,7 +67,7 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
     };
     async function verdict(u: any, scope: string) {
       const who = { name: u.name, college: u.college, passCode: u.pass_code, hasPhoto: u.has_photo };
-      const ticket = signJwt({ aud: "check-ticket", uid: u.id, scope }, config.sessionSecret, 300);   // long enough for the OD form
+      const ticket = signJwt({ aud: "check-ticket", uid: u.id, scope }, config.sessionSecret, 120);
       const [prev] = await db.query("SELECT scanned_at FROM checkins WHERE user_id=$1 AND scope=$2", [u.id, scope]);
       if (prev) return { result: "duplicate", message: "Already checked in.", at: new Date(prev.scanned_at).toISOString(), who, ticket };
       const warnings: string[] = [];
@@ -81,14 +79,11 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
     const ticketOf = (t: string) => { const c = verifyJwt<{ aud: string; uid: string; scope: string }>(t, config.sessionSecret); return c && c.aud === "check-ticket" ? c : null; };
 
     api.post("/checkin/api/confirm", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req, reply) => {
-      const b = z.object({ ticket: z.string().max(1000), decision: z.enum(["confirm", "reject"]), od: OdInput.optional() }).parse(req.body);
+      const b = z.object({ ticket: z.string().max(1000), decision: z.enum(["confirm", "reject"]) }).parse(req.body);
       const t = ticketOf(b.ticket);
       if (!t) return reply.code(400).send({ result: "expired", message: "That scan timed out. Scan the pass again." });
       if (b.decision === "reject") { await audit(db, req, "check.rejected", "user", t.uid, { scope: t.scope }); return { result: "rejected", message: "Entry rejected." }; }
-      // OD details are kept only for events that ask for them (a stray value for any other scope is ignored)
-      const od = b.od && (await collectsOd(t.scope)) ? b.od : null;
-      if (od && od.until <= od.from) return reply.code(400).send({ result: "invalid_od", message: "OD until time must be after OD from time." });
-      const ins = await db.query("INSERT INTO checkins (user_id,scope,scanned_by,od_from,od_until,od_hours) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING RETURNING scanned_at", [t.uid, t.scope, (req as any).staffUser ?? null, od?.from ?? null, od?.until ?? null, od?.hours ?? null]);
+      const ins = await db.query("INSERT INTO checkins (user_id,scope,scanned_by) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING scanned_at", [t.uid, t.scope, (req as any).staffUser ?? null]);
       if (!ins[0]) return { result: "duplicate", message: "Already checked in." };
       return { result: "ok", message: "Checked in." };
     });

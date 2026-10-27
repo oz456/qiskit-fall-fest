@@ -9,7 +9,7 @@ import { otpMail, sendMail } from "../lib/mail.ts";
 import { sanitizeJpeg, savePhoto } from "../lib/photos.ts";
 import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
-import { cgpaMissing, Details, detailsOut, Extra, GENDERS, needsExtra, PROGRAMS, SCHOOLS } from "../lib/details.ts";
+import { cgpaMissing, Details, OdInput, detailsOut, Extra, GENDERS, needsExtra, PROGRAMS, SCHOOLS } from "../lib/details.ts";
 import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
 import { randomBytes } from "node:crypto";
 
@@ -191,13 +191,14 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
 
     api.get("/v1/me", async (req) => {
       const [u] = await db.query("SELECT name,email,college,pass_code,says_srm,reg_no,school,semester,course,program,section,gender,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
-      const checkins = await db.query("SELECT scope, scanned_at FROM checkins WHERE user_id=$1", [req.uid]);
+      const checkins = await db.query(`SELECT c.scope, c.scanned_at, (e.collect_od AND c.od_from IS NULL) AS ask_od
+        FROM checkins c LEFT JOIN events e ON c.scope = 'event:' || e.id::text WHERE c.user_id=$1`, [req.uid]);
       // only SRM-AP addresses are asked for academic details, and only until they have been saved once
       const needsDetails = (isSrmEmail(u!.email) || u!.says_srm) && !u!.details_at;
       const extra = (isSrmEmail(u!.email) || u!.says_srm) && needsExtra(u!); // saved before section and gender existed: only those two are asked
       return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, needsDetails, needsExtra: extra, details: detailsOut(u!) },
         ...(needsDetails || extra ? { detailsOptions: { schools: SCHOOLS, programs: PROGRAMS, genders: GENDERS } } : {}),
-        checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString() })) };
+        checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString(), askOd: c.ask_od === true })) };
     });
 
     // First sign-in of an SRM-AP person: academic details, saved once. Later changes go through an organiser.
@@ -222,6 +223,19 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
         if (e?.code === "23505") return reply.code(409).send({ error: "reg_no_taken", message: "That registration number is already used by another account. Check it, or contact the organisers.", field: "regNo" });
         throw e;
       }
+      return { ok: true };
+    });
+
+    // OD details for an event the student was checked in at (only events an organiser ticked "collect OD details" on). Saved once; an organiser can clear a wrong one.
+    api.put("/v1/me/od", { config: { rateLimit: { max: 30, timeWindow: "10 minutes" } } }, async (req, reply) => {
+      const p = OdInput.safeParse(req.body);
+      if (!p.success) return reply.code(400).send({ error: "invalid_od", message: p.error.issues[0]?.message ?? "Please check the times.", field: String(p.error.issues[0]?.path[0] ?? "") });
+      const d = p.data;
+      const [row] = await db.query("SELECT c.id, c.od_from, e.collect_od FROM checkins c JOIN events e ON c.scope = 'event:' || e.id::text WHERE c.user_id=$1 AND e.id=$2", [req.uid, d.eventId]);
+      if (!row) return reply.code(404).send({ error: "not_checked_in", message: "You are not checked in at this event." });
+      if (!row.collect_od) return reply.code(400).send({ error: "not_needed", message: "This event does not collect OD details." });
+      if (row.od_from) return reply.code(409).send({ error: "already_set", message: "Your OD details are already saved. Ask an organiser to change them." });
+      await db.query("UPDATE checkins SET od_from=$2, od_until=$3, od_hours=$4 WHERE id=$1 AND od_from IS NULL", [row.id, d.from, d.until, d.hours]);
       return { ok: true };
     });
 

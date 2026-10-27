@@ -1,4 +1,5 @@
 // My Pass: tilt card, "tap to show QR" (hidden until tapped), full-screen rotating QR, saved events.
+import { openOd } from "./od.js";
 import { api } from "../api.js";
 import { atom } from "../atom.js";
 import { drawQR } from "../qr.js";
@@ -43,7 +44,7 @@ export function passView({ open }) {
     const attRow = ([scope, at]) => {
       const n = checkinLabel(scope, at), id = scope.startsWith("event:") ? scope.slice(6) : null;
       return h("div", { class: "card press row", role: id ? "button" : null, tabindex: id ? "0" : null, onclick: () => id && S.events.some((e) => e.id === id) && open(id) },
-        bubble("check", 50, true), h("div", { class: "meta" }, h("div", { class: "name" }, n.title), h("div", { class: "where" }, `Checked in · ${n.time}`)));
+        bubble("check", 50, true), h("div", { class: "meta" }, h("div", { class: "name" }, n.title), h("div", { class: "where" }, `Checked in · ${n.time}`), id && S.odPending.includes(id) ? h("button", { class: "link pri", type: "button", onclick: (ev) => { ev.stopPropagation(); openOd(id); } }, "Add OD details") : null));
     };
     const savedBox = reg.length ? [sectionLabel("Saved events"), h("div", { class: "list" }, reg.map((e) => eventRow(e, { trailing: true, open })))]
       : [h("div", { class: "empty", style: { padding: "36px 40px" } }, h("p", { class: "body muted" }, "Events you save appear here. Tap the bookmark on any event to save it."))];

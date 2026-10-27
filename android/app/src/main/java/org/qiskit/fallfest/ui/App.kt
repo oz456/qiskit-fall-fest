@@ -88,6 +88,8 @@ fun App(app: AppState) {
     if (notifs) NotificationsSheet(app) { notifs = false }
     app.message?.let { msg -> Toast(msg) { app.message = null } }
     if (profile) ProfileSheet(app) { profile = false }
+    // OD details come after the "You're checked in" popup, for events that collect them; "Later" keeps an "Add OD details" button on My Pass
+    app.odPending.firstOrNull { it !in app.odDismissed }?.let { if (app.checkinNotice == null && !app.needsDetails && !app.needsExtra && !app.needsSelfie) OdDialog(app, it) }
     app.checkinNotice?.let { n ->
         AlertDialog(
             onDismissRequest = { app.checkinNotice = null }, containerColor = P.bg,

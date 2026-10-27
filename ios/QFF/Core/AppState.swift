@@ -25,6 +25,9 @@ final class AppState: ObservableObject {
     @Published var message: String?
     /// Set when door staff have just checked this attendee in; the UI shows an alert and clears it.
     @Published var checkinNotice: CheckinNotice?
+    /// Events (ids) where the student was checked in and still has to give OD details; "Later" hides the sheet until the app is reopened.
+    @Published var odPending: [String] = []
+    @Published var odDismissed: Set<String> = []
     private var announcedCheckins: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "seen_checkins") ?? [])
     @Published var now = Date()
     @Published var seenAnnouncement: String?
@@ -130,7 +133,7 @@ final class AppState: ObservableObject {
         accessToken = nil; passSecret = nil
         keychain.wipe()
         for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "needs_details", "needs_extra", "seen_tickets", "push_registered", "notif_asked", "seen_checkins"] { defaults.removeObject(forKey: k) }
-        seenTickets = [:]; announcedCheckins = []; checkinNotice = nil
+        seenTickets = [:]; announcedCheckins = []; checkinNotice = nil; odPending = []; odDismissed = []
         needsSelfie = false; needsDetails = false; needsExtra = false
         profile = nil; events = []; announcements = []; tickets = []; checkins = [:]; faqs = []; settings = [:]
     }
@@ -291,11 +294,21 @@ final class AppState: ObservableObject {
     /// Takes the check-ins from /v1/me. One we have not announced yet and that is under 15 minutes old becomes an alert (older ones are marked as seen silently).
     private func applyCheckins(_ me: MeResponse) {
         checkins = Dictionary(me.checkins.map { ($0.scope, $0.at) }, uniquingKeysWith: { a, _ in a })
+        odPending = me.checkins.filter { $0.askOd == true }.map { String($0.scope.dropFirst(6)) }
         let fresh = checkins.filter { !announcedCheckins.contains($0.key) }
         guard !fresh.isEmpty else { return }
         announcedCheckins.formUnion(fresh.keys)
         defaults.set(Array(announcedCheckins), forKey: "seen_checkins")
         if let newest = fresh.filter({ Date().timeIntervalSince($0.value) < 15 * 60 }).max(by: { $0.value < $1.value }) { checkinNotice = checkinLabel(newest.key, newest.value) }
+    }
+    /// OD details (from / until as HH:MM, hours) for an event the student was checked in at. A 409 means they were already saved.
+    func saveOd(eventId: String, from: String, until: String, hours: Double) async throws {
+        if !isPreview {
+            do { _ = try await authedData("PUT", "/v1/me/od", body: ["eventId": eventId, "from": from, "until": until, "hours": hours]) }
+            catch let e as APIError where e.http == 409 { }
+        }
+        odPending.removeAll { $0 == eventId }
+        if !isPreview { Task { [self] in await refresh() } }
     }
     func checkinLabel(_ scope: String, _ at: Date) -> CheckinNotice {
         if scope.hasPrefix("event:") { return CheckinNotice(title: events.first { $0.id == String(scope.dropFirst(6)) }?.title ?? "Event", time: Fmt.dmTime.string(from: at)) }

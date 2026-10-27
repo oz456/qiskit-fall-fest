@@ -668,28 +668,35 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     assert.equal((await db.query("SELECT name FROM users WHERE id=$1", [id]))[0]!.name, "Krish");
     assert.equal((await admin("PATCH", `/admin/api/users/${id}`, {})).statusCode >= 400, true, "an empty change is refused");
   });
-  it("OD details are asked and kept only for events that collect them, and show on the attendance page only", async () => {
+  it("OD details are given by the student in their own app, only for events that collect them, and show on the attendance page only", async () => {
     const mkEvent = async (title: string, collectOd: boolean) => (await admin("POST", "/admin/api/events", { title, track: "Workshop", startsAt: new Date().toISOString(), endsAt: new Date(Date.now() + 7200_000).toISOString(), collectOd })).json().id as string;
     const withOd = await mkEvent("OD Workshop", true), without = await mkEvent("Plain Workshop", false);
     assert.equal((await admin("GET", "/admin/api/events")).json().find((e: any) => e.id === withOd).collectOd, true);
-    const mkUser = async (email: string) => (await db.query("INSERT INTO users (email,name,pass_code,pass_secret,source,kind) VALUES ($1,'OD Person',$2,$3,'admin','student') RETURNING id,pass_code,pass_secret", [email, "QFF-" + Math.floor(10000 + Math.random() * 89999), randomBytes(32)]))[0]!;
-    const scanOf = async (u: any, scope: string) => (await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(u.pass_secret), u.pass_code), scope })).json();
-    const a = await mkUser("od.a@example.org"), b = await mkUser("od.b@example.org"), c = await mkUser("od.c@example.org");
-    const va = await scanOf(a, `event:${withOd}`); assert.equal(va.collectOd, true, "this event asks");
-    assert.equal((await scanOf(b, `event:${without}`)).collectOd, false, "another event does not");
-    assert.equal((await scanOf(b, "day:2026-10-26")).collectOd, false, "campus entry never does");
-    // bad values are refused (nothing is checked in), good ones are saved with the check-in
-    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: va.ticket, decision: "confirm", od: { from: "11:00", until: "10:00", hours: 1 } })).statusCode, 400);
-    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: va.ticket, decision: "confirm", od: { from: "10:00", until: "12:30", hours: 30 } })).statusCode, 400);
-    assert.equal((await check("POST", "/checkin/api/confirm", { ticket: va.ticket, decision: "confirm", od: { from: "10:00", until: "12:30", hours: 2.5 } })).json().result, "ok");
-    // skipping is fine, and a stray OD value on an event that does not collect it is dropped
-    const vc = await scanOf(c, `event:${withOd}`); assert.equal((await check("POST", "/checkin/api/confirm", { ticket: vc.ticket, decision: "confirm" })).json().result, "ok");
-    const vb = await scanOf(b, `event:${without}`); assert.equal((await check("POST", "/checkin/api/confirm", { ticket: vb.ticket, decision: "confirm", od: { from: "09:00", until: "10:00", hours: 1 } })).json().result, "ok");
+    const mkUser = async (email: string) => { const u = (await db.query("INSERT INTO users (email,name,pass_code,pass_secret,source,kind) VALUES ($1,'OD Person',$2,$3,'admin','student') RETURNING id,pass_code,pass_secret", [email, "QFF-" + Math.floor(10000 + Math.random() * 89999), randomBytes(32)]))[0]! as any;
+      await db.query("INSERT INTO user_photos (user_id, object_key, size_bytes, sha256) VALUES ($1,'k',1,'x')", [u.id]);
+      const sid = (await db.query("INSERT INTO sessions (user_id, refresh_hash, device_id, expires_at) VALUES ($1,$2,'d',now()+interval '1 day') RETURNING id", [u.id, randomBytes(12).toString("hex")]))[0]!.id;
+      return { ...u, auth: { authorization: "Bearer " + signJwt({ sub: u.id, sid }, config.jwtSecret, 600) } }; };
+    const scanIn = async (u: any, scope: string) => { const v = (await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(u.pass_secret), u.pass_code), scope })).json();
+      assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok"); return v; };
+    const a = await mkUser("od.a@example.org"), c = await mkUser("od.c@example.org");
+    assert.equal((await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(a.pass_secret), a.pass_code), scope: `event:${withOd}` })).json().collectOd, true, "the volunteer is only told that the student will be asked");
+    await scanIn(a, `event:${withOd}`); await scanIn(c, `event:${without}`);
+    const me = async (u: any) => (await app.inject({ method: "GET", url: "/v1/me", headers: u.auth })).json().checkins as any[];
+    assert.equal((await me(a))[0].askOd, true, "checked in at an OD event with nothing given yet: the app asks");
+    assert.equal((await me(c))[0].askOd, false, "an event that does not collect OD never asks");
+    const put = (u: any, payload: object, n: number) => app.inject({ method: "PUT", url: "/v1/me/od", headers: u.auth, remoteAddress: "10.91.0." + n, payload });
+    assert.equal((await put(a, { eventId: withOd, from: "11:00", until: "10:00", hours: 1 }, 1)).statusCode, 400);
+    assert.equal((await put(a, { eventId: withOd, from: "10:00", until: "12:30", hours: 30 }, 2)).statusCode, 400);
+    assert.equal((await put(c, { eventId: without, from: "10:00", until: "11:00", hours: 1 }, 3)).statusCode, 400, "not for an event that does not collect it");
+    assert.equal((await put(c, { eventId: withOd, from: "10:00", until: "11:00", hours: 1 }, 4)).statusCode, 404, "not checked in at that event");
+    assert.equal((await put(a, { eventId: withOd, from: "10:00", until: "12:30", hours: 2.5 }, 5)).statusCode, 200);
+    assert.equal((await put(a, { eventId: withOd, from: "09:00", until: "10:00", hours: 1 }, 6)).statusCode, 409, "saved once");
+    assert.equal((await me(a))[0].askOd, false, "no longer asked");
     const att = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(`event:${withOd}`)}`)).json();
-    const ra = att.rows.find((r: any) => r.email === "od.a@example.org"), rc = att.rows.find((r: any) => r.email === "od.c@example.org");
-    assert.deepEqual([ra.odFrom, ra.odUntil, ra.odHours], ["10:00", "12:30", 2.5]); assert.deepEqual([rc.odFrom, rc.odUntil, rc.odHours], [null, null, null]);
-    const plain = (await admin("GET", `/admin/api/attendance?scope=${encodeURIComponent(`event:${without}`)}`)).json();
-    assert.equal(plain.rows[0].odFrom, null, "an event that does not collect OD stores none");
+    const ra = att.rows.find((r: any) => r.email === "od.a@example.org");
+    assert.deepEqual([ra.odFrom, ra.odUntil, ra.odHours], ["10:00", "12:30", 2.5]);
+    assert.equal((await admin("POST", `/admin/api/attendance/${ra.id}/clear-od`)).statusCode, 200);
+    assert.equal((await me(a))[0].askOd, true, "an organiser cleared a wrong entry: the student can fill it in again");
     const sum = (await admin("GET", "/admin/api/attendance")).json().summary; assert.equal(sum.find((x: any) => x.scope === `event:${withOd}`).collectOd, true); assert.equal(sum.find((x: any) => x.scope === `event:${without}`).collectOd, false);
   });
   it("there is no search-and-check-in: a live QR is the only way in", async () => {
