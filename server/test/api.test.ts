@@ -548,6 +548,14 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
     assert.ok((await admin("GET", "/admin/api/students")).json().rows.some((r: any) => r.email === em && r.cgpa === 8.45));
     assert.equal((await admin("DELETE", `/admin/api/users/${row.id}/details`)).statusCode, 200);
     assert.equal((await app.inject({ method: "GET", url: "/v1/me", headers: auth })).json().profile.needsDetails, true);
+    // an organiser can ask anyone (a hand-added account) for the details
+    const guestId = (await admin("POST", "/admin/api/users", { email: "guest.asked@example.org", name: "Guest Asked" })).json().id;
+    const gsid = (await db.query("INSERT INTO sessions (user_id, refresh_hash, device_id, expires_at) VALUES ($1,$2,'d',now()+interval '1 day') RETURNING id", [guestId, randomBytes(12).toString("hex")]))[0]!.id;
+    const gauth = { authorization: "Bearer " + signJwt({ sub: guestId, sid: gsid }, config.jwtSecret, 600) };
+    assert.equal((await app.inject({ method: "GET", url: "/v1/me", headers: gauth })).json().profile.needsDetails, false);
+    assert.equal((await admin("PATCH", `/admin/api/users/${guestId}`, { askDetails: true })).statusCode, 200);
+    assert.equal((await app.inject({ method: "GET", url: "/v1/me", headers: gauth })).json().profile.needsDetails, true, "asked by an organiser");
+    assert.equal((await app.inject({ method: "PUT", url: "/v1/me/details", headers: gauth, remoteAddress: "10.77.3.1", payload: { regNo: "AP25110010999", school: "SEAS", semester: 2, course: "CSE", program: "B.Tech", section: "B", gender: "Male", cgpa: 7.5 } })).statusCode, 200);
     // someone outside SRM is never asked and cannot save them
     const extId = (await admin("POST", "/admin/api/users", { email: "details_outside@example.org", name: "Outside Guest" })).json().id;
     const sid = (await db.query("INSERT INTO sessions (user_id, refresh_hash, device_id, expires_at) VALUES ($1,'x','d',now()+interval '1 day') RETURNING id", [extId]))[0]!.id;

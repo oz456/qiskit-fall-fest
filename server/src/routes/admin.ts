@@ -104,10 +104,10 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const order = f.sort === "name" ? "lower(u.name), u.email" : f.sort === "checkins" ? "checkins DESC, u.created_at DESC" : "u.created_at DESC";
       const [t] = await db.query(`SELECT count(*)::int AS n FROM users u WHERE ${where}`, args);
       const [all] = await db.query("SELECT count(*)::int AS n FROM users");
-      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,u.says_srm,u.reg_no,u.school,u.semester,u.course,u.program,u.section,u.gender,u.cgpa,u.details_at,
+      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,u.says_srm,u.ask_details,u.reg_no,u.school,u.semester,u.course,u.program,u.section,u.gender,u.cgpa,u.details_at,
         ${HAS_APP} AS has_app, ${HAS_PHOTO} AS has_photo, (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins
         FROM users u WHERE ${where} ORDER BY ${order} LIMIT ${f.limit} OFFSET ${f.offset}`, args);
-      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, saysSrm: u.says_srm, details: detailsOut(u), hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins })) };
+      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, saysSrm: u.says_srm, askDetails: u.ask_details, details: detailsOut(u), hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins })) };
     });
     // Who is in the app, by how they got in: SRM address, ₹99 pass, ₹499 pass, or neither. Signed in = has a live session.
     api.get("/admin/api/access-summary", async () => {
@@ -204,7 +204,8 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     api.patch("/admin/api/users/:id", async (req) => {
       const { id } = Id.parse(req.params);
-      const b = z.object({ status: z.enum(["active", "blocked"]).optional(), name: z.string().trim().min(1).max(100).optional() }).refine((x) => x.status || x.name, "Nothing to change.").parse(req.body);
+      const b = z.object({ status: z.enum(["active", "blocked"]).optional(), name: z.string().trim().min(1).max(100).optional(), askDetails: z.boolean().optional() }).refine((x) => x.status || x.name || x.askDetails !== undefined, "Nothing to change.").parse(req.body);
+      if (b.askDetails !== undefined) { await db.query("UPDATE users SET ask_details=$2 WHERE id=$1", [id, b.askDetails]); await audit(db, req, b.askDetails ? "user.ask_details" : "user.stop_ask_details", "user", id); }
       if (b.name) { await db.query("UPDATE users SET name=$2 WHERE id=$1", [id, b.name]); await audit(db, req, "user.rename", "user", id, { name: b.name }); }
       if (b.status) {
         await db.tx(async (q) => {

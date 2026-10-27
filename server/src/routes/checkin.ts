@@ -50,7 +50,7 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
       const m = /^QFF1\.([A-Z0-9-]{4,20})\.(\d{1,12})\.([A-Za-z0-9_-]{12})$/.exec(b.payload.trim());
       if (!m) return { result: "invalid", message: "Not a Fall Fest pass." };
       const [, code, stepStr, mac] = m as unknown as [string, string, string, string];
-      const [u] = await db.query("SELECT id,email,name,college,pass_code,pass_secret,status,says_srm,details_at,section,gender, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE pass_code=$1", [code]);
+      const [u] = await db.query("SELECT id,email,name,college,pass_code,pass_secret,status,says_srm,ask_details,details_at,section,gender, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE pass_code=$1", [code]);
       if (!u) return { result: "invalid", message: "Unknown pass." };
       const step = Number(stepStr); const nowStep = Math.floor(Date.now() / 1000 / PASS_STEP_SEC);
       const who = { name: u.name, college: u.college, passCode: u.pass_code, hasPhoto: u.has_photo };
@@ -75,7 +75,7 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
       const warnings: string[] = [];
       if (!u.has_photo) warnings.push("No selfie on file yet.");
       // SRM-AP students must give their academic details in the app; the volunteer can remind them
-      if ((isSrmEmail(u.email) || u.says_srm) && (!u.details_at || !u.section || !u.gender)) warnings.push("Academic details not filled in yet: ask them to open the app (or the web app) and complete them.");
+      if ((isSrmEmail(u.email) || u.says_srm || u.ask_details) && (!u.details_at || !u.section || !u.gender)) warnings.push("Academic details not filled in yet: ask them to open the app (or the web app) and complete them.");
       const collectOd = await collectsOd(scope);
       return { result: "verify", message: "Check the face, then confirm.", warning: warnings.join(" ") || undefined, who, ticket, collectOd };
     }

@@ -199,12 +199,13 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     });
 
     api.get("/v1/me", async (req) => {
-      const [u] = await db.query("SELECT name,email,college,pass_code,says_srm,pass_tier,reg_no,school,semester,course,program,section,gender,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
+      const [u] = await db.query("SELECT name,email,college,pass_code,says_srm,ask_details,pass_tier,reg_no,school,semester,course,program,section,gender,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
       const checkins = await db.query(`SELECT c.scope, c.scanned_at, (e.collect_od AND c.od_from IS NULL) AS ask_od
         FROM checkins c LEFT JOIN events e ON c.scope = 'event:' || e.id::text WHERE c.user_id=$1`, [req.uid]);
       // only SRM-AP addresses are asked for academic details, and only until they have been saved once
-      const needsDetails = (isSrmEmail(u!.email) || u!.says_srm) && !u!.details_at;
-      const extra = (isSrmEmail(u!.email) || u!.says_srm) && needsExtra(u!); // saved before section and gender existed: only those two are asked
+      const asked = isSrmEmail(u!.email) || u!.says_srm || u!.ask_details;   // SRM address, a personal address that says SRM-AP, or someone an organiser asked
+      const needsDetails = asked && !u!.details_at;
+      const extra = asked && needsExtra(u!); // saved before section and gender existed: only those two are asked
       return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, flagship: u!.pass_tier === "flagship", needsDetails, needsExtra: extra, details: detailsOut(u!) },
         ...(needsDetails || extra ? { detailsOptions: { schools: SCHOOLS, programs: PROGRAMS, genders: GENDERS } } : {}),
         checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString(), askOd: c.ask_od === true })) };
@@ -212,8 +213,8 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
 
     // First sign-in of an SRM-AP person: academic details, saved once. Later changes go through an organiser.
     api.put("/v1/me/details", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async (req, reply) => {
-      const [u] = await db.query("SELECT email, says_srm, details_at, section, gender FROM users WHERE id=$1", [req.uid]);
-      if (!isSrmEmail(u!.email) && !u!.says_srm) return reply.code(403).send({ error: "not_needed", message: "These details are only for SRM University-AP students." });
+      const [u] = await db.query("SELECT email, says_srm, ask_details, details_at, section, gender FROM users WHERE id=$1", [req.uid]);
+      if (!isSrmEmail(u!.email) && !u!.says_srm && !u!.ask_details) return reply.code(403).send({ error: "not_needed", message: "These details are only for SRM University-AP students." });
       const b0 = (req.body ?? {}) as Record<string, unknown>;
       if (u!.details_at && needsExtra(u!) && ("section" in b0 || "gender" in b0)) { // earlier details are kept; only the missing section / gender are filled in
         const x = Extra.safeParse(req.body);
