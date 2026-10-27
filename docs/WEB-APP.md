@@ -50,3 +50,6 @@ Without keys the web app works normally and simply offers no notifications.
 
 ## Testing before release
 Run `npm test` (includes a headless-Chrome run of the whole web journey with a fake camera). The real-iPhone checks that remain manual: camera permission prompt in Safari, Add to Home Screen + notification permission, the QR scanning at the door from the phone's actual screen, `.ics` download.
+
+## Add to home screen
+The web app is a PWA (manifest + service worker). The Hub shows a dismissible card, and the profile sheet a row, inviting people to add it to their home screen: Android Chrome gets the browser's own install dialog (`beforeinstallprompt`), iPhone gets the two Share steps (Safari has no install button). Nothing shows inside the installed app, on a laptop, or in browsers that cannot install. Dismissing hides the card for 3 days.

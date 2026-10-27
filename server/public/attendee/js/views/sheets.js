@@ -1,4 +1,5 @@
 // Sheets: event details, announcements, profile, FAQs, new ticket, ticket thread.
+import { installRow } from "../install.js";
 import { ApiError, api } from "../api.js";
 import { S, dayLabel, fmtStamp, loadAll, markAnnouncementsSeen, markTicketSeen, rangeLabel, statusOf, subscribe, toggleSaved } from "../store.js";
 import { TRACK_ICON, TRACK_LABEL, bubble, button, confirmDialog, h, icon, openSheet, pill, pulse, toast } from "../ui.js";
@@ -53,7 +54,7 @@ export function openProfile({ onSignOut }) {
     return [
       h("div", { style: { display: "flex", alignItems: "center", gap: "16px" } }, h("div", { class: "avatar", style: { width: "64px", height: "64px", background: "var(--pri)", color: "var(--onpri)", fontSize: "20px", fontFamily: "var(--display)" } }, (p.name || "?").split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("")),
         h("div", {}, h("div", { class: "h2" }, p.name || ""), h("div", { class: "small muted" }, `${p.email || ""} · Attendee`))),
-      pushBox,
+      pushBox, installRow(),
       button("Sign out", { cls: "ghost", icon: "logout", onclick: async () => { if (await confirmDialog({ title: "Sign out?", text: "You can sign back in with your registered email.", yes: "Sign out", danger: true })) { close(); setTimeout(onSignOut, 60); } } }),
       h("p", { class: "small muted", style: { textAlign: "center" } }, "QFF 2026 · web app"),
     ];

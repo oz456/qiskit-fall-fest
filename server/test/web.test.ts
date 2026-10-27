@@ -97,6 +97,11 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     await b.tap(".twobtn .btn:last-child"); assert.ok(await b.until(`!!document.querySelector('.dialog')`)); await b.tap(".dialog .actions .btn");
     assert.ok(await b.until(`!!document.querySelector('.tabbar') && !!document.querySelector('.hero')`, 10000));
     assert.equal((await db.query("SELECT 1 FROM user_photos"))[0] ? 1 : 0, 1, "the selfie reached the server");
+    // add-to-home-screen card: iPhone Safari gets the steps (no install button exists there); dismissing hides it
+    assert.ok(await b.until(`!!document.querySelector('.install')`), "the home-screen card is offered");
+    await b.tap(".install .go"); assert.ok(await b.until(`!!document.querySelector('.sheet .steps')`)); assert.match(await b.ev(`document.querySelector('.sheet .steps').textContent`), /Add to Home Screen/);
+    await b.ev(`history.back()`); assert.ok(await b.until(`!document.querySelector('.sheet')`));
+    await b.tap(".install .x"); assert.ok(await b.until(`!document.querySelector('.install')`), "dismissed");
     assert.equal(await b.ev(`location.pathname`), "/attendee/hub");
     // the refresh token is not readable by the page, and nothing secret is in storage
     assert.equal(await b.ev(`document.cookie`), "", "no script-readable cookie (the session cookie is HttpOnly)");

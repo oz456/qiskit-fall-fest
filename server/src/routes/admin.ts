@@ -148,8 +148,9 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const { dryRun, includeSignedIn } = z.object({ dryRun: z.boolean().default(true), includeSignedIn: z.boolean().default(false) }).parse(req.body ?? {});
       const [sync] = await db.query("SELECT value FROM settings WHERE key='passes_synced_at'");
       if (!sync || Date.now() - Date.parse(sync.value) > 24 * 3600_000) return { ok: false, message: "The pass list has not been synced from the website in the last 24 hours, so nobody can be judged yet. Run Sync now first." };
-      // includeSignedIn: also people who signed in or took a selfie (their selfie is deleted from storage too). Still never anyone added by hand or anyone ever checked in at a door.
+      // includeSignedIn: also people who signed in or took a selfie (their selfie is deleted from storage too). Still never anyone added by hand, anyone ever checked in at a door, or anyone whose payment is still waiting for review.
       const WHERE = `u.source IN ('website','import') AND lower(u.email) NOT LIKE '%@srmap.edu.in' AND u.pass_tier IS NULL AND NOT EXISTS(SELECT 1 FROM checkins c WHERE c.user_id=u.id)
+        AND NOT EXISTS(SELECT 1 FROM pass_claim_status w WHERE lower(w.email)=lower(u.email) AND w.status='pending')
         ${includeSignedIn ? "" : "AND NOT EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id) AND NOT EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=u.id)"}`;
       const ids = (await db.query<{ id: string }>(`SELECT u.id FROM users u WHERE ${WHERE}`)).map((r) => r.id);
       if (dryRun) return { ok: true, dryRun: true, wouldRemove: ids.length };

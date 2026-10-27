@@ -606,6 +606,8 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
     assert.equal((await app.inject({ method: "POST", url: "/v1/auth/request-code", remoteAddress: "10.77.0.3", payload: { email: "nobody.outside@gmail.com" } })).statusCode, 404);
     await db.query("UPDATE users SET pass_tier='general' WHERE pass_tier IS NULL"); // shield everyone created by earlier tests: only the three people below are under test
     const mk = async (email: string, extra = "") => (await db.query(`INSERT INTO users (email,name,pass_code,pass_secret,source,kind${extra ? ",pass_tier" : ""}) VALUES ($1,'X',$2,$3,'website','external'${extra ? ",'general'" : ""}) RETURNING id`, [email, "QFF-" + Math.floor(Math.random() * 90000 + 10000), Buffer.alloc(32, 1)]))[0]!.id as string;
+    const waiting = await mk("waiting.outsider@gmail.com");
+    await db.query("INSERT INTO pass_claim_status (email, status) VALUES ('waiting.outsider@gmail.com','pending') ON CONFLICT (email) DO UPDATE SET status='pending'");
     const stale = await mk("stale.outsider@gmail.com"), keptPass = await mk("paid.outsider@gmail.com", "pass"), keptSelfie = await mk("selfie.outsider@gmail.com");
     await db.query("INSERT INTO user_photos (user_id, object_key, size_bytes, sha256) VALUES ($1,'k',1,'x')", [keptSelfie]);
     await db.query("DELETE FROM settings WHERE key='passes_synced_at'");
@@ -615,6 +617,7 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
     assert.equal((await db.query("SELECT 1 FROM users WHERE id=$1", [stale])).length, 1, "a dry run removes nothing");
     await admin("POST", "/admin/api/cleanup-nonpass", { dryRun: false });
     assert.equal((await db.query("SELECT 1 FROM users WHERE id=$1", [stale])).length, 0, "stale outsider removed");
+    assert.equal((await db.query("SELECT 1 FROM users WHERE id=$1", [waiting])).length, 1, "someone whose payment is still pending review is kept");
     assert.equal((await db.query("SELECT 1 FROM users WHERE id=$1", [keptPass])).length, 1, "pass holder kept");
     assert.equal((await db.query("SELECT 1 FROM users WHERE id=$1", [keptSelfie])).length, 1, "someone with a selfie is kept");
     assert.equal((await db.query("SELECT 1 FROM users WHERE lower(email) LIKE '%@srmap.edu.in'")).length > 0, true, "SRM people are never removed");

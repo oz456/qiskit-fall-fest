@@ -20,11 +20,14 @@ export function eventRow(e, { day = null, trailing = true, open }) {
     trailing ? h("button", { class: "save" + (e.saved ? " on" : ""), type: "button", "aria-label": e.saved ? "Unsave" : "Save", onclick: (ev) => { ev.stopPropagation(); toggleSaved(e, toast); ev.currentTarget.classList.add("pop"); } }, icon("bookmark")) : null);
 }
 
+import { installCard, onInstallChange } from "../install.js";
+
 export function hubView({ open, openAnnouncements, openProfile }) {
   const root = h("div", { class: "screen" });
   const bell = h("button", { class: "iconbtn", type: "button", "aria-label": "Announcements", onclick: () => { markAnnouncementsSeen(); openAnnouncements(); } }, icon("bell"));
   const avatar = h("button", { class: "avatar", type: "button", "aria-label": "Profile", onclick: openProfile });
   const offline = h("div", {});
+  const installBox = h("div", {});
   const greet = h("div", { class: "greet" });
   const canvas = h("canvas", { "aria-hidden": "true" });
   const heroBox = h("div", { class: "hero", role: "button", tabindex: "0" }, canvas);
@@ -33,7 +36,7 @@ export function hubView({ open, openAnnouncements, openProfile }) {
   const stripBox = h("div", {});
   const listBox = h("div", { class: "list" });
   const foot = partnerLine();
-  root.append(h("div", { class: "top" }, lockup(), bell, avatar), offline, greet, heroBox, stripBox, listBox, foot);
+  root.append(h("div", { class: "top" }, lockup(), bell, avatar), offline, installBox, greet, heroBox, stripBox, listBox, foot);
   requestAnimationFrame(() => atom(canvas, { color: "#f2e7d7", electron: "#eb732f", period: 9, line: 1.3 }));
   let railScroll = 0;
 
@@ -98,8 +101,9 @@ export function hubView({ open, openAnnouncements, openProfile }) {
     avatar.textContent = initials(S.profile?.name);
     offline.replaceChildren(S.offline ? h("div", { class: "offline" }, icon("cloudOff"), "You’re offline. Showing the last saved schedule.") : "");
     greet.replaceChildren(h("div", { class: "h1" }, greeting()), h("div", { class: "body muted" }, greetDate() + (S.settings.venue ? ` · ${S.settings.venue}` : "")));
+    installBox.replaceChildren(installCard() || "");
     hero(); strip(); list();
   }
-  const un = subscribe(update); update();
-  return { el: root, refresh: loadAll, destroy: un };
+  const un = subscribe(update), unInstall = onInstallChange(update); update();
+  return { el: root, refresh: loadAll, destroy() { un(); unInstall(); } };
 }

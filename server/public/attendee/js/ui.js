@@ -35,6 +35,7 @@ const ICONS = {
   chevR: ["p:M9 6l6 6-6 6"], chevL: ["p:M15 6l-6 6 6 6"],
   arrowR: ["p:M5 12h14M13 6l6 6-6 6"],
   x: ["p:M6 6l12 12M18 6L6 18"],
+  download: ["p:M12 4v11M7 11l5 5 5-5", "p:M5 20h14"],
   lock: ["p:M5 11h14v10H5z", "p:M8 11V7a4 4 0 0 1 8 0v4"],
   lockOpen: ["p:M5 11h14v10H5z", "p:M8 11V7a4 4 0 0 1 7.5-2"],
   calendar: ["p:M4 6h16v14H4z", "p:M4 10h16M8 3v4M16 3v4"],
