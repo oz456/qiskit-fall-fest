@@ -685,6 +685,13 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     const scanIn = async (u: any, scope: string) => { const v = (await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(u.pass_secret), u.pass_code), scope })).json();
       assert.equal((await check("POST", "/checkin/api/confirm", { ticket: v.ticket, decision: "confirm" })).json().result, "ok"); return v; };
     const a = await mkUser("od.a@example.org"), c = await mkUser("od.c@example.org");
+    // the volunteer is reminded when an SRM-AP student has not given the academic details yet
+    const scanOf = async (u: any, scope: string) => (await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(u.pass_secret), u.pass_code), scope })).json();
+    const srmStu = await mkUser("needs.details@srmap.edu.in");
+    assert.match((await scanOf(srmStu, "day:2026-10-27")).warning ?? "", /Academic details not filled in/);
+    await db.query("UPDATE users SET reg_no='AP25110010888', school='SEAS', semester=2, section='A', gender='Male', course='CSE', program='B.Tech', cgpa=7, details_at=now() WHERE id=$1", [srmStu.id]);
+    assert.doesNotMatch((await scanOf(srmStu, "day:2026-10-27")).warning ?? "", /Academic details/);
+    assert.doesNotMatch((await scanOf(a, "day:2026-10-27")).warning ?? "", /Academic details/, "outside people are not nagged");
     assert.equal((await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(a.pass_secret), a.pass_code), scope: `event:${withOd}` })).json().collectOd, true, "the volunteer is only told that the student will be asked");
     await db.query("INSERT INTO push_tokens (token,user_id,platform) VALUES ($1,$2,'android')", ["od-token-" + "x".repeat(40), a.id]);
     outbox.length = 0;
