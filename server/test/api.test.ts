@@ -592,6 +592,13 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
       assert.equal((await db.query("SELECT says_srm FROM users WHERE email='says.srm@gmail.com'"))[0]!.says_srm, false, "the mark follows the website");
     } finally { config.website.baseUrl = was; srv.close(); }
   });
+  it("when the website approves a personal-email SRM-AP student, the push marks them at once so their first sign-in asks for the details", async () => {
+    config.website.secret = "sync-test-secret-0123456789";
+    const push = (people: unknown[]) => app.inject({ method: "POST", url: "/integrations/website/attendees", headers: { authorization: "Bearer sync-test-secret-0123456789" }, payload: { people } });
+    assert.equal((await push([{ email: "fresh.says.srm@gmail.com", name: "Fresh Student", passTier: "flagship", srmBasis: "personal_says_srm" }, { email: "fresh.other@gmail.com", name: "Fresh Other", passTier: "general", srmBasis: "outside" }])).statusCode, 200);
+    const rows = Object.fromEntries((await db.query("SELECT email, says_srm FROM users WHERE email LIKE 'fresh.%@gmail.com'")).map((r: any) => [r.email, r.says_srm]));
+    assert.deepEqual(rows, { "fresh.says.srm@gmail.com": true, "fresh.other@gmail.com": false });
+  });
   it("an outside account whose pass is not (or no longer) verified cannot get a code; verifying it opens the door again", async () => {
     const ask = (n: number) => app.inject({ method: "POST", url: "/v1/auth/request-code", remoteAddress: `10.79.0.${n}`, payload: { email: "unverified.later@gmail.com" } });
     await db.query("INSERT INTO users (email,name,pass_code,pass_secret,source,kind,pass_tier) VALUES ('unverified.later@gmail.com','U L','QFF-90909',$1,'website','external','general')", [Buffer.alloc(32, 2)]);

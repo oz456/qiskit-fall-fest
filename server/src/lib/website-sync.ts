@@ -6,6 +6,8 @@ import type { Db, Queryable } from "../db.ts";
 
 export type Kind = "student" | "faculty" | "unclear" | "external";
 export interface WebsitePerson {
+  /** decided by the website (one rule for the payments page and this app): a personal address whose college says SRM-AP is asked for the academic details like an SRM address */
+  srmBasis?: "srm_email" | "personal_says_srm" | "outside";
   email: string;
   name: string;
   institution?: string | null;
@@ -71,6 +73,7 @@ export async function upsertPeople(db: Db, people: WebsitePerson[]): Promise<Syn
         if (p.passTier !== undefined && (p.passTier ?? null) !== cur.pass_tier) { await db.query("UPDATE users SET pass_tier=$2 WHERE id=$1", [cur.id, p.passTier ?? null]); out.updated++; }
         if (p.isActive === false && cur.source === "website" && cur.status === "active") { await db.query("UPDATE users SET status='blocked' WHERE id=$1", [cur.id]); out.updated++; }
       }
+      if (p.srmBasis && !isSrmEmail(email)) await db.query("UPDATE users SET says_srm=$2 WHERE lower(email)=$1 AND says_srm<>$2", [email, p.srmBasis === "personal_says_srm"]);
     } catch (e: any) { out.failed.push(`${p.email}: ${e.message}`); }
   }
   return out;
@@ -111,7 +114,7 @@ export async function reconcile(db: Db, trigger: "scheduler" | "admin"): Promise
         for (const x of ok) seenPass.add(String(x.email).toLowerCase());
         for (const x of body.people) { if (x.srmBasis) sawBasis = true; if (x.srmBasis === "personal_says_srm") saysSrm.add(String(x.email).toLowerCase()); }
         for (const x of body.people) if (x.status === "pending" || x.status === "rejected") notYet.set(String(x.email).toLowerCase(), x.status);
-        const r = await upsertPeople(db, ok.map((x) => ({ email: x.email, name: x.name ?? "", passTier: x.tier })));
+        const r = await upsertPeople(db, ok.map((x) => ({ email: x.email, name: x.name ?? "", passTier: x.tier, srmBasis: x.srmBasis })));
         total.created += r.created; total.updated += r.updated; failed.push(...r.failed);
         pc = body.nextCursor ?? null; if (!pc) break;
       }
