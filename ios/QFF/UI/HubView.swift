@@ -41,7 +41,12 @@ struct HubView: View {
         return out
     }
     private var live: Event? { app.events.filter { app.status(of: $0) == .live }.max { $0.startsAt < $1.startsAt } }
-    private var next: Event? { app.events.filter { app.status(of: $0) == .upcoming }.min { $0.startsAt < $1.startsAt } }
+    /// People registered for the Hackathon (₹499 pass) see it here instead of the next session, until it starts.
+    private var next: Event? {
+        let upcoming = app.events.filter { app.status(of: $0) == .upcoming }
+        if app.profile?.flagship == true, let h = upcoming.filter({ $0.track == .Hackathon }).min(by: { $0.startsAt < $1.startsAt }) { return h }
+        return upcoming.min { $0.startsAt < $1.startsAt }
+    }
 
     var body: some View {
         ScrollView {
@@ -170,7 +175,7 @@ private struct Hero: View {
                         if let l = live { HStack(spacing: 6) { PulseDot(color: P.accent); Text("LIVE NOW · \(l.location.uppercased())").lineLimit(1) } }
                         else if before { Text("FEST STARTS IN") }
                         else if after { Text("THANKS FOR JOINING") }
-                        else { Text("UP NEXT · \(next.map { Fmt.weekdayTime.string(from: $0.startsAt).uppercased() } ?? "")") }
+                        else { Text("\(app.profile?.flagship == true && next?.track == .Hackathon ? "YOUR HACKATHON" : "UP NEXT") · \(next.map { Fmt.weekdayTime.string(from: $0.startsAt).uppercased() } ?? "")") }
                     }
                     .font(T.label).tracking(1.3).foregroundStyle(P.accent).padding(.trailing, 56)
                     Spacer(minLength: 14)

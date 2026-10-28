@@ -73,7 +73,9 @@ fun HubScreen(app: AppState, onOpen: (Event) -> Unit, onNotifications: () -> Uni
     // With "All days" the list is grouped under a small date header.
     val entries: List<Any> = if (day != null) shown else buildList { var last: LocalDate? = null; shown.forEach { e -> if (e.startDay != last) { add(e.startDay); last = e.startDay }; add(e) } }
     val live = events.filter { app.statusOf(it) == Status.Live }.maxByOrNull { it.start }
-    val next = events.filter { app.statusOf(it) == Status.Upcoming }.minByOrNull { it.start }
+    val upcoming = events.filter { app.statusOf(it) == Status.Upcoming }
+    // people registered for the Hackathon (₹499 pass) see it here instead of the next session, until it starts
+    val next = (if (app.flagship) upcoming.filter { it.track == Track.Hackathon }.minByOrNull { it.start } else null) ?: upcoming.minByOrNull { it.start }
 
     PullToRefreshBox(app.refreshing, { app.refresh() }, Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 130.dp)) {
@@ -145,7 +147,7 @@ private fun Hero(app: AppState, live: Event?, next: Event?, onOpen: (Event) -> U
                     live != null -> Row(Modifier.padding(end = 56.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { PulseDot(P.accent); Text("LIVE NOW · ${live.location.uppercase()}", style = T.label, color = P.accent, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     before -> Text("FEST STARTS IN", style = T.label, color = P.accent)
                     after -> Text("THANKS FOR JOINING", style = T.label, color = P.accent)
-                    else -> Text("UP NEXT · ${next?.start?.format(DateTimeFormatter.ofPattern("EEE h:mm a")).orEmpty().uppercase()}", style = T.label, color = P.accent)
+                    else -> Text("${if (app.flagship && next?.track == Track.Hackathon) "YOUR HACKATHON" else "UP NEXT"} · ${next?.start?.format(DateTimeFormatter.ofPattern("EEE h:mm a")).orEmpty().uppercase()}", style = T.label, color = P.accent)
                 }
                 Spacer(Modifier.height(10.dp))
                 when {

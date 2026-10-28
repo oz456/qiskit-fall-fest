@@ -45,7 +45,10 @@ export function hubView({ open, openAnnouncements, openProfile }) {
     if (!S.events.length) { heroBox.classList.add("hidden"); return; } heroBox.classList.remove("hidden");
     const evs = S.events, now = S.now;
     const live = evs.filter((e) => statusOf(e) === "live").sort((a, b) => b.startMs - a.startMs)[0];
-    const next = evs.filter((e) => statusOf(e) === "upcoming").sort((a, b) => a.startMs - b.startMs)[0];
+    const upcoming = evs.filter((e) => statusOf(e) === "upcoming").sort((a, b) => a.startMs - b.startMs);
+    // people registered for the Hackathon (₹499 pass) see it here instead of the next session, until it starts
+    const mineHack = S.profile?.flagship ? upcoming.find((e) => e.track === "Hackathon") : null;
+    const next = mineHack || upcoming[0];
     const fe = S.settings.fest_end;
     const festEnd = /^\d{4}-\d{2}-\d{2}$/.test(fe || "") ? Date.parse(addDays(fe, 1) + "T00:00:00+05:30") : -Infinity;
     const firstStart = KICKOFF_MS, lastEnd = Math.max(...evs.map((e) => e.endMs), festEnd);
@@ -54,7 +57,7 @@ export function hubView({ open, openAnnouncements, openProfile }) {
     if (live) heroBody.append(h("div", { class: "kicker" }, pulse(), `LIVE NOW · ${live.location.toUpperCase()}`));
     else if (before) heroBody.append(h("div", { class: "kicker" }, "FEST STARTS IN"));
     else if (after) heroBody.append(h("div", { class: "kicker" }, "THANKS FOR JOINING"));
-    else heroBody.append(h("div", { class: "kicker" }, `UP NEXT · ${next ? weekdayShort(next.startDay) + " " + fmtTime(next.startMs) : ""}`.toUpperCase()));
+    else heroBody.append(h("div", { class: "kicker" }, `${mineHack ? "YOUR HACKATHON" : "UP NEXT"} · ${next ? weekdayShort(next.startDay) + " " + fmtTime(next.startMs) : ""}`.toUpperCase()));
     if (before && !live) {
       const s = Math.max(0, Math.floor((firstStart - now) / 1000)), u = (n, l) => h("div", { class: "u glass" }, h("span", { class: "n" }, String(n).padStart(2, "0")), h("span", { class: "l" }, l));
       heroBody.append(h("div", { class: "count" }, u(Math.floor(s / 86400), "DAYS"), u(Math.floor(s / 3600) % 24, "HRS"), u(Math.floor(s / 60) % 60, "MIN")));
