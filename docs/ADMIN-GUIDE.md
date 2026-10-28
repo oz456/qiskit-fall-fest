@@ -33,3 +33,7 @@ In the Events page, open an event and tick **OD needed**. After a student is che
 ## Pass type on Add attendee
 
 "Add attendee" asks for a **Pass type**: No pass, ₹99 General or ₹499 Flagship. You can change it later from the person's page ("Pass type"). It is kept in this app only: the website is never told, and the website sync never removes it (the person shows "SET BY HAND"). Choosing "As on the website" hands the decision back to the website. A ₹499 pass here gives the Hackathon card on My Pass. People you gave a pass by hand are left out of the "Matches the website?" comparison on the sync card.
+
+## Quick messages (Announcements)
+
+The Announcements page has ready-made messages above the form: Hackathon (kickoff, mentors, 2 hours / 1 hour / 30 minutes / 10 minutes left, submissions closed, judging, results soon, slow Wi-Fi), Food and breaks (snacks, tea and coffee, lunch, dinner, stretch break) and General (pass reminder, group photo, thank you). Tap one to fill the title and message, change the words if you like, then press Publish. Nothing is sent by tapping a preset. The wording lives in the `PRESETS` list at the top of the announcements section of `server/public/admin/admin.js`.

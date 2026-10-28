@@ -238,10 +238,41 @@ async function people(m) {
   }
 }
 
+// Ready-made announcements. Tapping one fills the form; nothing is sent until you press Publish, and you can edit the words first.
+const PRESETS = [
+  ["Hackathon", [
+    ["Kickoff", "The qubits are warm. The Hackathon has started.", "The clock is running. Teams, open your laptops and begin. May your circuits be shallow and your fidelity high."],
+    ["Mentors", "Mentors are on the floor", "Stuck on a bug, a backend or a bad idea? Mentors are walking around the hall right now. Wave one down before you lose another hour."],
+    ["2 hours left", "Two hours to go", "Two hours left in the Hackathon. Your idea is in. Now make it run. Start thinking about your README and your demo."],
+    ["1 hour left", "One hour left. Wrap it up.", "One hour left. Freeze new features and fix what is broken. A small thing that works beats a big thing that almost works."],
+    ["30 minutes left", "30 minutes. Final stretch.", "Half an hour to go. Make sure your repository is public, your README explains how to run it, and your team has agreed on what to submit."],
+    ["10 minutes left", "10 minutes. Submit now.", "Ten minutes left. Push your final commit and submit your repository link on the portal right now. Do not wait for the last minute, the last minute is crowded."],
+    ["Submissions closed", "Pencils down. Submissions are closed.", "Submissions are now closed. Step away from the keyboard, you have earned it. Thank you for the energy and the ideas."],
+    ["Judging", "Judges are coming to your table", "Judging has begun. Please stay at your table with your whole team and your demo ready. Keep your pitch short and honest."],
+    ["Results soon", "Drumroll, please", "Results will be announced shortly in the main hall. Take your seats and bring your team."],
+    ["Wi-Fi slow", "Wi-Fi is having a moment", "We know the network is slow. We are on it. Until it is back, keep working locally and push your code when it recovers."],
+  ]],
+  ["Food and breaks", [
+    ["Snacks", "Snacks have entered the chat", "Fresh snacks are out at the refreshment counter. Refuel your brain, then get back to your circuits. Please queue up, there is enough for everyone."],
+    ["Tea and coffee", "Caffeine alert", "Tea and coffee are ready. Your code will not debug itself, but it looks much better after a cup."],
+    ["Lunch", "Lunch is served. Your qubits can wait.", "Lunch is ready. Take a proper break and step away from the screen for a while. Decoherence is real, and so is hunger."],
+    ["Dinner", "Dinner time", "Dinner is served. Eat first, debug later. Please keep your pass ready."],
+    ["Stretch break", "Stand up. Stretch. Drink water.", "You have been sitting for a long time. Stand up, stretch and drink some water. Your best idea might be waiting by the water cooler."],
+  ]],
+  ["General", [
+    ["Pass reminder", "Keep your pass handy", "Open the app and show your QR at the door every time you come in. If it does not scan, ask a volunteer for help."],
+    ["Group photo", "Group photo in a few minutes", "Please gather in the main hall for the group photo. It takes five minutes and you will want to be in it."],
+    ["Thank you", "Thank you for being here", "Thank you for making Qiskit Fall Fest 2026 what it was. We hope you learned something, built something and met someone. See you next time."],
+  ]],
+];
+
 async function announce(m) {
   const [list, push] = await Promise.all([api("GET", "/announcements"), api("GET", "/push")]);
   const t = h("input", { maxlength: 120 }), b = h("textarea", { maxlength: 2000 });
-  m.append(head("Announcements"), h("div", { class: "card" }, h("h2", {}, "New announcement"), field("Title", t), field("Message", b),
+  const pick = (title, body) => { t.value = title; b.value = body; toast("Filled in. Edit the words if you like, then press Publish."); t.scrollIntoView({ behavior: "smooth", block: "center" }); b.focus(); };
+  const quick = h("div", { class: "card" }, h("h2", {}, "Quick messages"), h("p", { class: "muted small" }, "Tap one to fill the form below. Nothing is sent until you press Publish."),
+    PRESETS.map(([group, items]) => h("div", { class: "presets" }, h("div", { class: "muted small", style: "margin:12px 0 6px;font-weight:600" }, group.toUpperCase()), h("div", { class: "row", style: "flex-wrap:wrap;gap:8px" }, items.map(([label, title, body]) => h("button", { type: "button", class: "btn ghost sm", title: body, onclick: () => pick(title, body) }, label))))));
+  m.append(head("Announcements"), quick, h("div", { class: "card" }, h("h2", {}, "New announcement"), field("Title", t), field("Message", b),
     h("p", { class: "muted small", style: "margin-top:12px" }, `Sent instantly as a notification to every phone that has notifications on (${push.devices} right now), and listed in the app’s bell menu. Not emailed.`),
     h("div", { class: "row" }, h("button", { class: "btn", onclick: guard(async (ev) => {
       const btn = ev.currentTarget; btn.disabled = true;
