@@ -105,9 +105,10 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const [t] = await db.query(`SELECT count(*)::int AS n FROM users u WHERE ${where}`, args);
       const [all] = await db.query("SELECT count(*)::int AS n FROM users");
       const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,u.says_srm,u.ask_details,u.reg_no,u.school,u.semester,u.course,u.program,u.section,u.gender,u.cgpa,u.details_at,
-        ${HAS_APP} AS has_app, ${HAS_PHOTO} AS has_photo, (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins
+        ${HAS_APP} AS has_app, ${HAS_PHOTO} AS has_photo, (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins,
+        (SELECT max(s.last_used_at) FROM sessions s WHERE s.user_id=u.id) AS last_active
         FROM users u WHERE ${where} ORDER BY ${order} LIMIT ${f.limit} OFFSET ${f.offset}`, args);
-      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, saysSrm: u.says_srm, askDetails: u.ask_details, details: detailsOut(u), hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins })) };
+      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, saysSrm: u.says_srm, askDetails: u.ask_details, details: detailsOut(u), hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins, createdAt: new Date(u.created_at).toISOString(), lastActive: u.last_active ? new Date(u.last_active).toISOString() : null })) };
     });
     // Who is in the app, by how they got in: SRM address, ₹99 pass, ₹499 pass, or neither. Signed in = has a live session.
     api.get("/admin/api/access-summary", async () => {
