@@ -72,6 +72,8 @@ export const api = {
   uploadPhoto: (blob) => call("PUT", "/v1/me/photo", blob),
   saveDetails: (d) => call("PUT", "/v1/me/details", d),
   saveOd: (d) => call("PUT", "/v1/me/od", d),
+  team: () => call("GET", "/v1/me/team"),
+  renameTeam: (name) => call("PUT", "/v1/me/team", { name }),
   passCodes: () => call("GET", "/v1/pass/codes"),
   putPush: (sub) => call("PUT", "/v1/me/push-token", sub),
   delPush: (token) => call("DELETE", `/v1/me/push-token?token=${encodeURIComponent(token)}`),

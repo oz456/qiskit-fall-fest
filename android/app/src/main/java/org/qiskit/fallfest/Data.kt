@@ -89,3 +89,7 @@ val Greetings = listOf(
 
 /** Door staff checked this attendee in: [title] is the event (or "Campus entry"), [time] when. */
 data class CheckinNotice(val title: String, val time: String)
+
+/** One person in a hackathon team. The lead is shown first. */
+data class TeamMember(val name: String, val leader: Boolean, val invited: Boolean, val you: Boolean)
+data class TeamInfo(val name: String, val problemStatement: String?, val isLeader: Boolean, val members: List<TeamMember>)

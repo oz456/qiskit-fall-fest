@@ -62,6 +62,8 @@ private fun rememberLivePass(app: AppState): Pair<String?, Float> {
 @Composable
 fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
     var qrOpen by remember { mutableStateOf(false) }
+    var teamOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(app.flagship, teamOpen) { app.loadTeam() }
     var attendedOpen by rememberSaveable { mutableStateOf(false) } // the Attended list is folded away until its heading is tapped
     SecureWindow((LocalContext.current as? Activity)?.window)
     val saved = app.events.filter { it.saved }
@@ -69,6 +71,10 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
     LaunchedEffect(Unit) { while (true) { delay(2000); app.pollCheckins() } } // a door scan shows up within a couple of seconds
     val (payload, progress) = rememberLivePass(app)
 
+    if (teamOpen) {
+        val hack = app.events.firstOrNull { it.track == org.qiskit.fallfest.Track.Hackathon }
+        TeamSheet(app, { teamOpen = false }, hack?.let { h -> { onOpen(h) } })
+    }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 130.dp)) {
         item {
             Column(Modifier.statusBarsPadding().padding(horizontal = 24.dp, vertical = 18.dp)) {
@@ -85,13 +91,14 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
             val hack = app.events.firstOrNull { it.track == org.qiskit.fallfest.Track.Hackathon }
             item { SectionLabel("REGISTERED EVENTS", Modifier.padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 8.dp)) }
             item {
-                Card(Modifier.padding(horizontal = 24.dp, vertical = 6.dp).fillMaxWidth(), RoundedCornerShape(24.dp), onClick = { hack?.let(onOpen) }) {
+                Card(Modifier.padding(horizontal = 24.dp, vertical = 6.dp).fillMaxWidth(), RoundedCornerShape(24.dp), onClick = { teamOpen = true }) {
                     Row(Modifier.padding(horizontal = 18.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         IconBubble(org.qiskit.fallfest.Track.Hackathon.icon, 50.dp, P.mintInk, P.mint)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text("You are registered for the Hackathon", style = T.title, color = P.ink, maxLines = 2)
-                            Text("Included in your Flagship Pass", style = T.small, color = P.muted, maxLines = 1)
+                            Text(app.team?.let { "Team ${it.name} · tap to see your team" } ?: "Included in your Flagship Pass · tap to see your team", style = T.small, color = P.muted, maxLines = 1)
                         }
+                        Icon(Icons.Outlined.ChevronRight, null, tint = P.muted, modifier = Modifier.size(20.dp))
                     }
                 }
             }

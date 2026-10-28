@@ -1,5 +1,6 @@
 // My Pass: tilt card, "tap to show QR" (hidden until tapped), full-screen rotating QR, saved events.
 import { openOd } from "./od.js";
+import { loadTeam, openTeam } from "./team.js";
 import { api } from "../api.js";
 import { atom } from "../atom.js";
 import { drawQR } from "../qr.js";
@@ -8,6 +9,7 @@ import { TRACK_ICON, bubble, button, h, icon, posterTitle, sectionLabel, toast }
 import { eventRow } from "./hub.js";
 
 const STEP = 30, QR_IDLE_MS = 120_000;
+let teamData = null;       // this person's hackathon team (flagship pass holders), loaded in the background
 let attendedOpen = false;   // the Attended list is folded away until its heading is tapped
 let codes = [], skew = 0;
 async function fetchCodes() {
@@ -56,13 +58,17 @@ export function passView({ open }) {
       : h("div", { class: "empty", style: { padding: "24px 40px" } }, h("p", { class: "body muted" }, "Events you attend appear here after the team scans your pass at the door."));
     // flagship (₹499) holders are registered for the Hackathon, the only flagship event
     const hack = S.events.find((e) => e.track === "Hackathon");
-    regBox.replaceChildren(...(S.profile?.flagship ? [sectionLabel("Registered events"), h("div", { class: "reglist" }, h("div", { class: "card row" + (hack ? " press" : ""), role: hack ? "button" : null, tabindex: hack ? "0" : null, onclick: () => hack && open(hack.id) },
-      bubble(TRACK_ICON.Hackathon || "code", 50, true), h("div", { class: "meta" }, h("div", { class: "name" }, "You are registered for the Hackathon"), h("div", { class: "where" }, "Included in your Flagship Pass"))))] : []));
+    if (S.profile?.flagship && !teamAsked) { teamAsked = true; refreshTeam(); }
+    const t = teamData?.team;
+    regBox.replaceChildren(...(S.profile?.flagship ? [sectionLabel("Registered events"), h("div", { class: "reglist" }, h("div", { class: "card row press", role: "button", tabindex: "0", onclick: () => openTeam(teamData, { onRenamed: (d) => { teamData = d; update(); }, onOpenEvent: hack ? () => open(hack.id) : null }) },
+      bubble(TRACK_ICON.Hackathon || "code", 50, true), h("div", { class: "meta" }, h("div", { class: "name" }, "You are registered for the Hackathon"), h("div", { class: "where" }, t ? `Team ${t.name} · tap to see your team` : "Included in your Flagship Pass · tap to see your team")), icon("chevR")))] : []));
     listBox.replaceChildren(...[...savedBox, head, attendedBox].filter(Boolean));
   }
+  let teamAsked = false;
+  const refreshTeam = async () => { if (!S.profile?.flagship) return; const d = await loadTeam(); if (d) { teamData = d; update(); } };
   const un = subscribe(update); update();
   const poll = setInterval(() => { if (!document.hidden) pollCheckins(); }, 2000); // a door scan shows up within a couple of seconds
-  return { el: root, refresh: loadAll, destroy() { un(); clearInterval(poll); } };
+  return { el: root, refresh: () => { refreshTeam(); return loadAll(); }, destroy() { un(); clearInterval(poll); } };
 }
 
 /** Full-screen QR with a border that counts down the 30-second window. Closed automatically when the page is hidden (app switcher). */

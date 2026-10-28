@@ -263,3 +263,9 @@ body.kb .tabbar,body.kb .toast{display:none}
 .odgrid{display:flex;gap:12px}.odgrid>*{flex:1;min-width:0}
 .fl .field input[type=time],.fl .field input[type=number]{flex:1;min-width:0;border:0;outline:0;background:none;font-size:16px;height:100%}
 .reglist{padding:0 24px;display:flex;flex-direction:column;gap:12px}
+.teamhead{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.teamhead .btn{width:auto;height:40px;padding:0 18px}
+.teamlist{display:flex;flex-direction:column;gap:2px;margin:6px 0 18px}
+.teamrow{display:flex;align-items:center;gap:14px;padding:10px 0}
+.teamav{width:44px;height:44px;flex:none;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:15px;background:var(--surface-2,#f3eeee);color:var(--muted);border:1px solid var(--line)}
+.teamav.lead{background:var(--pri);color:#fff;border-color:var(--pri)}

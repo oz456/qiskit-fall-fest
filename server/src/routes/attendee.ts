@@ -11,6 +11,7 @@ import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
 import { cgpaMissing, Details, OdInput, detailsOut, Extra, GENDERS, needsExtra, PROGRAMS, SCHOOLS } from "../lib/details.ts";
 import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
+import { teamOf, renameTeam } from "../lib/team.ts";
 import { randomBytes } from "node:crypto";
 
 const ACCESS_TTL = 15 * 60;
@@ -247,6 +248,30 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       if (row.od_from) return reply.code(409).send({ error: "already_set", message: "Your OD details are already saved. Ask an organiser to change them." });
       await db.query("UPDATE checkins SET od_from=$2, od_until=$3, od_hours=$4 WHERE id=$1 AND od_from IS NULL", [row.id, d.from, d.until, d.hours]);
       return { ok: true };
+    });
+
+    // Hackathon team (flagship pass holders): lead first, then teammates. The lead can rename it unless an organiser has switched renaming off.
+    api.get("/v1/me/team", async (req, reply) => {
+      const [u] = await db.query("SELECT email, pass_tier FROM users WHERE id=$1", [req.uid]);
+      if (!u || u.pass_tier !== "flagship") return { team: null, canRename: false };
+      try {
+        const team = await teamOf(u.email);
+        const [off] = await db.query("SELECT 1 FROM settings WHERE key='team_rename' AND value='off'");
+        return { team, canRename: Boolean(team?.isLeader && !off) };
+      } catch { return reply.code(502).send({ error: "unavailable", message: "Your team couldn't be loaded. Please try again." }); }
+    });
+    api.put("/v1/me/team", { config: { rateLimit: { max: 8, timeWindow: "10 minutes" } } }, async (req, reply) => {
+      const p = z.object({ name: z.string().max(100) }).safeParse(req.body);
+      if (!p.success) return reply.code(400).send({ error: "invalid_name", message: "A team name must be 3 to 40 characters." });
+      const [u] = await db.query("SELECT email, pass_tier FROM users WHERE id=$1", [req.uid]);
+      if (!u || u.pass_tier !== "flagship") return reply.code(403).send({ error: "no_team", message: "You are not in a team." });
+      const [off] = await db.query("SELECT 1 FROM settings WHERE key='team_rename' AND value='off'");
+      if (off) return reply.code(403).send({ error: "rename_closed", message: "Team names can't be changed any more." });
+      const name = p.data.name.replace(/\s+/g, " ").trim();
+      if (name.length < 3 || name.length > 40) return reply.code(400).send({ error: "invalid_name", message: "A team name must be 3 to 40 characters." });
+      let r; try { r = await renameTeam(u.email, name); } catch { r = { ok: false as const, status: 502, error: "unavailable", message: "Team names can't be changed right now. Please try again in a minute." }; }
+      if (!r.ok) return reply.code(r.status).send({ error: r.error, message: r.message });
+      return { ok: true, name: r.name };
     });
 
     // One selfie per attendee, taken on first sign-in so door staff can match the face to the pass. Only an admin can reset it.

@@ -27,6 +27,10 @@ final class AppState: ObservableObject {
     @Published var checkinNotice: CheckinNotice?
     /// Events (ids) where the student was checked in and still has to give OD details; "Later" hides the sheet until the app is reopened.
     @Published var odPending: [String] = []
+    /// The hackathon team of a flagship pass holder (lead first), loaded in the background. nil until loaded or when there is none.
+    @Published var team: TeamInfo?
+    @Published var teamLoaded = false
+    @Published var canRenameTeam = false
     @Published var odDismissed: Set<String> = []
     private var announcedCheckins: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "seen_checkins") ?? [])
     @Published var now = Date()
@@ -134,6 +138,7 @@ final class AppState: ObservableObject {
         keychain.wipe()
         for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "needs_details", "needs_extra", "seen_tickets", "push_registered", "notif_asked", "seen_checkins"] { defaults.removeObject(forKey: k) }
         seenTickets = [:]; announcedCheckins = []; checkinNotice = nil; odPending = []; odDismissed = []
+        team = nil; teamLoaded = false; canRenameTeam = false
         needsSelfie = false; needsDetails = false; needsExtra = false
         profile = nil; events = []; announcements = []; tickets = []; checkins = [:]; faqs = []; settings = [:]
     }
@@ -309,6 +314,16 @@ final class AppState: ObservableObject {
         }
         odPending.removeAll { $0 == eventId }
         if !isPreview { Task { [self] in await refresh() } }
+    }
+    func loadTeam() async {
+        guard !isPreview, profile?.flagship == true else { return }
+        if let r: TeamResponse = try? await authed("GET", "/v1/me/team") { team = r.team; canRenameTeam = r.canRename; teamLoaded = true }
+    }
+    /// The team lead renames the team. Throws with a readable message (name taken, too short, renaming closed).
+    func renameTeam(_ name: String) async throws {
+        do { _ = try await authedData("PUT", "/v1/me/team", body: ["name": name]) }
+        catch let e as APIError where e.http == 403 { canRenameTeam = false; throw e }
+        await loadTeam()
     }
     func checkinLabel(_ scope: String, _ at: Date) -> CheckinNotice {
         if scope.hasPrefix("event:") { return CheckinNotice(title: events.first { $0.id == String(scope.dropFirst(6)) }?.title ?? "Event", time: Fmt.dmTime.string(from: at)) }

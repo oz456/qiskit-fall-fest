@@ -7,6 +7,7 @@ struct PassView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var captured = UIScreen.main.isCaptured
     @State private var fullQR = false
+    @State private var teamOpen = false
     @State private var attendedOpen = false // the Attended list is folded away until its heading is tapped
 
     private var saved: [Event] { app.events.filter(\.saved) }
@@ -32,17 +33,21 @@ struct PassView: View {
 
                 if app.profile?.flagship == true {
                     SectionLabel(text: "REGISTERED EVENTS").padding(.horizontal, 24).padding(.top, 32).padding(.bottom, 8)
-                    Card {
-                        HStack(spacing: 14) {
-                            IconBubble(symbol: "chevron.left.forwardslash.chevron.right", size: 50, tint: P.mintInk, bg: P.mint)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("You are registered for the Hackathon").font(T.title).foregroundStyle(P.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                                Text("Included in your Flagship Pass").font(T.small).foregroundStyle(P.muted).lineLimit(1)
+                    Button { teamOpen = true; Haptics.tap() } label: {
+                        Card {
+                            HStack(spacing: 14) {
+                                IconBubble(symbol: "chevron.left.forwardslash.chevron.right", size: 50, tint: P.mintInk, bg: P.mint)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("You are registered for the Hackathon").font(T.title).foregroundStyle(P.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                                    Text(app.team.map { "Team \($0.name) · tap to see your team" } ?? "Included in your Flagship Pass · tap to see your team").font(T.small).foregroundStyle(P.muted).lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(P.muted)
                             }
-                            Spacer(minLength: 0)
+                            .padding(18)
                         }
-                        .padding(18)
                     }
+                    .buttonStyle(.plain)
                     .padding(.horizontal, 24).padding(.vertical, 6)
                 }
                 if !saved.isEmpty {
@@ -96,6 +101,11 @@ struct PassView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in captured = UIScreen.main.isCaptured }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in app.message = "Screenshots won't scan — the code changes every 30 seconds." }
         .fullScreenCover(isPresented: $fullQR) { FullQR(hidden: hidden) { fullQR = false }.environmentObject(app) }
+        .task(id: app.profile?.flagship) { await app.loadTeam() }
+        .sheet(isPresented: $teamOpen) {
+            TeamView(onOpenEvent: app.events.first(where: { $0.track == .Hackathon }).map { h in { DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { router.sheet = .event(h.id) } } })
+                .environmentObject(app)
+        }
         .onAppear { if ProcessInfo.processInfo.environment["QFF_SCREEN"] == "qr" { fullQR = true } }
     }
 }

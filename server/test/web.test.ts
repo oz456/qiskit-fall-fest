@@ -177,6 +177,9 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     assert.equal(await b.ev(`/\\bnull\\b|\\bundefined\\b/.test(document.body.innerText)`), false, "no stray null/undefined text on the pass screen");
     assert.ok(await b.until(`/REGISTERED EVENTS/i.test(document.body.innerText) && /You are registered for the Hackathon/.test(document.body.innerText)`), "flagship holders see the Hackathon card on My Pass");
     assert.equal(await b.ev(`(() => { const t = document.body.innerText, i = t.indexOf('REGISTERED EVENTS'), j = t.search(/Saved events|Events you save/i); return i > 0 && j > i; })()`), true, "the card sits above Saved events");
+    await b.tap(".reglist .card"); assert.ok(await b.until(`!!document.querySelector('.sheet') && /Your team/.test(document.querySelector('.sheet').innerText)`), "tapping the Hackathon card opens the team sheet");
+    assert.equal(await b.ev(`/\\bnull\\b|\\bundefined\\b/.test(document.querySelector('.sheet').innerText)`), false, "no stray null text in the team sheet");
+    await b.ev(`history.back()`); assert.ok(await b.until(`!document.querySelector('.sheet')`));
     await b.tap(".tab[aria-label='Hub']"); assert.ok(await b.until(`!!document.querySelector('.hero')`)); await b.tap(".avatar"); assert.ok(await b.until(`!!document.querySelector('.sheet')`));
     await b.ev(`[...document.querySelectorAll('.sheet button')].find((x) => /Sign out/.test(x.textContent)).click()`); assert.ok(await b.until(`!!document.querySelector('.dialog')`)); await b.tap(".dialog .actions .btn");
     assert.ok(await b.until(`!!document.querySelector('.signin')`)); assert.equal(await b.ev(`location.pathname`), "/attendee");

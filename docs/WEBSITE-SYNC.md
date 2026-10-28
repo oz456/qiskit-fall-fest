@@ -24,3 +24,11 @@ The main website (`www.qffsrmap2026.com`, repo `qiskitfallfest-srmap/QisKit-Fall
 
 ## Personal-email SRM-AP students (academic details)
 The one-time details form is asked of every `@srmap.edu.in` address, and also of a person with a verified pass on a personal address whose college (typed on the website) says SRM-AP. The website's passes feed carries `srmBasis` per person (`srm_email`, `personal_says_srm`, `outside`), decided by the website's single `lib/srm-group.ts` (SRM Chennai/IST and other campuses do not count). The sync stores it as `users.says_srm`. It is self-reported, so exports keep it apart (`email_type`), and the admin sees a "SAYS SRM-AP" tag. `GET /admin/api/srm-audit` lists the borderline claims for checking by hand (read-only).
+
+## Hackathon teams (My Pass)
+
+The hackathon teams live on the website (`hackathon_teams`, `team_members`). Flagship (₹499) holders get a **Registered events** card on My Pass; tapping it opens **Your team**: the team lead first, then teammates (invited ones are marked), and the lead gets a **Rename** button.
+
+- The app reads one person's team on demand from the website: `GET /api/integrations/qff-app/team?email=` (Bearer `GCP_ACCESS`, read-only, names and roles only, no teammate emails). The app caches it for 30 seconds.
+- A rename is `POST /api/integrations/qff-app/team {email, name}`: only the team lead, 3 to 40 characters, name not already taken. It changes nothing but `hackathon_teams.name`, so the website, admin pages and shortlist show the new name.
+- **Switching renaming off:** Admin, Content, untick "Team leads can rename their hackathon team". The Rename button disappears and the server refuses renames. Tick it again to allow it.

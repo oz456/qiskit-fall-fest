@@ -49,6 +49,10 @@ class AppState(context: Context) {
     var needsExtra by mutableStateOf(prefs.getBoolean("needs_extra", false)); private set
     /** Holds the ₹499 Flagship Pass: registered for the Hackathon (the only flagship event). */
     var flagship by mutableStateOf(prefs.getBoolean("flagship", false)); private set
+    /** The hackathon team of a flagship pass holder (lead first), loaded in the background. null until loaded or when there is none. */
+    var team by mutableStateOf<TeamInfo?>(null); private set
+    var teamLoaded by mutableStateOf(false); private set
+    var canRenameTeam by mutableStateOf(false); private set
     var detailsGenders by mutableStateOf(listOf("Male", "Female")); private set
     var detailsSchools by mutableStateOf(listOf("SEAS", "ESLA", "PSB", "Other")); private set
     var detailsPrograms by mutableStateOf(listOf("Other")); private set
@@ -137,7 +141,7 @@ class AppState(context: Context) {
         wipe()
     }
     private fun wipe() {
-        accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; flagship = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null; odPending = emptyList(); odDismissed = emptySet()
+        team = null; teamLoaded = false; canRenameTeam = false; accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; flagship = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null; odPending = emptyList(); odDismissed = emptySet()
         profile = null; events = emptyList(); announcements = emptyList(); tickets = emptyList(); checkins = emptyMap()
     }
 
@@ -239,6 +243,25 @@ class AppState(context: Context) {
         catch (e: ApiException) { if (e.http != 409 || e.code != "already_set") throw e }
         needsDetails = false; needsExtra = false; prefs.edit().putBoolean("needs_details", false).putBoolean("needs_extra", false).apply()
         refresh()
+    }
+
+    suspend fun loadTeam() {
+        if (!signedIn || !flagship) return
+        try {
+            val r = authed("GET", "/v1/me/team") as JSONObject
+            val t = r.optJSONObject("team")
+            team = t?.let { o -> val m = o.getJSONArray("members")
+                TeamInfo(o.getString("name"), o.optString("problemStatementId").ifBlank { null }, o.optBoolean("isLeader"),
+                    (0 until m.length()).map { i -> val x = m.getJSONObject(i); TeamMember(x.getString("name"), x.getString("role") == "leader", x.optString("status") == "invited", x.optBoolean("you")) }) }
+            canRenameTeam = r.optBoolean("canRename"); teamLoaded = true
+        } catch (_: Exception) { }
+    }
+
+    /** The team lead renames the team. Throws ApiException with a readable message (name taken, too short, renaming closed). */
+    suspend fun renameTeam(name: String) {
+        try { authed("PUT", "/v1/me/team", JSONObject().put("name", name)) }
+        catch (e: ApiException) { if (e.code == "rename_closed" || e.http == 403) canRenameTeam = false; throw e }
+        loadTeam()
     }
 
     /** Section and gender for someone who saved their details earlier. */
