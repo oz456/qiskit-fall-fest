@@ -39,7 +39,7 @@ export function passView({ open }) {
   function update() {
     const p = S.profile || {};
     cardBody.replaceChildren(
-      h("div", { class: "secure" }, icon("checkCircle"), "Secure Pass", h("span", { class: "pill cream" }, "ACTIVE")),
+      h("div", { class: "secure" }, icon("checkCircle"), p.passType === "flagship" ? "₹499 Pass" : p.passType === "general" ? "₹99 Pass" : "Secure Pass", h("span", { class: "pill cream" }, "ACTIVE")),
       h("div", { class: "att" }, "ATTENDEE"), h("div", { class: "nm" }, p.name || ""), h("div", { class: "id" }, `ID: ${p.passCode || ""}`), p.college ? h("div", { class: "col" }, p.college) : null,
       h("button", { class: "btn", type: "button", onclick: showQR }, icon("qr"), "Tap to show QR"));
     const reg = S.events.filter((e) => e.saved);

@@ -138,7 +138,7 @@ private struct TiltPass: View {
             AtomOrb(color: P.cream, electron: P.accent, period: 12).frame(width: 300, height: 300).opacity(0.75).offset(x: 128).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             VStack(alignment: .leading, spacing: 22) {
                 HStack {
-                    Label("Secure Pass", systemImage: "checkmark.shield").font(T.bodyM).foregroundStyle(.white.opacity(0.8))
+                    Label(app.profile?.passType == "flagship" ? "₹499 Pass" : app.profile?.passType == "general" ? "₹99 Pass" : "Secure Pass", systemImage: "checkmark.shield").font(T.bodyM).foregroundStyle(.white.opacity(0.8))
                     Spacer()
                     Pill(text: "ACTIVE", bg: P.cream, fg: P.primary)
                 }

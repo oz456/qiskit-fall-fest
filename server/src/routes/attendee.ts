@@ -207,7 +207,10 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       const asked = isSrmEmail(u!.email) || u!.says_srm || u!.ask_details;   // SRM address, a personal address that says SRM-AP, or someone an organiser asked
       const needsDetails = asked && !u!.details_at;
       const extra = asked && needsExtra(u!); // saved before section and gender existed: only those two are asked
-      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, flagship: u!.pass_tier === "flagship" || await inAppTeam(db, req.uid!), needsDetails, needsExtra: extra, details: detailsOut(u!) },
+      const flagship = u!.pass_tier === "flagship" || await inAppTeam(db, req.uid!);
+      // what the pass card says: SRM-AP students get the ₹99 pass free; a ₹499 holder shows the ₹499 pass; someone with neither (a guest) just sees "Secure Pass"
+      const passType = flagship ? "flagship" : u!.pass_tier === "general" || isSrmEmail(u!.email) || u!.says_srm ? "general" : null;
+      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, flagship, passType, needsDetails, needsExtra: extra, details: detailsOut(u!) },
         ...(needsDetails || extra ? { detailsOptions: { schools: SCHOOLS, programs: PROGRAMS, genders: GENDERS } } : {}),
         checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString(), askOd: c.ask_od === true })) };
     });

@@ -49,6 +49,8 @@ class AppState(context: Context) {
     var needsExtra by mutableStateOf(prefs.getBoolean("needs_extra", false)); private set
     /** Holds the ₹499 Flagship Pass: registered for the Hackathon (the only flagship event). */
     var flagship by mutableStateOf(prefs.getBoolean("flagship", false)); private set
+    /** "flagship" (₹499), "general" (₹99, free for SRM-AP students) or null: the title on the pass card. */
+    var passType by mutableStateOf(prefs.getString("pass_type", null)); private set
     /** The hackathon team of a flagship pass holder (lead first), loaded in the background. null until loaded or when there is none. */
     var team by mutableStateOf<TeamInfo?>(null); private set
     var teamLoaded by mutableStateOf(false); private set
@@ -141,7 +143,7 @@ class AppState(context: Context) {
         wipe()
     }
     private fun wipe() {
-        team = null; teamLoaded = false; canRenameTeam = false; accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; flagship = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null; odPending = emptyList(); odDismissed = emptySet()
+        passType = null; team = null; teamLoaded = false; canRenameTeam = false; accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; flagship = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null; odPending = emptyList(); odDismissed = emptySet()
         profile = null; events = emptyList(); announcements = emptyList(); tickets = emptyList(); checkins = emptyMap()
     }
 
@@ -228,6 +230,8 @@ class AppState(context: Context) {
         if (need != needsDetails) { needsDetails = need; prefs.edit().putBoolean("needs_details", need).apply() }
         val fl = me.getJSONObject("profile").optBoolean("flagship", false)
         if (fl != flagship) { flagship = fl; prefs.edit().putBoolean("flagship", fl).apply() }
+        val pt = me.getJSONObject("profile").optString("passType", "").ifBlank { null }
+        if (pt != passType) { passType = pt; prefs.edit().putString("pass_type", pt).apply() }
         val extra = me.getJSONObject("profile").optBoolean("needsExtra", false)
         if (extra != needsExtra) { needsExtra = extra; prefs.edit().putBoolean("needs_extra", extra).apply() }
         me.optJSONObject("detailsOptions")?.let { o ->

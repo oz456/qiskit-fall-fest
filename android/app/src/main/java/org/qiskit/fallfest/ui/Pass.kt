@@ -177,7 +177,7 @@ private fun TiltPass(app: AppState, onQr: () -> Unit) {
         Column(Modifier.padding(26.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.VerifiedUser, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
-                Text("Secure Pass", style = T.bodyM, color = Color.White.copy(alpha = .8f), modifier = Modifier.weight(1f))
+                Text(when (app.passType) { "flagship" -> "₹499 Pass"; "general" -> "₹99 Pass"; else -> "Secure Pass" }, style = T.bodyM, color = Color.White.copy(alpha = .8f), modifier = Modifier.weight(1f))
                 Pill("ACTIVE", Color(0xFFF2E7D7), P.primary)
             }
             Column {

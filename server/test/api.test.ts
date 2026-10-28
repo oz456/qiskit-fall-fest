@@ -511,7 +511,7 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
     const v = await app.inject({ method: "POST", url: "/v1/auth/verify", remoteAddress: "10.77.1.1", payload: { email: em, code: "246802", deviceId: "details-device-1" } });
     const auth = { authorization: "Bearer " + v.json().accessToken };
     const me = (await app.inject({ method: "GET", url: "/v1/me", headers: auth })).json();
-    assert.equal(me.profile.needsDetails, true); assert.ok(me.detailsOptions.schools.includes("SEAS")); assert.equal(me.profile.flagship, false, "no ₹499 pass: no Hackathon card");
+    assert.equal(me.profile.needsDetails, true); assert.ok(me.detailsOptions.schools.includes("SEAS")); assert.equal(me.profile.flagship, false, "no ₹499 pass: no Hackathon card"); assert.equal(me.profile.passType, "general", "SRM-AP students have the ₹99 pass free");
     const good = { regNo: "ap25110010123", school: "SEAS", semester: 3, course: "CSE", program: "B.Tech", cgpa: 8.45 };
     const put = (payload: object) => app.inject({ method: "PUT", url: "/v1/me/details", headers: auth, remoteAddress: "10.77.1.2", payload });
     for (const bad of [{ ...good, regNo: "12345" }, { ...good, semester: 9 }, { ...good, cgpa: 10.5 }, { ...good, school: "XYZ" }]) assert.equal((await put(bad)).statusCode, 400);
@@ -797,12 +797,13 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     const aAuth = await mk(a, "10.89.1.1"), bAuth = await mk(b, "10.89.1.2");
     await db.query("INSERT INTO user_photos (user_id, object_key, size_bytes, sha256) SELECT id,'k',1,'x' FROM users WHERE email = ANY($1)", [[a, b]]);
     const me = async (x: { authorization: string }) => (await app.inject({ method: "GET", url: "/v1/me", headers: x })).json().profile.flagship;
+    const kind = async (x: { authorization: string }) => (await app.inject({ method: "GET", url: "/v1/me", headers: x })).json().profile.passType;
     assert.equal(await me(aAuth), false);
     assert.equal((await admin("POST", "/admin/api/app-teams", { name: "ab", leadEmail: a })).statusCode, 400, "name too short");
     assert.equal((await admin("POST", "/admin/api/app-teams", { name: "Test Team", leadEmail: a, memberEmails: ["nobody@srmap.edu.in"] })).statusCode, 404, "unknown people are named");
     const made = await admin("POST", "/admin/api/app-teams", { name: "Test Team", leadEmail: a, memberEmails: [b] }); assert.equal(made.statusCode, 201);
     assert.equal((await admin("POST", "/admin/api/app-teams", { name: "Other", leadEmail: b })).statusCode, 409, "one team per person");
-    assert.equal(await me(aAuth), true); assert.equal(await me(bAuth), true);
+    assert.equal(await me(aAuth), true); assert.equal(await me(bAuth), true); assert.equal(await kind(aAuth), "flagship", "the pass card says ₹499");
     const wasSecret = config.website.secret; config.website.secret = undefined;   // no website at all
     try {
       const get = async (x: { authorization: string }) => (await app.inject({ method: "GET", url: "/v1/me/team", headers: x })).json();
