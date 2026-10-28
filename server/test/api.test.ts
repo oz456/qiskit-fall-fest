@@ -770,8 +770,8 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     });
     await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r)); const was = config.website.baseUrl, wasSecret = config.website.secret; config.website.baseUrl = `http://127.0.0.1:${(srv.address() as any).port}`; config.website.secret = "team-test-secret-0123456789";
     try {
-      const get = async (a: object) => (await app.inject({ method: "GET", url: "/v1/me/team", headers: a })).json();
-      const put = (a: object, name: string) => app.inject({ method: "PUT", url: "/v1/me/team", headers: a, payload: { name } });
+      const get = async (a: { authorization: string }) => (await app.inject({ method: "GET", url: "/v1/me/team", headers: a })).json();
+      const put = (a: { authorization: string }, name: string) => app.inject({ method: "PUT", url: "/v1/me/team", headers: a, payload: { name } });
       const l = await get(leadAuth); assert.equal(l.team.name, "Qubit Squad"); assert.equal(l.team.members[0].role, "leader"); assert.equal(l.canRename, true);
       assert.equal((await get(mateAuth)).canRename, false, "a teammate cannot rename"); assert.equal((await get(npAuth)).team, null, "no ₹499 pass: no team card");
       assert.equal((await put(mateAuth, "Hijacked")).statusCode, 403); assert.equal(teamName, "Qubit Squad");
@@ -785,5 +785,34 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
       srv.close(); srv.closeAllConnections();
       assert.equal((await put(leadAuth, "Offline Name")).statusCode, 502, "website down: a clear, retryable error");
     } finally { config.website.baseUrl = was; config.website.secret = wasSecret; srv.close(); srv.closeAllConnections(); }
+  });
+  it("an organiser can make a team inside the app: it counts as registered for the Hackathon, needs no website, and the lead can rename it", async () => {
+    const hash = (em: string, c: string) => hmac(config.otpPepper, `${em}|${c}`).toString("hex");
+    const mk = async (email: string, ip: string) => {
+      await db.query("INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1,$2,$3)", [email, hash(email, "864209"), new Date(Date.now() + 600_000)]);
+      const v = await app.inject({ method: "POST", url: "/v1/auth/verify", remoteAddress: ip, payload: { email, code: "864209", deviceId: "appteam-" + email } });
+      return { authorization: "Bearer " + v.json().accessToken };
+    };
+    const a = "appteam_a@srmap.edu.in", b = "appteam_b@srmap.edu.in";
+    const aAuth = await mk(a, "10.89.1.1"), bAuth = await mk(b, "10.89.1.2");
+    await db.query("INSERT INTO user_photos (user_id, object_key, size_bytes, sha256) SELECT id,'k',1,'x' FROM users WHERE email = ANY($1)", [[a, b]]);
+    const me = async (x: { authorization: string }) => (await app.inject({ method: "GET", url: "/v1/me", headers: x })).json().profile.flagship;
+    assert.equal(await me(aAuth), false);
+    assert.equal((await admin("POST", "/admin/api/app-teams", { name: "ab", leadEmail: a })).statusCode, 400, "name too short");
+    assert.equal((await admin("POST", "/admin/api/app-teams", { name: "Test Team", leadEmail: a, memberEmails: ["nobody@srmap.edu.in"] })).statusCode, 404, "unknown people are named");
+    const made = await admin("POST", "/admin/api/app-teams", { name: "Test Team", leadEmail: a, memberEmails: [b] }); assert.equal(made.statusCode, 201);
+    assert.equal((await admin("POST", "/admin/api/app-teams", { name: "Other", leadEmail: b })).statusCode, 409, "one team per person");
+    assert.equal(await me(aAuth), true); assert.equal(await me(bAuth), true);
+    const wasSecret = config.website.secret; config.website.secret = undefined;   // no website at all
+    try {
+      const get = async (x: { authorization: string }) => (await app.inject({ method: "GET", url: "/v1/me/team", headers: x })).json();
+      const t = await get(aAuth); assert.equal(t.team.name, "Test Team"); assert.equal(t.team.members[0].role, "leader"); assert.equal(t.team.members.length, 2); assert.equal(t.canRename, true);
+      assert.equal((await get(bAuth)).canRename, false);
+      const put = (x: { authorization: string }, name: string) => app.inject({ method: "PUT", url: "/v1/me/team", headers: x, payload: { name } });
+      assert.equal((await put(bAuth, "Hijack")).statusCode, 403);
+      assert.equal((await put(aAuth, "Renamed Team")).statusCode, 200); assert.equal((await get(bAuth)).team.name, "Renamed Team");
+    } finally { config.website.secret = wasSecret; }
+    const list = (await admin("GET", "/admin/api/app-teams")).json(); assert.equal(list.find((x: any) => x.name === "Renamed Team").members.length, 2);
+    assert.equal((await admin("DELETE", `/admin/api/app-teams/${made.json().id}`)).statusCode, 200); assert.equal(await me(aAuth), false);
   });
 });

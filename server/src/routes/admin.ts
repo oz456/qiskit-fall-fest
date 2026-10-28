@@ -323,6 +323,28 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       await audit(db, req, "settings.update"); return { ok: true };
     });
 
+    // ---- teams made inside the app (testing, or people the website does not know). Never writes to the website. See migration 021. ----
+    api.get("/admin/api/app-teams", async () => (await db.query(`SELECT t.id, t.name, t.created_at, json_agg(json_build_object('email', u.email, 'name', u.name, 'leader', m.leader) ORDER BY m.leader DESC, u.email) AS members
+      FROM app_teams t JOIN app_team_members m ON m.team_id=t.id JOIN users u ON u.id=m.user_id GROUP BY t.id ORDER BY t.created_at DESC`)).map((t) => ({ id: t.id, name: t.name, createdAt: new Date(t.created_at).toISOString(), members: t.members })));
+    api.post("/admin/api/app-teams", async (req, reply) => {
+      const b = z.object({ name: z.string().trim().min(3).max(40), leadEmail: z.string().email(), memberEmails: z.array(z.string().email()).max(5).default([]) }).parse(req.body);
+      const emails = [...new Set([b.leadEmail, ...b.memberEmails].map((e) => e.toLowerCase()))];
+      const users = await db.query("SELECT id, lower(email) AS email FROM users WHERE lower(email) = ANY($1::text[])", [emails]);
+      const missing = emails.filter((e) => !users.some((u) => u.email === e));
+      if (missing.length) return reply.code(404).send({ error: "no_such_person", message: "Not in the app yet: " + missing.join(", ") });
+      const taken = await db.query("SELECT u.email FROM app_team_members m JOIN users u ON u.id=m.user_id WHERE u.id = ANY($1::uuid[])", [users.map((u) => u.id)]);
+      if (taken.length) return reply.code(409).send({ error: "already_in_team", message: "Already in an app team: " + taken.map((t) => t.email).join(", ") });
+      const [dupe] = await db.query("SELECT 1 FROM app_teams WHERE lower(name)=lower($1)", [b.name]);
+      if (dupe) return reply.code(409).send({ error: "name_taken", message: "That team name is already used." });
+      const [t] = await db.query("INSERT INTO app_teams (name) VALUES ($1) RETURNING id", [b.name]);
+      for (const u of users) await db.query("INSERT INTO app_team_members (team_id, user_id, leader) VALUES ($1,$2,$3)", [t!.id, u.id, u.email === b.leadEmail.toLowerCase()]);
+      await audit(db, req, "app_team.create", "app_team", t!.id, { name: b.name, members: emails.length });
+      return reply.code(201).send({ id: t!.id });
+    });
+    api.delete("/admin/api/app-teams/:id", async (req) => {
+      const { id } = Id.parse(req.params); await db.query("DELETE FROM app_teams WHERE id=$1", [id]); await audit(db, req, "app_team.delete", "app_team", id); return { ok: true };
+    });
+
     // ---- website sync (people come from the main website; see lib/website-sync.ts) ----
     api.get("/admin/api/sync", async () => {
       const runs = await db.query("SELECT id,started_at,finished_at,trigger,status,seen,created,updated,skipped,error FROM sync_runs ORDER BY started_at DESC LIMIT 8");

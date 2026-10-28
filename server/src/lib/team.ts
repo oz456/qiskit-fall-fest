@@ -35,3 +35,28 @@ export async function renameTeam(email: string, name: string): Promise<RenameRes
   const error = body.error && known.has(body.error) ? body.error : "unavailable";
   return { ok: false, status: known.has(error) ? res.status : 502, error, message: known.has(error) && body.message ? body.message : "Team names can't be changed right now. Please try again in a minute." };
 }
+
+// ---- teams made inside the app by an organiser (see migration 021): used before the website is asked ----
+import type { Db } from "../db.ts";
+
+export async function inAppTeam(db: Db, uid: string): Promise<boolean> {
+  return (await db.query("SELECT 1 FROM app_team_members WHERE user_id=$1", [uid])).length > 0;
+}
+
+export async function appTeamOf(db: Db, uid: string): Promise<Team | null> {
+  const [mine] = await db.query("SELECT t.id, t.name, m.leader FROM app_team_members m JOIN app_teams t ON t.id=m.team_id WHERE m.user_id=$1", [uid]);
+  if (!mine) return null;
+  const rows = await db.query("SELECT u.id, u.name, m.leader FROM app_team_members m JOIN users u ON u.id=m.user_id WHERE m.team_id=$1 ORDER BY m.leader DESC, lower(u.name)", [mine.id]);
+  return { name: mine.name, vertical: null, problemStatementId: null, finalized: false, isLeader: mine.leader === true,
+    members: rows.map((r) => ({ name: r.name, role: r.leader ? "leader" as const : "member" as const, status: "accepted" as const, you: r.id === uid })) };
+}
+
+export async function renameAppTeam(db: Db, uid: string, name: string): Promise<RenameResult> {
+  const [mine] = await db.query("SELECT t.id, m.leader FROM app_team_members m JOIN app_teams t ON t.id=m.team_id WHERE m.user_id=$1", [uid]);
+  if (!mine) return { ok: false, status: 404, error: "no_team", message: "You are not in a team." };
+  if (!mine.leader) return { ok: false, status: 403, error: "not_leader", message: "Only the team lead can rename the team." };
+  const [clash] = await db.query("SELECT 1 FROM app_teams WHERE lower(name)=lower($1) AND id<>$2", [name, mine.id]);
+  if (clash) return { ok: false, status: 409, error: "name_taken", message: `The team name "${name}" is already taken.` };
+  await db.query("UPDATE app_teams SET name=$2 WHERE id=$1", [mine.id, name]);
+  return { ok: true, name };
+}

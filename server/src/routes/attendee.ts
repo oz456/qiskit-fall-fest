@@ -11,7 +11,7 @@ import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
 import { cgpaMissing, Details, OdInput, detailsOut, Extra, GENDERS, needsExtra, PROGRAMS, SCHOOLS } from "../lib/details.ts";
 import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
-import { teamOf, renameTeam } from "../lib/team.ts";
+import { appTeamOf, inAppTeam, renameAppTeam, teamOf, renameTeam } from "../lib/team.ts";
 import { randomBytes } from "node:crypto";
 
 const ACCESS_TTL = 15 * 60;
@@ -207,7 +207,7 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       const asked = isSrmEmail(u!.email) || u!.says_srm || u!.ask_details;   // SRM address, a personal address that says SRM-AP, or someone an organiser asked
       const needsDetails = asked && !u!.details_at;
       const extra = asked && needsExtra(u!); // saved before section and gender existed: only those two are asked
-      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, flagship: u!.pass_tier === "flagship", needsDetails, needsExtra: extra, details: detailsOut(u!) },
+      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, flagship: u!.pass_tier === "flagship" || await inAppTeam(db, req.uid!), needsDetails, needsExtra: extra, details: detailsOut(u!) },
         ...(needsDetails || extra ? { detailsOptions: { schools: SCHOOLS, programs: PROGRAMS, genders: GENDERS } } : {}),
         checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString(), askOd: c.ask_od === true })) };
     });
@@ -253,10 +253,12 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     // Hackathon team (flagship pass holders): lead first, then teammates. The lead can rename it unless an organiser has switched renaming off.
     api.get("/v1/me/team", async (req, reply) => {
       const [u] = await db.query("SELECT email, pass_tier FROM users WHERE id=$1", [req.uid]);
+      const [off] = await db.query("SELECT 1 FROM settings WHERE key='team_rename' AND value='off'");
+      const own = await appTeamOf(db, req.uid!);   // a team an organiser made in the app comes first
+      if (own) return { team: own, canRename: Boolean(own.isLeader && !off) };
       if (!u || u.pass_tier !== "flagship") return { team: null, canRename: false };
       try {
         const team = await teamOf(u.email);
-        const [off] = await db.query("SELECT 1 FROM settings WHERE key='team_rename' AND value='off'");
         return { team, canRename: Boolean(team?.isLeader && !off) };
       } catch { return reply.code(502).send({ error: "unavailable", message: "Your team couldn't be loaded. Please try again." }); }
     });
@@ -264,11 +266,13 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       const p = z.object({ name: z.string().max(100) }).safeParse(req.body);
       if (!p.success) return reply.code(400).send({ error: "invalid_name", message: "A team name must be 3 to 40 characters." });
       const [u] = await db.query("SELECT email, pass_tier FROM users WHERE id=$1", [req.uid]);
-      if (!u || u.pass_tier !== "flagship") return reply.code(403).send({ error: "no_team", message: "You are not in a team." });
+      const own = await inAppTeam(db, req.uid!);
+      if (!u || (u.pass_tier !== "flagship" && !own)) return reply.code(403).send({ error: "no_team", message: "You are not in a team." });
       const [off] = await db.query("SELECT 1 FROM settings WHERE key='team_rename' AND value='off'");
       if (off) return reply.code(403).send({ error: "rename_closed", message: "Team names can't be changed any more." });
       const name = p.data.name.replace(/\s+/g, " ").trim();
       if (name.length < 3 || name.length > 40) return reply.code(400).send({ error: "invalid_name", message: "A team name must be 3 to 40 characters." });
+      if (own) { const r = await renameAppTeam(db, req.uid!, name); return r.ok ? { ok: true, name: r.name } : reply.code(r.status).send({ error: r.error, message: r.message }); }
       let r; try { r = await renameTeam(u.email, name); } catch { r = { ok: false as const, status: 502, error: "unavailable", message: "Team names can't be changed right now. Please try again in a minute." }; }
       if (!r.ok) return reply.code(r.status).send({ error: r.error, message: r.message });
       return { ok: true, name: r.name };
