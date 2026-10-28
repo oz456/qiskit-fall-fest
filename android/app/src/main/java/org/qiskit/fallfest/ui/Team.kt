@@ -69,7 +69,7 @@ fun TeamSheet(app: AppState, onDismiss: () -> Unit, onOpenEvent: (() -> Unit)?) 
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(m.name + if (m.you) " (you)" else "", style = T.title, color = P.ink)
-                            Text(if (m.leader) "Team lead" else if (m.invited) "Invited, hasn’t accepted yet" else "Teammate", style = T.small, color = P.muted)
+                            Text(if (m.leader) "Team lead" else "Teammate", style = T.small, color = P.muted)
                         }
                     }
                 }

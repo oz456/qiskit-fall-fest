@@ -50,7 +50,7 @@ struct TeamView: View {
                     .overlay(Circle().stroke(m.isLeader ? P.primary : P.line, lineWidth: 1))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(m.name + (m.you ? " (you)" : "")).font(T.title).foregroundStyle(P.ink)
-                    Text(m.isLeader ? "Team lead" : m.invited ? "Invited, hasn’t accepted yet" : "Teammate").font(T.small).foregroundStyle(P.muted)
+                    Text(m.isLeader ? "Team lead" : "Teammate").font(T.small).foregroundStyle(P.muted)
                 }
                 Spacer(minLength: 0)
             }

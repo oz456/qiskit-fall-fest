@@ -23,7 +23,7 @@ export function openTeam(data, { onRenamed, onOpenEvent } = {}) {
       }
       const rows = t.members.map((m) => h("div", { class: "teamrow" },
         h("div", { class: "teamav" + (m.role === "leader" ? " lead" : "") }, initials(m.name)),
-        h("div", { class: "meta" }, h("div", { class: "name" }, m.name + (m.you ? " (you)" : "")), h("div", { class: "where" }, m.role === "leader" ? "Team lead" : m.status === "invited" ? "Invited, hasn’t accepted yet" : "Teammate"))));
+        h("div", { class: "meta" }, h("div", { class: "name" }, m.name + (m.you ? " (you)" : "")), h("div", { class: "where" }, m.role === "leader" ? "Team lead" : "Teammate"))));
       body.replaceChildren(
         h("div", { class: "teamhead" }, h("h2", { class: "h1", style: { margin: 0 } }, t.name), state.canRename ? button("Rename", { cls: "alt", onclick: rename }) : null),
         h("p", { class: "body muted" }, [t.problemStatementId, `${t.members.length} ${t.members.length === 1 ? "member" : "members"}`].filter(Boolean).join(" · ")),

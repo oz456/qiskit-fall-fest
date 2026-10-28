@@ -27,7 +27,7 @@ The one-time details form is asked of every `@srmap.edu.in` address, and also of
 
 ## Hackathon teams (My Pass)
 
-The hackathon teams live on the website (`hackathon_teams`, `team_members`). Flagship (₹499) holders get a **Registered events** card on My Pass; tapping it opens **Your team**: the team lead first, then teammates (invited ones are marked), and the lead gets a **Rename** button.
+The hackathon teams live on the website (`hackathon_teams`, `team_members`). Flagship (₹499) holders get a **Registered events** card on My Pass; tapping it opens **Your team**: the team lead first, then teammates (view only: no inviting, adding or removing in the app), and the lead gets a **Rename** button.
 
 - The app reads one person's team on demand from the website: `GET /api/integrations/qff-app/team?email=` (Bearer `GCP_ACCESS`, read-only, names and roles only, no teammate emails). The app caches it for 30 seconds.
 - A rename is `POST /api/integrations/qff-app/team {email, name}`: only the team lead, 3 to 40 characters, name not already taken. It changes nothing but `hackathon_teams.name`, so the website, admin pages and shortlist show the new name.
