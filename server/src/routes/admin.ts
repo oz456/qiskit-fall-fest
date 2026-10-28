@@ -104,11 +104,11 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const order = f.sort === "name" ? "lower(u.name), u.email" : f.sort === "checkins" ? "checkins DESC, u.created_at DESC" : "u.created_at DESC";
       const [t] = await db.query(`SELECT count(*)::int AS n FROM users u WHERE ${where}`, args);
       const [all] = await db.query("SELECT count(*)::int AS n FROM users");
-      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,u.says_srm,u.ask_details,u.reg_no,u.school,u.semester,u.course,u.program,u.section,u.gender,u.cgpa,u.details_at,
+      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,u.pass_manual,u.says_srm,u.ask_details,u.reg_no,u.school,u.semester,u.course,u.program,u.section,u.gender,u.cgpa,u.details_at,
         ${HAS_APP} AS has_app, ${HAS_PHOTO} AS has_photo, (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins,
         (SELECT max(s.last_used_at) FROM sessions s WHERE s.user_id=u.id) AS last_active
         FROM users u WHERE ${where} ORDER BY ${order} LIMIT ${f.limit} OFFSET ${f.offset}`, args);
-      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, saysSrm: u.says_srm, askDetails: u.ask_details, details: detailsOut(u), hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins, createdAt: new Date(u.created_at).toISOString(), lastActive: u.last_active ? new Date(u.last_active).toISOString() : null })) };
+      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, passManual: u.pass_manual, saysSrm: u.says_srm, askDetails: u.ask_details, details: detailsOut(u), hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins, createdAt: new Date(u.created_at).toISOString(), lastActive: u.last_active ? new Date(u.last_active).toISOString() : null })) };
     });
     // Who is in the app, by how they got in: SRM address, ₹99 pass, ₹499 pass, or neither. Signed in = has a live session.
     api.get("/admin/api/access-summary", async () => {
@@ -128,10 +128,12 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
         count(*) FILTER (WHERE ${OUT} AND u.says_srm AND u.pass_tier IS NULL)::int AS says_srm_no_pass,
         count(*) FILTER (WHERE lower(u.email) LIKE '%@srmap.edu.in' AND u.pass_tier='general')::int AS srm_general,
         count(*) FILTER (WHERE lower(u.email) LIKE '%@srmap.edu.in' AND u.pass_tier='flagship')::int AS srm_flagship,
+        count(*) FILTER (WHERE u.pass_manual AND u.pass_tier='general')::int AS manual_general,
+        count(*) FILTER (WHERE u.pass_manual AND u.pass_tier='flagship')::int AS manual_flagship,
         count(*) FILTER (WHERE (lower(u.email) LIKE '%@srmap.edu.in' OR u.says_srm) AND u.details_at IS NOT NULL)::int AS details_given
         FROM users u`);
       const [sync] = await db.query("SELECT value FROM settings WHERE key='passes_synced_at'");
-      return { total: r!.total, signedIn: r!.signed_in, srm: r!.srm, outsideGeneral: r!.outside_general, outsideFlagship: r!.outside_flagship, srmWithPass: r!.srm_with_pass, saysSrm: r!.says_srm, saysSrmFlagship: r!.says_srm_flagship, saysSrmGeneral: r!.says_srm_general, otherFlagship: r!.other_flagship, otherGeneral: r!.other_general, outsideNoPass: r!.outside_no_pass, saysSrmNoPass: r!.says_srm_no_pass, srmGeneral: r!.srm_general, srmFlagship: r!.srm_flagship, detailsGiven: r!.details_given, passesSyncedAt: sync?.value ?? null };
+      return { total: r!.total, signedIn: r!.signed_in, srm: r!.srm, outsideGeneral: r!.outside_general, outsideFlagship: r!.outside_flagship, srmWithPass: r!.srm_with_pass, saysSrm: r!.says_srm, saysSrmFlagship: r!.says_srm_flagship, saysSrmGeneral: r!.says_srm_general, otherFlagship: r!.other_flagship, otherGeneral: r!.other_general, outsideNoPass: r!.outside_no_pass, saysSrmNoPass: r!.says_srm_no_pass, srmGeneral: r!.srm_general, srmFlagship: r!.srm_flagship, detailsGiven: r!.details_given, manualGeneral: r!.manual_general, manualFlagship: r!.manual_flagship, passesSyncedAt: sync?.value ?? null };
     });
     // Outside people whose payment is waiting for review or was rejected (they see the matching message at sign-in).
     api.get("/admin/api/pass-claims-waiting", async () => (await db.query("SELECT email, status, updated_at FROM pass_claim_status ORDER BY status, email")).map((r) => ({ email: r.email, status: r.status, at: new Date(r.updated_at).toISOString() })));
@@ -186,7 +188,8 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const b = UserInput.parse(req.body);
       const id = await createUser(db, b.email, b.name, b.college);
       if (!id) return reply.code(409).send({ error: "exists", message: "That email is already registered." });
-      await audit(db, req, "user.create", "user", id); return reply.code(201).send({ id });
+      if (b.passTier) await db.query("UPDATE users SET pass_tier=$2, pass_manual=true WHERE id=$1", [id, b.passTier]);   // app only: nothing is sent to the website
+      await audit(db, req, "user.create", "user", id, b.passTier ? { passTier: b.passTier } : undefined); return reply.code(201).send({ id });
     });
     // CSV columns: email, name, college.
     api.post("/admin/api/users/import", { bodyLimit: 1_000_000 }, async (req) => {
@@ -205,7 +208,11 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     api.patch("/admin/api/users/:id", async (req) => {
       const { id } = Id.parse(req.params);
-      const b = z.object({ status: z.enum(["active", "blocked"]).optional(), name: z.string().trim().min(1).max(100).optional(), askDetails: z.boolean().optional() }).refine((x) => x.status || x.name || x.askDetails !== undefined, "Nothing to change.").parse(req.body);
+      const b = z.object({ status: z.enum(["active", "blocked"]).optional(), name: z.string().trim().min(1).max(100).optional(), askDetails: z.boolean().optional(), passTier: z.enum(["general", "flagship"]).nullable().optional() }).refine((x) => x.status || x.name || x.askDetails !== undefined || x.passTier !== undefined, "Nothing to change.").parse(req.body);
+      if (b.passTier !== undefined) {   // set by hand in the app only; "none" goes back to whatever the website says
+        await db.query("UPDATE users SET pass_tier=$2, pass_manual=$3 WHERE id=$1", [id, b.passTier, b.passTier !== null]);
+        await audit(db, req, "user.pass_tier", "user", id, { passTier: b.passTier });
+      }
       if (b.askDetails !== undefined) { await db.query("UPDATE users SET ask_details=$2 WHERE id=$1", [id, b.askDetails]); await audit(db, req, b.askDetails ? "user.ask_details" : "user.stop_ask_details", "user", id); }
       if (b.name) { await db.query("UPDATE users SET name=$2 WHERE id=$1", [id, b.name]); await audit(db, req, "user.rename", "user", id, { name: b.name }); }
       if (b.status) {

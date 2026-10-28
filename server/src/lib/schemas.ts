@@ -15,7 +15,7 @@ export const EventInput = z.object({
   collectOd: z.boolean().default(false),
 }).refine((v) => new Date(v.endsAt) > new Date(v.startsAt), { message: "End must be after start", path: ["endsAt"] });
 
-export const UserInput = z.object({ email: Email, name: text(100).min(1), college: text(150).nullable().default(null) });
+export const UserInput = z.object({ email: Email, name: text(100).min(1), college: text(150).nullable().default(null), passTier: z.enum(["general", "flagship"]).nullable().default(null) });
 export const AnnouncementInput = z.object({ title: text(120).min(2), body: text(2000).min(2) });
 export const FaqInput = z.object({ question: text(200).min(2), answer: text(2000).min(2), position: z.number().int().min(0).max(1000).default(0) });
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "use YYYY-MM-DD");

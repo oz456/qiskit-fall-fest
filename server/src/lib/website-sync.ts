@@ -120,7 +120,7 @@ export async function reconcile(db: Db, trigger: "scheduler" | "admin"): Promise
       }
       if (seenPass.size === 0) throw new Error("passes feed was empty"); // never wipe pass marks because of an empty answer
       // anyone we marked as a pass-holder who is no longer verified on the website loses the mark
-      await db.query("UPDATE users SET pass_tier=NULL WHERE pass_tier IS NOT NULL AND NOT (lower(email) = ANY($1::text[]))", [[...seenPass]]);
+      await db.query("UPDATE users SET pass_tier=NULL WHERE pass_tier IS NOT NULL AND NOT pass_manual AND NOT (lower(email) = ANY($1::text[]))", [[...seenPass]]);
       // personal-address people whose college says SRM-AP are asked for the academic details like SRM addresses (an older website answer has no srmBasis: leave the marks alone)
       if (sawBasis) {
         await db.query("UPDATE users SET says_srm=true WHERE NOT says_srm AND lower(email) = ANY($1::text[])", [[...saysSrm]]);

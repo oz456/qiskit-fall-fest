@@ -29,3 +29,7 @@ Admin: `/admin`. Door scanner: `/checkin/` (a different login, give only this on
 
 ## OD details at the door
 In the Events page, open an event and tick **OD needed**. After a student is checked in at the door for that event, **their own app** (Android, iPhone or web app) asks them for OD from time, OD until time and number of hours (the hours are worked out from the two times and can be corrected). **Later** keeps an "Add OD details" button under the event in My Pass. The volunteer is only told that the student will be asked, and nothing is asked for other events or campus entry. The answers show only on the Attendance page (extra columns and in the CSV) for that event; **Clear** next to a row empties a wrong entry so the student can fill it in again. Older Android installs do not have the form until they update.
+
+## Pass type on Add attendee
+
+"Add attendee" asks for a **Pass type**: No pass, ₹99 General or ₹499 Flagship. You can change it later from the person's page ("Pass type"). It is kept in this app only: the website is never told, and the website sync never removes it (the person shows "SET BY HAND"). Choosing "As on the website" hands the decision back to the website. A ₹499 pass here gives the Hackathon card on My Pass. People you gave a pass by hand are left out of the "Matches the website?" comparison on the sync card.

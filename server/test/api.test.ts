@@ -815,4 +815,27 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     const list = (await admin("GET", "/admin/api/app-teams")).json(); assert.equal(list.find((x: any) => x.name === "Renamed Team").members.length, 2);
     assert.equal((await admin("DELETE", `/admin/api/app-teams/${made.json().id}`)).statusCode, 200); assert.equal(await me(aAuth), false);
   });
+  it("Add attendee takes a pass type kept in the app only: the sync never clears it, and it can be changed or removed", async () => {
+    const add = async (payload: object) => admin("POST", "/admin/api/users", payload);
+    assert.equal((await add({ email: "hand99@example.org", name: "Hand NinetyNine", passTier: "general" })).statusCode, 201);
+    assert.equal((await add({ email: "hand499@example.org", name: "Hand FourNinetyNine", passTier: "flagship" })).statusCode, 201);
+    assert.equal((await add({ email: "handnone@example.org", name: "Hand None" })).statusCode, 201);
+    assert.equal((await add({ email: "handbad@example.org", name: "Hand Bad", passTier: "gold" })).statusCode, 400, "only the two pass types");
+    const find = async (q: string) => (await admin("GET", `/admin/api/users?q=${q}`)).json().rows[0];
+    assert.deepEqual([(await find("hand99@")).passTier, (await find("hand499@")).passTier, (await find("handnone@")).passTier], ["general", "flagship", null]);
+    assert.equal((await find("hand499@")).passManual, true);
+    // the website sync runs: it knows none of them, and must not take the marks away
+    const srv = createServer((req, res) => { res.setHeader("content-type", "application/json"); res.end(JSON.stringify(req.url!.includes("/passes") ? { people: [{ email: "someone.else@example.org", name: "Someone Else", tier: "general", status: "verified" }], nextCursor: null } : { people: [], nextCursor: null })); });
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r)); const was = config.website.baseUrl, wasSecret = config.website.secret;
+    config.website.baseUrl = `http://127.0.0.1:${(srv.address() as any).port}`; config.website.secret = "pass-test-secret-0123456789";
+    try {
+      await db.query("DELETE FROM sync_runs WHERE status='running'");
+      const run = await app.inject({ method: "POST", url: "/integrations/website/reconcile", headers: { authorization: "Bearer pass-test-secret-0123456789" } }); assert.equal(run.json().ok, true, run.body);
+      assert.equal((await find("hand499@")).passTier, "flagship", "a pass given by hand survives the sync"); assert.equal((await find("hand99@")).passTier, "general");
+    } finally { config.website.baseUrl = was; config.website.secret = wasSecret; srv.close(); srv.closeAllConnections(); }
+    // change it, then put it back to the website's view
+    const id = (await find("handnone@")).id;
+    assert.equal((await admin("PATCH", `/admin/api/users/${id}`, { passTier: "flagship" })).statusCode, 200); assert.equal((await find("handnone@")).passTier, "flagship");
+    assert.equal((await admin("PATCH", `/admin/api/users/${id}`, { passTier: null })).statusCode, 200); const back = await find("handnone@"); assert.deepEqual([back.passTier, back.passManual], [null, false]);
+  });
 });

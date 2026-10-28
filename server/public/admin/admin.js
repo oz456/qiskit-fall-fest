@@ -151,7 +151,7 @@ async function people(m) {
       const rep = await api("GET", "/pass-report");
       if (rep.ok && Array.isArray(rep.claims)) {
         const web = (tier) => rep.claims.filter((c) => c.tier === tier && c.status === "verified").reduce((n, c) => n + c.count, 0);
-        const mine = { general_offline: access.srmGeneral + access.outsideGeneral, flagship_offline: access.srmFlagship + access.outsideFlagship };
+        const mine = { general_offline: access.srmGeneral + access.outsideGeneral - access.manualGeneral, flagship_offline: access.srmFlagship + access.outsideFlagship - access.manualFlagship };   // passes you gave by hand are not on the website
         const part = (label, tier) => `${label}: app ${mine[tier]} · website ${web(tier)} ${mine[tier] === web(tier) ? "✓" : "(differs by " + Math.abs(mine[tier] - web(tier)) + ")"}`;
         reconcile = `verified passes, ${part("₹99", "general_offline")} · ${part("₹499", "flagship_offline")}. A difference of a few can just be someone approved in the last 10 minutes.`;
       }
@@ -195,6 +195,7 @@ async function people(m) {
           h("div", { class: "muted small" }, "Added " + fmt(u.createdAt, { dateStyle: "medium", timeStyle: "short" }) + " · " + (u.lastActive ? "last active " + fmt(u.lastActive, { dateStyle: "medium", timeStyle: "short" }) : "never opened the app")),
           h("div", { style: "margin-top:10px" }, h("span", { class: "pill " + (u.status === "active" ? "ok" : "bad") }, u.status.toUpperCase()), " ", h("span", { class: "pill" }, u.hasApp ? "SIGNED IN" : "NOT SIGNED IN"), u.saysSrm ? " " : "", u.saysSrm ? h("span", { class: "pill", title: "Personal email; the college typed on the website says SRM-AP (self-reported)" }, "SAYS SRM-AP") : "", u.askDetails ? " " : "", u.askDetails ? h("span", { class: "pill", title: "An organiser asked this person for the academic details" }, "ASKED FOR DETAILS") : "", " ", u.checkins ? h("span", { class: "pill" }, `${u.checkins} CHECK-IN${u.checkins > 1 ? "S" : ""}`) : null))),
       u.details ? h("div", { class: "muted", style: "margin:12px 0" }, [u.details.regNo, u.details.school, "Sem " + u.details.semester + (u.details.section ? " · Sec " + u.details.section : ""), u.details.gender, u.details.program + " " + u.details.course, "CGPA " + (u.details.cgpa === null ? "NA" : u.details.cgpa.toFixed(2))].filter(Boolean).join(" · ")) : null,
+      h("div", { class: "row", style: "margin:10px 0;gap:10px" }, h("span", { class: "muted" }, "Pass type"), (() => { const sel = h("select", {}, h("option", { value: "" }, "As on the website"), h("option", { value: "general" }, "₹99 General pass"), h("option", { value: "flagship" }, "₹499 Flagship pass")); sel.value = u.passManual ? u.passTier : ""; sel.onchange = guard(async () => { await api("PATCH", "/users/" + u.id, { passTier: sel.value || null }); done(sel.value ? "Pass type saved in the app (the website is not changed)" : "Back to what the website says"); }); return sel; })(), u.passManual ? h("span", { class: "pill", title: "Given by hand here; the website does not know" }, "SET BY HAND") : ""),
       h("div", { class: "row" },
         act(u.status === "active" ? "Block" : "Unblock", "ghost", guard(async () => { await api("PATCH", "/users/" + u.id, { status: u.status === "active" ? "blocked" : "active" }); done("Updated"); })),
         act("Reset sign-in limit", "ghost", guard(async () => { await api("POST", `/users/${u.id}/reset-login-limit`); done("They can request a new code now"); })),
@@ -214,8 +215,9 @@ async function people(m) {
   }
   async function addUser() {
     const n = h("input", { required: true, maxlength: 100 }), e = h("input", { type: "email", required: true }), c = h("input", { maxlength: 150 });
-    const bg = modal("Add attendee", h("form", { onsubmit: guard(async (ev) => { ev.preventDefault(); await api("POST", "/users", { email: e.value, name: n.value, college: c.value || null }); bg.remove(); toast("Added"); load(); }) },
-      field("Name", n), field("Email", e), field("College / organisation", c), h("div", { class: "row" }, h("button", { class: "btn" }, "Add"))));
+    const pass = h("select", {}, h("option", { value: "" }, "No pass"), h("option", { value: "general" }, "₹99 General pass"), h("option", { value: "flagship" }, "₹499 Flagship pass (includes the Hackathon)"));
+    const bg = modal("Add attendee", h("form", { onsubmit: guard(async (ev) => { ev.preventDefault(); await api("POST", "/users", { email: e.value, name: n.value, college: c.value || null, passTier: pass.value || null }); bg.remove(); toast("Added"); load(); }) },
+      field("Name", n), field("Email", e), field("College / organisation", c), field("Pass type", pass), h("p", { class: "muted small" }, "Kept in this app only. The website is not changed."), h("div", { class: "row" }, h("button", { class: "btn" }, "Add"))));
   }
   async function importCsv() {
     const ta = h("textarea", { placeholder: "email,name,college\nalex@example.org,Alex Morgan,SRM University AP", rows: 7 });
