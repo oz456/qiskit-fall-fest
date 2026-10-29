@@ -60,7 +60,7 @@ export function passView({ open }) {
     const hack = S.events.find((e) => e.track === "Hackathon");
     if (S.profile?.flagship && !teamAsked) { teamAsked = true; refreshTeam(); }
     const t = teamData?.team;
-    regBox.replaceChildren(...(S.profile?.flagship ? [sectionLabel("Registered events"), h("div", { class: "reglist" }, h("div", { class: "card row press", role: "button", tabindex: "0", onclick: () => openTeam(teamData, { onRenamed: (d) => { teamData = d; update(); } }) },
+    regBox.replaceChildren(...(S.profile?.flagship ? [sectionLabel("Registered events"), h("div", { class: "reglist" }, h("div", { class: "card row press", role: "button", tabindex: "0", onclick: () => openTeam(teamData, { onChanged: (d) => { teamData = d; update(); } }) },
       bubble(TRACK_ICON.Hackathon || "code", 50, true), h("div", { class: "meta" }, h("div", { class: "name" }, "You are registered for the Hackathon"), h("div", { class: "where" }, t ? `Team ${t.name} · tap to see your team` : "Included in your Flagship Pass · tap to see your team")), icon("chevR")))] : []));
     listBox.replaceChildren(...[...savedBox, head, attendedBox].filter(Boolean));
   }

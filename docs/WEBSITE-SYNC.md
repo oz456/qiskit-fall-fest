@@ -27,10 +27,15 @@ The one-time details form is asked of every `@srmap.edu.in` address, and also of
 
 ## Hackathon teams (My Pass)
 
-The hackathon teams live on the website (`hackathon_teams`, `team_members`). Flagship (₹499) holders get a **Registered events** card on My Pass; tapping it opens **Your team**: the team lead first, then teammates (view only: no inviting, adding or removing in the app), and the lead gets a **Rename** button.
+The hackathon teams live on the website (`hackathon_teams`, `team_members`). Flagship (₹499) holders get a **Registered events** card on My Pass; tapping it opens **Your team**: the team lead first, then teammates (view only: no inviting, adding or removing in the app).
 
-- The app reads one person's team on demand from the website: `GET /api/integrations/qff-app/team?email=` (Bearer `GCP_ACCESS`, read-only, names and roles only, no teammate emails). The app caches it for 30 seconds.
-- A rename is `POST /api/integrations/qff-app/team {email, name}`: only the team lead, 3 to 40 characters, name not already taken. It changes nothing but `hackathon_teams.name`, so the website, admin pages and shortlist show the new name.
-- **Switching renaming off:** Admin, Content, untick "Team leads can rename their hackathon team". The Rename button disappears and the server refuses renames. Tick it again to allow it.
+- The app reads one person's team on demand from the website: `GET /api/integrations/qff-app/team?email=` (Bearer `GCP_ACCESS`, read-only, names and roles only, no teammate emails), and the whole list with `?all=1` (team id, name, leader). The app caches both for 30 seconds.
+- A name change is `POST /api/integrations/qff-app/team {email, name}`: only the team lead, 3 to 40 characters, name not already taken. It changes nothing but `hackathon_teams.name`.
 
-**Rename deadline.** Renaming also closes at a set time: 3:00 PM IST on 29 Oct 2026 by default. Change it in Admin, Content, "Team renaming closes at". The team sheet tells the lead "You can rename your team until 3:00 PM." while it is open. The untick switch above still stops it at any moment.
+### Team names from the founders list
+
+Every team gets a name inspired by an Indian founder (50 names in `server/src/lib/founders.ts`, for example "CRED-ibility", inspired by Kunal Shah).
+
+- **At the set time** (default 11:30 AM IST on 29 Oct 2026) every team lead can tap **Get my team name** for **100 seconds**. The server picks a free name at random, so two leads can never collide, and tapping twice gives the same name.
+- **When the 100 seconds are over** every team still without a name gets one automatically, including teams whose lead never opened the app (the app asks the website for all teams). Names are written to the website; if that fails it is retried (every 15 seconds, on app requests, and by the 10-minute scheduler) until it sticks. Until then the app already shows the new name.
+- **Admin, Content, "Hackathon team names":** switch it off, change the time, **Practice now** (a 25-second countdown and a 100-second round for teams made in the app only, such as the test team; the real schedule and the website teams are untouched), and **Name all teams now** (emergency button: names every unnamed team immediately, whatever the clock says).

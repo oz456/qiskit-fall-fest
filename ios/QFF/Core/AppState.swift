@@ -30,9 +30,8 @@ final class AppState: ObservableObject {
     /// The hackathon team of a flagship pass holder (lead first), loaded in the background. nil until loaded or when there is none.
     @Published var team: TeamInfo?
     @Published var teamLoaded = false
-    @Published var canRenameTeam = false
-    /// "You can rename your team until 3:00 PM." (from the server, only for the lead while renaming is open)
-    @Published var teamRenameNote: String?
+    /// Team names come from a list of Indian founders: the lead taps "Get my team name" at the naming time, the rest are named automatically.
+    @Published var teamNaming: TeamNaming?
     @Published var odDismissed: Set<String> = []
     private var announcedCheckins: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "seen_checkins") ?? [])
     @Published var now = Date()
@@ -140,7 +139,7 @@ final class AppState: ObservableObject {
         keychain.wipe()
         for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "needs_details", "needs_extra", "seen_tickets", "push_registered", "notif_asked", "seen_checkins"] { defaults.removeObject(forKey: k) }
         seenTickets = [:]; announcedCheckins = []; checkinNotice = nil; odPending = []; odDismissed = []
-        team = nil; teamLoaded = false; canRenameTeam = false; teamRenameNote = nil
+        team = nil; teamLoaded = false; teamNaming = nil
         needsSelfie = false; needsDetails = false; needsExtra = false
         profile = nil; events = []; announcements = []; tickets = []; checkins = [:]; faqs = []; settings = [:]
     }
@@ -319,13 +318,14 @@ final class AppState: ObservableObject {
     }
     func loadTeam() async {
         guard !isPreview, profile?.flagship == true else { return }
-        if let r: TeamResponse = try? await authed("GET", "/v1/me/team") { team = r.team; canRenameTeam = r.canRename; teamRenameNote = r.renameNote; teamLoaded = true }
+        if let r: TeamResponse = try? await authed("GET", "/v1/me/team") { team = r.team; teamNaming = r.naming; teamLoaded = true }
     }
-    /// The team lead renames the team. Throws with a readable message (name taken, too short, renaming closed).
-    func renameTeam(_ name: String) async throws {
-        do { _ = try await authedData("PUT", "/v1/me/team", body: ["name": name]) }
-        catch let e as APIError where e.http == 403 { canRenameTeam = false; teamRenameNote = nil; throw e }
+    /// The team lead taps "Get my team name": the server picks a free founder-themed name. Throws with a readable message.
+    @discardableResult func assignTeamName() async throws -> String {
+        let d = try await authedData("POST", "/v1/me/team/name")
+        let name = (try? JSONSerialization.jsonObject(with: d) as? [String: Any])?["name"] as? String ?? ""
         await loadTeam()
+        return name
     }
     func checkinLabel(_ scope: String, _ at: Date) -> CheckinNotice {
         if scope.hasPrefix("event:") { return CheckinNotice(title: events.first { $0.id == String(scope.dropFirst(6)) }?.title ?? "Event", time: Fmt.dmTime.string(from: at)) }

@@ -7,6 +7,7 @@ import { config } from "../config.ts";
 import type { Db } from "../db.ts";
 import { sha256, safeEqual } from "../lib/crypto.ts";
 import { reconcile, upsertPeople } from "../lib/website-sync.ts";
+import { maybeSweep } from "../lib/team-names.ts";
 
 const Person = z.object({ email: z.string().max(200), name: z.string().max(200).optional().default(""), institution: z.string().max(300).nullish(), isActive: z.boolean().optional(), role: z.string().max(40).optional(), passTier: z.enum(["general", "flagship"]).nullish(), srmBasis: z.enum(["srm_email", "personal_says_srm", "outside"]).optional() });
 
@@ -23,6 +24,6 @@ export function integrationRoutes(app: FastifyInstance, db: Db) {
       await db.query("INSERT INTO sync_runs (trigger,status,finished_at,seen,created,updated,skipped,error) VALUES ('push','ok',now(),$1,$2,$3,$4,$5)", [r.seen, r.created, r.updated, r.skipped, r.failed.length ? r.failed.slice(0, 3).join("; ").slice(0, 500) : null]);
       return { ok: true, created: r.created, updated: r.updated, skipped: r.skipped, failed: r.failed.length };
     });
-    api.post("/integrations/website/reconcile", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async () => reconcile(db, "scheduler"));
+    api.post("/integrations/website/reconcile", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async () => { void maybeSweep(db); return reconcile(db, "scheduler"); });
   });
 }

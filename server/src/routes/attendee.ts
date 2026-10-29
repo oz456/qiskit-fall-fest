@@ -11,7 +11,8 @@ import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
 import { cgpaMissing, Details, OdInput, detailsOut, Extra, GENDERS, needsExtra, PROGRAMS, SCHOOLS } from "../lib/details.ts";
 import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
-import { appTeamOf, inAppTeam, renameAppTeam, renameWindow, teamOf, renameTeam } from "../lib/team.ts";
+import { appTeamOf, inAppTeam, teamOf, type Team } from "../lib/team.ts";
+import { claimName, claimOf, maybeSweep, naming, pushClaim, scopeOf, type Claim, type Naming } from "../lib/team-names.ts";
 import { randomBytes } from "node:crypto";
 
 const ACCESS_TTL = 15 * 60;
@@ -253,31 +254,46 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       return { ok: true };
     });
 
-    // Hackathon team (flagship pass holders): lead first, then teammates. The lead can rename it unless an organiser has switched renaming off.
+    // Hackathon team (flagship pass holders): lead first, then teammates. At the naming time the lead taps "Get my team name" (server picks a free founder-themed name);
+    // when the 100 seconds are over, every team still without a name gets one automatically. See lib/team-names.ts.
+    const myTeam = async (uid: string): Promise<{ team: Team; key: string } | null> => {
+      const own = await appTeamOf(db, uid);
+      if (own) return { team: own, key: "app:" + own.id };
+      const [u] = await db.query("SELECT email, pass_tier FROM users WHERE id=$1", [uid]);
+      if (!u || u.pass_tier !== "flagship") return null;
+      const team = await teamOf(u.email);
+      return team?.id ? { team, key: team.id } : null;
+    };
+    const namingFor = (n: Naming, isLeader: boolean, named: boolean) => {
+      if (n.phase === "off") return { phase: "off", note: null, canAssign: false };
+      if (named) return { phase: n.phase, note: null, canAssign: false };
+      if (n.phase === "before") return { phase: "before", note: `Team names are given out at ${n.label}. Every team gets a name inspired by an Indian founder.`, canAssign: false };
+      if (n.phase === "open") return { phase: "open", note: isLeader ? "Tap Get my team name now. If you don’t, a name is given to your team automatically in a moment." : "Your team lead is getting the team name now.", canAssign: isLeader };
+      return { phase: "closed", note: isLeader ? "Tap Get my team name, or wait a moment: your team is being named." : "Your team is being named. Check back in a moment.", canAssign: isLeader };
+    };
     api.get("/v1/me/team", async (req, reply) => {
-      const [u] = await db.query("SELECT email, pass_tier FROM users WHERE id=$1", [req.uid]);
-      const win = await renameWindow(db);
-      const own = await appTeamOf(db, req.uid!);   // a team an organiser made in the app comes first
-      if (own) return { team: own, canRename: Boolean(own.isLeader && win.open), renameNote: own.isLeader ? win.note : null };
-      if (!u || u.pass_tier !== "flagship") return { team: null, canRename: false };
-      try {
-        const team = await teamOf(u.email);
-        return { team, canRename: Boolean(team?.isLeader && win.open), renameNote: team?.isLeader ? win.note : null };
-      } catch { return reply.code(502).send({ error: "unavailable", message: "Your team couldn't be loaded. Please try again." }); }
+      let found; try { found = await myTeam(req.uid!); } catch { return reply.code(502).send({ error: "unavailable", message: "Your team couldn't be loaded. Please try again." }); }
+      if (!found) return { team: null, naming: { phase: "off", note: null, canAssign: false } };
+      void maybeSweep(db);   // the 100 seconds are over: make sure nobody is left without a name
+      const n = await naming(db, scopeOf(found.key)), claim = await claimOf(db, found.key);
+      const t = found.team;
+      return { team: { ...t, name: claim?.name ?? t.name, founder: claim?.founder ?? null }, naming: namingFor(n, t.isLeader, Boolean(claim)) };
     });
-    api.put("/v1/me/team", { config: { rateLimit: { max: 8, timeWindow: "10 minutes" } } }, async (req, reply) => {
-      const p = z.object({ name: z.string().max(100) }).safeParse(req.body);
-      if (!p.success) return reply.code(400).send({ error: "invalid_name", message: "A team name must be 3 to 40 characters." });
-      const [u] = await db.query("SELECT email, pass_tier FROM users WHERE id=$1", [req.uid]);
-      const own = await inAppTeam(db, req.uid!);
-      if (!u || (u.pass_tier !== "flagship" && !own)) return reply.code(403).send({ error: "no_team", message: "You are not in a team." });
-      if (!(await renameWindow(db)).open) return reply.code(403).send({ error: "rename_closed", message: "Team names can't be changed any more." });
-      const name = p.data.name.replace(/\s+/g, " ").trim();
-      if (name.length < 3 || name.length > 40) return reply.code(400).send({ error: "invalid_name", message: "A team name must be 3 to 40 characters." });
-      if (own) { const r = await renameAppTeam(db, req.uid!, name); return r.ok ? { ok: true, name: r.name } : reply.code(r.status).send({ error: r.error, message: r.message }); }
-      let r; try { r = await renameTeam(u.email, name); } catch { r = { ok: false as const, status: 502, error: "unavailable", message: "Team names can't be changed right now. Please try again in a minute." }; }
-      if (!r.ok) return reply.code(r.status).send({ error: r.error, message: r.message });
-      return { ok: true, name: r.name };
+    api.post("/v1/me/team/name", { config: { rateLimit: { max: 12, timeWindow: "10 minutes" } } }, async (req, reply) => {
+      let found; try { found = await myTeam(req.uid!); } catch { return reply.code(502).send({ error: "unavailable", message: "Your team couldn't be loaded. Please try again." }); }
+      if (!found) return reply.code(404).send({ error: "no_team", message: "You are not in a team." });
+      if (!found.team.isLeader) return reply.code(403).send({ error: "not_leader", message: "Only the team lead can get the team name." });
+      const n = await naming(db, scopeOf(found.key)), view = namingFor(n, true, false);
+      let claim: Claim | null | undefined = await claimOf(db, found.key);
+      if (!claim) {
+        if (view.phase === "off") return reply.code(403).send({ error: "naming_off", message: "Team names are not being given out." });
+        if (view.phase === "before") return reply.code(403).send({ error: "not_yet", message: `Team names are given out at ${n.label}.` });
+        const [u] = await db.query("SELECT email FROM users WHERE id=$1", [req.uid]);
+        claim = await claimName(db, found.key, u?.email ?? null, "tap");
+        if (!claim) return reply.code(503).send({ error: "unavailable", message: "Please try again in a moment." });
+        void pushClaim(db, claim);   // written to the website in the background; the app already shows it, and the sweep retries if that fails
+      }
+      return { ok: true, name: claim.name, founder: claim.founder };
     });
 
     // One selfie per attendee, taken on first sign-in so door staff can match the face to the pass. Only an admin can reset it.

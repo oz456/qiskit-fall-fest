@@ -3,7 +3,7 @@
 import type { Db, Queryable } from "../db.ts";
 
 // Parents before children so FK constraints hold on restore.
-export const TABLES = ["settings", "users", "app_teams", "app_team_members", "user_photos", "events", "user_events", "announcements", "tickets", "ticket_messages", "faqs", "checkins", "audit_log"] as const;
+export const TABLES = ["settings", "users", "app_teams", "app_team_members", "team_name_claims", "user_photos", "events", "user_events", "announcements", "tickets", "ticket_messages", "faqs", "checkins", "audit_log"] as const;
 
 const enc = (v: unknown): unknown => (v instanceof Uint8Array ? { $hex: Buffer.from(v).toString("hex") } : v instanceof Date ? v.toISOString() : v);
 const dec = (v: unknown): unknown => (v && typeof v === "object" && "$hex" in (v as any) ? Buffer.from((v as any).$hex, "hex") : v);

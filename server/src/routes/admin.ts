@@ -10,6 +10,7 @@ import { mailRemaining } from "../lib/mail.ts";
 import { getPhoto, removePhoto } from "../lib/photos.ts";
 import { devicesForAll, devicesForUser, pushInBackground } from "../lib/push.ts";
 import { AnnouncementInput, EventInput, FaqInput, SettingsInput, TicketReply, TicketStatus, UserInput } from "../lib/schemas.ts";
+import { DEFAULT_NAMES_AT, WINDOW_SEC, naming, sweep } from "../lib/team-names.ts";
 import { audit, eventDay, eventOut } from "../lib/util.ts";
 import { detailsOut } from "../lib/details.ts";
 
@@ -350,6 +351,26 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     api.delete("/admin/api/app-teams/:id", async (req) => {
       const { id } = Id.parse(req.params); await db.query("DELETE FROM app_teams WHERE id=$1", [id]); await audit(db, req, "app_team.delete", "app_team", id); return { ok: true };
+    });
+
+    // ---- hackathon team names from the founders list (see lib/team-names.ts) ----
+    api.get("/admin/api/team-names", async () => {
+      const st = Object.fromEntries((await db.query("SELECT key, value FROM settings WHERE key IN ('team_names','team_names_at','team_names_practice_at','team_names_done_at')")).map((r) => [r.key as string, r.value as string]));
+      const claims = await db.query("SELECT team_key, name, founder, mode, lead_email, pushed, claimed_at FROM team_name_claims ORDER BY claimed_at");
+      const [web, app] = [await naming(db, "web"), await naming(db, "app")];
+      return { enabled: st.team_names !== "off", at: st.team_names_at || DEFAULT_NAMES_AT, windowSec: WINDOW_SEC, webPhase: web.phase, appPhase: app.phase, practiceAt: st.team_names_practice_at ?? null, doneAt: st.team_names_done_at ?? null,
+        claims: claims.map((c) => ({ team: c.team_key.startsWith("app:") ? "app team" : "website team", name: c.name, founder: c.founder, mode: c.mode, leadEmail: c.lead_email, onWebsite: c.pushed, at: new Date(c.claimed_at).toISOString() })) };
+    });
+    // Practice round: only for teams made in the app (e.g. the test team). Starts in 25 seconds, lasts 100 seconds, then names are given out. The real schedule is untouched.
+    api.post("/admin/api/team-names/practice", { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } }, async (req) => {
+      const stamp = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata", dateStyle: "short", timeStyle: "medium" }).format(new Date(Date.now() + 25_000)).replace(" ", "T");
+      await db.query("DELETE FROM team_name_claims WHERE team_key LIKE 'app:%'");
+      await db.query("INSERT INTO settings (key,value) VALUES ('team_names_practice_at',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [stamp]);
+      await audit(db, req, "team_names.practice"); return { ok: true, startsAt: stamp };
+    });
+    // Emergency button: name every team that has no name right now, whatever the clock says.
+    api.post("/admin/api/team-names/run", { config: { rateLimit: { max: 5, timeWindow: "10 minutes" } } }, async (req) => {
+      const r = await sweep(db, { web: true, app: true }); await audit(db, req, "team_names.run", undefined, undefined, { assigned: r.assigned, missing: r.missing }); return r;
     });
 
     // ---- website sync (people come from the main website; see lib/website-sync.ts) ----
