@@ -93,7 +93,14 @@ export async function sweep(db: Db, which: { web: boolean; app: boolean }): Prom
   try {
     const teams: { key: string; leadEmail: string; name: string }[] = [];
     let reachable = true; const taken: string[] = [];
-    if (which.web) { try { for (const t of await websiteTeams(true)) { teams.push({ key: t.id, leadEmail: t.leadEmail, name: t.name }); taken.push(t.name); } } catch { reachable = false; } }
+    // only real hackathon teams are named: those whose lead holds a verified ₹499 pass (the website also holds teams from people who never paid)
+    if (which.web) {
+      try {
+        const all = await websiteTeams(true);
+        const paid = new Set((await db.query("SELECT lower(email) AS e FROM users WHERE pass_tier='flagship' AND lower(email) = ANY($1::text[])", [all.map((t) => t.leadEmail.toLowerCase())])).map((r) => r.e as string));
+        for (const t of all) { taken.push(t.name); if (paid.has(t.leadEmail.toLowerCase())) teams.push({ key: t.id, leadEmail: t.leadEmail, name: t.name }); }
+      } catch { reachable = false; }
+    }
     if (which.app) for (const t of await db.query("SELECT t.id, t.name, u.email FROM app_teams t JOIN app_team_members m ON m.team_id=t.id AND m.leader JOIN users u ON u.id=m.user_id")) teams.push({ key: "app:" + t.id, leadEmail: t.email, name: t.name });
     let assigned = 0, pushed = 0, missing = 0;
     for (const t of teams) {

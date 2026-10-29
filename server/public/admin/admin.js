@@ -99,14 +99,15 @@ async function events(m) {
     clear(teamsBox); teamsBox.append(h("h2", {}, "Hackathon teams"), h("p", { class: "muted" }, "Loading…"));
     const [r, st] = await Promise.all([api("GET", "/teams"), api("GET", "/settings")]);
     const q = h("input", { type: "search", placeholder: "Search team or lead…", style: "max-width:260px" });
-    let onlyNumbered = false;
+    let onlyNumbered = false, onlyPaid = true;
+    const paidChip = h("button", { type: "button", class: "btn ghost sm", onclick: () => { onlyPaid = !onlyPaid; paidChip.textContent = onlyPaid ? "Showing verified ₹499 teams only" : "Showing all teams on the website"; drawRows(); } }, "Showing verified ₹499 teams only");
     const chip = h("button", { type: "button", class: "btn ghost sm", onclick: () => { onlyNumbered = !onlyNumbered; chip.textContent = onlyNumbered ? "Showing numbered names only" : "Show numbered names only"; drawRows(); } }, "Show numbered names only");
     const lock = h("button", { type: "button", class: "btn ghost sm", onclick: guard(async () => { await api("PUT", "/settings", { team_edit: st.team_edit === "off" ? "on" : "off" }); drawTeams(); }) }, st.team_edit === "off" ? "Let team leads change names" : "Stop team leads changing names");
     const body = h("div");
     const numbered = (t) => /^Quantum Team \d+$/.test(t.name);
     function drawRows() {
       const needle = q.value.trim().toLowerCase();
-      const shown = r.teams.filter((t) => (!onlyNumbered || numbered(t)) && (!needle || [t.name, t.leadName, t.leadEmail].some((x) => String(x || "").toLowerCase().includes(needle))));
+      const shown = r.teams.filter((t) => (!onlyNumbered || numbered(t)) && (!onlyPaid || t.eligible) && (!needle || [t.name, t.leadName, t.leadEmail].some((x) => String(x || "").toLowerCase().includes(needle))));
       clear(body);
       body.append(h("table", {}, h("tr", {}, ["Team name", "Lead", "Name given", ""].map((x) => h("th", {}, x))),
         shown.map((t) => h("tr", {}, h("td", {}, h("b", {}, t.name), t.kind === "app" ? h("span", { class: "pill", style: "margin-left:6px" }, "TEST TEAM") : "", !t.onWebsite ? h("span", { class: "pill warn", style: "margin-left:6px", title: "Not on the website yet; it keeps retrying" }, "NOT ON WEBSITE YET") : ""),
@@ -123,10 +124,10 @@ async function events(m) {
     }
     const nNum = r.teams.filter(numbered).length;
     clear(teamsBox);
-    teamsBox.append(h("h2", {}, `Hackathon teams (${r.teams.length})`),
+    teamsBox.append(h("h2", {}, `Hackathon teams (${r.teams.filter((t) => t.eligible).length} with a verified ₹499 lead, ${r.teams.length} on the website)`),
       h("p", { class: "muted small" }, `Team leads can change their own team name once the team has one (${st.team_edit === "off" ? "currently switched off" : "currently allowed"}). ${nNum ? nNum + " teams have a numbered name like Quantum Team 1, because the founders list ran out." : ""}`),
       !r.websiteReachable ? h("p", { class: "pill warn" }, "The website did not answer, so only test teams are listed. Reload in a moment.") : "",
-      h("div", { class: "row", style: "flex-wrap:wrap;gap:8px;margin:8px 0" }, q, nNum ? chip : "", lock), body);
+      h("div", { class: "row", style: "flex-wrap:wrap;gap:8px;margin:8px 0" }, q, paidChip, nNum ? chip : "", lock), body);
     drawRows();
   }
   async function drawNames() {

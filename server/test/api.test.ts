@@ -766,6 +766,9 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     const names: Record<string, string> = { T1: "Our Own Name", T2: "Another Team", T3: "Third Team" };
     const leads: Record<string, string> = { T1: lead, T2: "never.opened.t2@example.org", T3: "never.opened.t3@example.org" };
     const posts: any[] = [];
+    // T2 and T3 are paid teams whose leads never opened the app; T4 is a team from someone who never paid: it must not be named
+    leads.T4 = "never.paid.t4@example.org"; names.T4 = "Unpaid Team";
+    for (const [em, tier] of [[leads.T2!, "flagship"], [leads.T3!, "flagship"], [leads.T4!, null]] as const) await db.query("INSERT INTO users (email,name,pass_code,pass_secret,source,kind,pass_tier) VALUES ($1,'Lead',$2,$3,'website','student',$4)", [em, "QFF-" + Math.floor(10000 + Math.random() * 80000), Buffer.alloc(32, 5), tier]);
     const roster = (email: string) => ({ team: { id: "T1", name: names.T1, vertical: "Finance", problemStatementId: "PS-F1", finalized: false, isLeader: email === lead,
       members: [{ name: "Team Lead", role: "leader", status: "accepted", you: email === lead }, { name: "Team Mate", role: "member", status: "accepted", you: email === mate }] } });
     const srv = createServer((req, res) => {
@@ -803,6 +806,7 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
       // the 100 seconds are over: everyone still without a name gets one, whether or not their lead ever opened the app
       await at(-200_000);
       const { maybeSweep } = await import("../src/lib/team-names.ts"); await maybeSweep(db);
+      assert.equal(names.T4, "Unpaid Team", "a team whose lead never paid keeps its own name");
       const all = [names.T1, names.T2, names.T3]; assert.equal(new Set(all.map((n) => n.toLowerCase())).size, 3, "all names are different");
       assert.ok(!["Our Own Name", "Another Team", "Third Team"].some((n) => all.includes(n)), "every website team now has a founder name");
       assert.equal(names.T1, name, "a team that already tapped keeps its name");
@@ -816,7 +820,7 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
       assert.equal((await rename(leadAuth, names.T2)).statusCode, 409, "another team already has that name");
       const mine = await rename(leadAuth, "  The   Entangled  Ones "); assert.equal(mine.statusCode, 200); assert.equal(mine.json().name, "The Entangled Ones");
       assert.equal((await get(mateAuth)).team.name, "The Entangled Ones", "teammates see it straight away"); assert.equal(names.T1, "The Entangled Ones", "and the website has it");
-      const list = (await admin("GET", "/admin/api/teams")).json(); assert.equal(list.teams.length, 3); assert.equal(list.teams.find((t: any) => t.key === "T1").mode, "edit"); assert.ok(list.teams.every((t: any) => t.leadEmail));
+      const list = (await admin("GET", "/admin/api/teams")).json(); assert.equal(list.teams.length, 4); assert.equal(list.teams.filter((t: any) => t.eligible).length, 3, "the unpaid team is marked"); assert.equal(list.teams.find((t: any) => t.key === "T1").mode, "edit"); assert.ok(list.teams.every((t: any) => t.leadEmail));
       assert.equal((await admin("POST", "/admin/api/teams/rename", { key: "T3", name: "Renamed By Organiser" })).statusCode, 200); assert.equal(names.T3, "Renamed By Organiser");
       assert.equal((await admin("POST", "/admin/api/teams/rename", { key: "T3", name: names.T2 })).statusCode, 409); assert.equal((await admin("POST", "/admin/api/teams/rename", { key: "nope", name: "Whatever Name" })).statusCode, 404);
       await admin("PUT", "/admin/api/settings", { team_edit: "off" }); assert.equal((await get(leadAuth)).naming.canEdit, false); const locked = await rename(leadAuth, "Locked Out Name"); assert.equal(locked.statusCode, 403); assert.equal(locked.json().error, "edit_closed");

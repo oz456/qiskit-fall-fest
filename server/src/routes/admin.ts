@@ -366,9 +366,14 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     api.get("/admin/api/teams", async () => {
       const claims = new Map((await db.query("SELECT team_key, name, mode, pushed FROM team_name_claims")).map((c) => [c.team_key as string, c]));
       const rows: any[] = []; let websiteReachable = true;
-      try { for (const t of await websiteTeams(true)) { const c = claims.get(t.id); rows.push({ key: t.id, kind: "website", name: c?.name ?? t.name, wasName: c ? t.name : null, mode: c?.mode ?? null, onWebsite: c ? c.pushed : true, leadName: t.leadName, leadEmail: t.leadEmail }); } } catch { websiteReachable = false; }
+      let paid = new Set<string>();
+      try {
+        const all = await websiteTeams(true);
+        paid = new Set((await db.query("SELECT lower(email) AS e FROM users WHERE pass_tier='flagship' AND lower(email) = ANY($1::text[])", [all.map((t) => t.leadEmail.toLowerCase())])).map((r) => r.e as string));
+        for (const t of all) { const c = claims.get(t.id); rows.push({ eligible: paid.has(t.leadEmail.toLowerCase()), key: t.id, kind: "website", name: c?.name ?? t.name, wasName: c ? t.name : null, mode: c?.mode ?? null, onWebsite: c ? c.pushed : true, leadName: t.leadName, leadEmail: t.leadEmail }); }
+      } catch { websiteReachable = false; }
       for (const t of await db.query("SELECT t.id, t.name, u.name AS lead_name, u.email FROM app_teams t JOIN app_team_members m ON m.team_id=t.id AND m.leader JOIN users u ON u.id=m.user_id")) {
-        const c = claims.get("app:" + t.id); rows.push({ key: "app:" + t.id, kind: "app", name: c?.name ?? t.name, wasName: null, mode: c?.mode ?? null, onWebsite: true, leadName: t.lead_name, leadEmail: t.email });
+        const c = claims.get("app:" + t.id); rows.push({ eligible: true, key: "app:" + t.id, kind: "app", name: c?.name ?? t.name, wasName: null, mode: c?.mode ?? null, onWebsite: true, leadName: t.lead_name, leadEmail: t.email });
       }
       rows.sort((a, b) => String(a.name).localeCompare(String(b.name)));
       return { websiteReachable, teams: rows };
