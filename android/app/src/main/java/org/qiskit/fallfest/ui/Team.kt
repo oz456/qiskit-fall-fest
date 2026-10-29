@@ -7,6 +7,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
@@ -25,6 +28,8 @@ fun TeamSheet(app: AppState, onDismiss: () -> Unit) {
     val naming = app.teamNaming
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
     // keep the sheet current while the naming time comes and the names go out
     LaunchedEffect(Unit) { while (true) { delay(3000); if (!busy) app.loadTeam() } }
     fun assign() {
@@ -35,13 +40,38 @@ fun TeamSheet(app: AppState, onDismiss: () -> Unit) {
             finally { busy = false }
         }
     }
+    fun saveName() {
+        val n = newName.replace(Regex("\\s+"), " ").trim()
+        when {
+            n.length < 3 || n.length > 40 -> error = "A team name must be 3 to 40 characters."
+            n == team?.name -> renaming = false
+            else -> { busy = true; error = null
+                scope.launch {
+                    try { app.renameTeam(n); renaming = false }
+                    catch (x: ApiException) { error = x.message } catch (_: Exception) { error = "Can't reach the server. Check your connection." }
+                    finally { busy = false }
+                } }
+        }
+    }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = P.bg, dragHandle = { BottomSheetDefaults.DragHandle(color = P.line) }) {
         Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 28.dp).navigationBarsPadding().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (team == null) {
                 Text("Your team", style = T.h1, color = P.ink)
                 Text(if (app.teamLoaded) "You haven’t formed or joined a team yet. Create your team, or accept an invitation, on the Qiskit Fall Fest website (Learning portal, Hackathon)." else "We couldn’t load your team right now. Check your connection and try again.", style = T.body, color = P.muted)
+            } else if (renaming) {
+                Text("Change your team name", style = T.h1, color = P.ink)
+                Text("Everyone in the team, and the organisers, will see the new name. No other team can have the same name.", style = T.body, color = P.muted)
+                Box(Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp)).background(P.surface).border(1.dp, P.line, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
+                    BasicTextField(newName, { newName = it.take(40); error = null }, singleLine = true, textStyle = T.body.copy(color = P.ink), cursorBrush = SolidColor(P.primary), modifier = Modifier.fillMaxWidth())
+                }
+                if (error != null) Text(error.orEmpty(), style = T.small, color = P.danger)
+                PrimaryButton(if (busy) "Saving…" else "Save name", loading = busy) { saveName() }
+                TextButton(onClick = { renaming = false; error = null }, modifier = Modifier.fillMaxWidth(), enabled = !busy) { Text("Cancel", color = P.muted) }
             } else {
-                Text(team.name, style = T.h1, color = P.ink, maxLines = 2, modifier = if (team.nameHidden) Modifier.blur(10.dp) else Modifier)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(team.name, style = T.h1, color = P.ink, maxLines = 2, modifier = (if (team.nameHidden) Modifier.blur(10.dp) else Modifier).weight(1f))
+                    if (naming?.canEdit == true) TextButton(onClick = { newName = team.name; error = null; renaming = true }) { Text("Rename", color = P.primary) }
+                }
                 Text(listOfNotNull(team.problemStatement, "${team.members.size} ${if (team.members.size == 1) "member" else "members"}").joinToString(" · "), style = T.body, color = P.muted)
                 naming?.note?.let { Text(it, style = T.body, color = P.ink) }
                 if (naming?.canAssign == true) PrimaryButton(if (busy) "Getting your name…" else "Get my team name", loading = busy) { assign() }

@@ -74,6 +74,7 @@ export const api = {
   saveOd: (d) => call("PUT", "/v1/me/od", d),
   team: () => call("GET", "/v1/me/team"),
   assignTeamName: () => call("POST", "/v1/me/team/name"),
+  renameTeam: (name) => call("PUT", "/v1/me/team/name", { name }),
   practiceTeamNames: () => call("POST", "/v1/me/team/practice"),
   passCodes: () => call("GET", "/v1/pass/codes"),
   putPush: (sub) => call("PUT", "/v1/me/push-token", sub),

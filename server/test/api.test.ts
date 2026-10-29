@@ -809,8 +809,20 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
       const [done] = await db.query("SELECT 1 FROM settings WHERE key='team_names_done_at'"); assert.ok(done, "marked done once everyone is named and on the website");
       // the lead who comes late just sees the name
       l = await get(leadAuth); assert.equal(l.team.name, name); assert.equal(l.naming.canAssign, false);
+      // the lead can change the name by hand once the team has one; a teammate cannot; names stay unique; organisers can lock it and edit from the admin
+      l = await get(leadAuth); assert.equal(l.naming.canEdit, true); assert.equal((await get(mateAuth)).naming.canEdit, false);
+      const rename = (a: { authorization: string }, n: string) => app.inject({ method: "PUT", url: "/v1/me/team/name", headers: a, payload: { name: n } });
+      assert.equal((await rename(mateAuth, "Hijacked Name")).statusCode, 403); assert.equal((await rename(leadAuth, "ab")).statusCode, 400, "too short"); assert.equal((await rename(leadAuth, "x".repeat(41))).statusCode, 400, "too long");
+      assert.equal((await rename(leadAuth, names.T2)).statusCode, 409, "another team already has that name");
+      const mine = await rename(leadAuth, "  The   Entangled  Ones "); assert.equal(mine.statusCode, 200); assert.equal(mine.json().name, "The Entangled Ones");
+      assert.equal((await get(mateAuth)).team.name, "The Entangled Ones", "teammates see it straight away"); assert.equal(names.T1, "The Entangled Ones", "and the website has it");
+      const list = (await admin("GET", "/admin/api/teams")).json(); assert.equal(list.teams.length, 3); assert.equal(list.teams.find((t: any) => t.key === "T1").mode, "edit"); assert.ok(list.teams.every((t: any) => t.leadEmail));
+      assert.equal((await admin("POST", "/admin/api/teams/rename", { key: "T3", name: "Renamed By Organiser" })).statusCode, 200); assert.equal(names.T3, "Renamed By Organiser");
+      assert.equal((await admin("POST", "/admin/api/teams/rename", { key: "T3", name: names.T2 })).statusCode, 409); assert.equal((await admin("POST", "/admin/api/teams/rename", { key: "nope", name: "Whatever Name" })).statusCode, 404);
+      await admin("PUT", "/admin/api/settings", { team_edit: "off" }); assert.equal((await get(leadAuth)).naming.canEdit, false); const locked = await rename(leadAuth, "Locked Out Name"); assert.equal(locked.statusCode, 403); assert.equal(locked.json().error, "edit_closed");
+      await admin("PUT", "/admin/api/settings", { team_edit: "on" });
       // the organiser can switch it off
-      await db.query("DELETE FROM team_name_claims"); await admin("PUT", "/admin/api/settings", { team_names: "off" });
+      await db.query("DELETE FROM team_name_claims"); names.T1 = "Our Own Name"; await admin("PUT", "/admin/api/settings", { team_names: "off" });
       assert.equal((await get(leadAuth)).naming.phase, "off"); assert.equal((await tap(leadAuth)).statusCode, 403);
       await admin("PUT", "/admin/api/settings", { team_names: "on" });
     } finally { config.website.baseUrl = was; config.website.secret = wasSecret; srv.close(); srv.closeAllConnections(); await db.query("DELETE FROM settings WHERE key IN ('team_names_at','team_names_done_at')"); }

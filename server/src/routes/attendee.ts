@@ -12,7 +12,7 @@ import { eventOut, newTicketCode } from "../lib/util.ts";
 import { cgpaMissing, Details, OdInput, detailsOut, Extra, GENDERS, needsExtra, PROGRAMS, SCHOOLS } from "../lib/details.ts";
 import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
 import { appTeamOf, inAppTeam, teamOf, type Team } from "../lib/team.ts";
-import { claimName, claimOf, maybeSweep, naming, pushClaim, scopeOf, startPractice, type Claim, type Naming } from "../lib/team-names.ts";
+import { claimName, claimOf, editName, maybeSweep, naming, pushClaim, scopeOf, startPractice, type Claim, type Naming } from "../lib/team-names.ts";
 import { randomBytes } from "node:crypto";
 
 const ACCESS_TTL = 15 * 60;
@@ -282,7 +282,9 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       const t = found.team;
       // until the team has its founder name, the app shows a placeholder behind a blur (the team's old name is not sent: it is about to be replaced)
       const hidden = n.phase !== "off" && !claim;
-      return { team: { ...t, name: hidden ? "Your Team Name" : claim?.name ?? t.name, nameHidden: hidden, founder: claim?.founder ?? null }, naming: namingFor(n, t.isLeader, Boolean(claim), found.key.startsWith("app:")) };
+      const locked = Boolean((await db.query("SELECT 1 FROM settings WHERE key='team_edit' AND value='off'"))[0]);
+      const naming_ = { ...namingFor(n, t.isLeader, Boolean(claim), found.key.startsWith("app:")), canEdit: t.isLeader && Boolean(claim) && !locked };   // the lead can change the name once the team has one
+      return { team: { ...t, name: hidden ? "Your Team Name" : claim?.name ?? t.name, nameHidden: hidden, founder: claim?.founder ?? null }, naming: naming_ };
     });
     // Test teams only (made in the app by an organiser): the lead can run the naming round again whenever they like, to try it out.
     api.post("/v1/me/team/practice", { config: { rateLimit: { max: 12, timeWindow: "10 minutes" } } }, async (req, reply) => {
@@ -291,6 +293,19 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       if (!own.isLeader) return reply.code(403).send({ error: "not_leader", message: "Only the team lead can start a practice round." });
       if ((await naming(db, "app")).phase === "off") return reply.code(403).send({ error: "naming_off", message: "Team names are switched off." });
       await startPractice(db, 0); return { ok: true };
+    });
+    // The team lead changes the team name by hand (once the team has been named). The organisers can switch this off (admin, Events).
+    api.put("/v1/me/team/name", { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } }, async (req, reply) => {
+      const p = z.object({ name: z.string().max(100) }).safeParse(req.body);
+      if (!p.success) return reply.code(400).send({ error: "invalid_name", message: "A team name must be 3 to 40 characters." });
+      let found; try { found = await myTeam(req.uid!); } catch { return reply.code(502).send({ error: "unavailable", message: "Your team couldn't be loaded. Please try again." }); }
+      if (!found) return reply.code(404).send({ error: "no_team", message: "You are not in a team." });
+      if (!found.team.isLeader) return reply.code(403).send({ error: "not_leader", message: "Only the team lead can change the team name." });
+      if ((await db.query("SELECT 1 FROM settings WHERE key='team_edit' AND value='off'"))[0]) return reply.code(403).send({ error: "edit_closed", message: "Team names can't be changed any more." });
+      if (!(await claimOf(db, found.key))) return reply.code(403).send({ error: "not_named_yet", message: "Your team gets its name first. Then you can change it." });
+      const [u] = await db.query("SELECT email FROM users WHERE id=$1", [req.uid]);
+      const r = await editName(db, found.key, u?.email ?? null, p.data.name);
+      return r.ok ? { ok: true, name: r.name } : reply.code(r.status).send({ error: r.error, message: r.message });
     });
     api.post("/v1/me/team/name", { config: { rateLimit: { max: 12, timeWindow: "10 minutes" } } }, async (req, reply) => {
       let found; try { found = await myTeam(req.uid!); } catch { return reply.code(502).send({ error: "unavailable", message: "Your team couldn't be loaded. Please try again." }); }

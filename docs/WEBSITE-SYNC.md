@@ -39,3 +39,9 @@ Every team gets a name inspired by an Indian founder (50 names in `server/src/li
 - **When an organiser starts it** (Admin, Events, "Hackathon team names": **Start now**, or **Schedule** a time; nothing happens on its own) every team lead can tap **Get my team name** for **100 seconds**. The server picks a free name at random, so two leads can never collide, and tapping twice gives the same name.
 - **When the 100 seconds are over** every team still without a name gets one automatically, including teams whose lead never opened the app (the app asks the website for all teams). Names are written to the website; if that fails it is retried (every 15 seconds, on app requests, and by the 10-minute scheduler) until it sticks. Until then the app already shows the new name.
 - **Admin, Events, "Hackathon team names":** **Start now**, **Schedule** a time, **Cancel schedule**, **Switch off**, **Practice** (a 25-second countdown and a 100-second round for teams made in the app only, such as the test team; the real schedule and the website teams are untouched), and **Name all teams now** (emergency button: names every unnamed team immediately, whatever the clock says).
+
+### Changing a team name by hand
+
+- **Team lead (app, once the team has a name):** a **Rename** button in the team sheet. 3 to 40 characters, no other team may have the same name; the website changes too. Organisers can stop this with **Stop team leads changing names** (Admin, Events, Hackathon teams).
+- **Organisers (Admin, Events, "Hackathon teams"):** every team is listed with its lead and how it got its name, with search, a filter for numbered names, and an **Edit** button.
+- If the founders list (50, plus 26 in reserve) runs out, a team gets a numbered name such as "Quantum Team 7" so it is never left without one; those can be edited the same way.

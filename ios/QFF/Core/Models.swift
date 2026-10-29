@@ -129,7 +129,7 @@ struct TeamMember: Decodable, Equatable, Identifiable { var id: String { "\(role
     var isLeader: Bool { role == "leader" }; var invited: Bool { status == "invited" } }
 struct TeamInfo: Decodable, Equatable { let name: String; let problemStatementId: String?; let isLeader: Bool; let members: [TeamMember]; let founder: String?; let nameHidden: Bool? }
 /// Where the team-name handout stands: `note` is for the screen, `canAssign` shows the "Get my team name" button.
-struct TeamNaming: Decodable, Equatable { let phase: String; let note: String?; let canAssign: Bool; let canPractice: Bool? }
+struct TeamNaming: Decodable, Equatable { let phase: String; let note: String?; let canAssign: Bool; let canPractice: Bool?; let canEdit: Bool? }
 struct TeamResponse: Decodable { let team: TeamInfo?; let naming: TeamNaming? }
 struct Checkin: Decodable { let scope: String; let at: Date; var askOd: Bool? }
 /// An event whose OD details this student still has to give.

@@ -8,6 +8,8 @@ import { FOUNDERS, RESERVE } from "./founders.ts";
 export const fullName = (f: { team: string; founder: string }) => `${f.team} (${f.founder})`;
 import { renameTeam, websiteTeams } from "./team.ts";
 
+export type EditResult = { ok: true; name: string } | { ok: false; status: number; error: string; message: string };
+
 export const WINDOW_SEC = 100;
 
 export type Phase = "off" | "before" | "open" | "closed";
@@ -113,4 +115,22 @@ export async function maybeSweep(db: Db): Promise<void> {
     const webNeeded = web.phase === "closed" && !(done && new Date(done.value) > web.endsAt), appNeeded = app.phase === "closed";
     if (webNeeded || appNeeded) await sweep(db, { web: webNeeded, app: appNeeded });
   } catch { /* the next call tries again */ }
+}
+
+/** Change a team's name by hand (the team lead in the app, or an organiser in the admin). The name must be 3 to 40 characters and not used by any other team; it is written to the website too. */
+export async function editName(db: Db, teamKey: string, leadEmail: string | null, raw: string): Promise<EditResult> {
+  const name = raw.replace(/\s+/g, " ").trim();
+  if (name.length < 3 || name.length > 40 || /[\u0000-\u001f<>]/.test(name)) return { ok: false, status: 400, error: "invalid_name", message: "A team name must be 3 to 40 characters." };
+  const taken = (m: string): EditResult => ({ ok: false, status: 409, error: "name_taken", message: m });
+  const [clash] = await db.query("SELECT 1 FROM team_name_claims WHERE lower(name)=lower($1) AND team_key<>$2", [name, teamKey]);
+  if (clash) return taken(`The team name "${name}" is already taken.`);
+  if (!teamKey.startsWith("app:")) {
+    try { if ((await websiteTeams()).some((t) => t.id !== teamKey && t.name.toLowerCase() === name.toLowerCase())) return taken(`The team name "${name}" is already taken.`); } catch { /* the website's own check decides */ }
+  }
+  try {
+    await db.query(`INSERT INTO team_name_claims (team_key, name, founder, mode, lead_email, pushed) VALUES ($1,$2,'Edited by hand','edit',$3,false)
+      ON CONFLICT (team_key) DO UPDATE SET name=EXCLUDED.name, mode='edit', lead_email=COALESCE(EXCLUDED.lead_email, team_name_claims.lead_email), pushed=false`, [teamKey, name, leadEmail]);
+  } catch (e: any) { if (e?.code === "23505") return taken(`The team name "${name}" is already taken.`); throw e; }
+  const c = await claimOf(db, teamKey); if (c) await pushClaim(db, c);   // if the website is slow, the sweep keeps trying; the app already shows the new name
+  return { ok: true, name };
 }

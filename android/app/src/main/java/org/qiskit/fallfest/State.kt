@@ -259,10 +259,13 @@ class AppState(context: Context) {
                 TeamInfo(o.getString("name"), o.optString("problemStatementId").ifBlank { null }, o.optBoolean("isLeader"),
                     (0 until m.length()).map { i -> val x = m.getJSONObject(i); TeamMember(x.getString("name"), x.getString("role") == "leader", x.optString("status") == "invited", x.optBoolean("you")) },
                     o.optString("founder", "").ifBlank { null }, o.optBoolean("nameHidden")) }
-            teamNaming = r.optJSONObject("naming")?.let { TeamNaming(it.optString("phase"), it.optString("note", "").ifBlank { null }, it.optBoolean("canAssign"), it.optBoolean("canPractice")) }
+            teamNaming = r.optJSONObject("naming")?.let { TeamNaming(it.optString("phase"), it.optString("note", "").ifBlank { null }, it.optBoolean("canAssign"), it.optBoolean("canPractice"), it.optBoolean("canEdit")) }
             teamLoaded = true
         } catch (_: Exception) { }
     }
+
+    /** The team lead changes the team name by hand. Throws ApiException with a readable message (name taken, too short, editing closed). */
+    suspend fun renameTeam(name: String) { authed("PUT", "/v1/me/team/name", JSONObject().put("name", name)); loadTeam() }
 
     /** Test teams only: the lead starts the 100-second naming round right now. */
     suspend fun practiceTeamNames() { authed("POST", "/v1/me/team/practice"); loadTeam() }

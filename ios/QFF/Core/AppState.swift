@@ -320,6 +320,8 @@ final class AppState: ObservableObject {
         guard !isPreview, profile?.flagship == true else { return }
         if let r: TeamResponse = try? await authed("GET", "/v1/me/team") { team = r.team; teamNaming = r.naming; teamLoaded = true }
     }
+    /// The team lead changes the team name by hand. Throws with a readable message (name taken, too short, editing closed).
+    func renameTeam(_ name: String) async throws { _ = try await authedData("PUT", "/v1/me/team/name", body: ["name": name]); await loadTeam() }
     /// Test teams only: the lead starts the 100-second naming round right now.
     func practiceTeamNames() async throws { _ = try await authedData("POST", "/v1/me/team/practice"); await loadTeam() }
     /// The team lead taps "Get my team name": the server picks a free founder-themed name. Throws with a readable message.

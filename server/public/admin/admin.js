@@ -92,6 +92,43 @@ async function events(m) {
   m.append(head("Events", h("button", { class: "btn", onclick: () => editEvent() }, "New event")));
   const namesBox = h("div", { class: "card" }); m.append(namesBox);
   drawNames();
+  const teamsBox = h("div", { class: "card" }); m.append(teamsBox);
+  drawTeams();
+  // every hackathon team: who leads it, its name now, and a way to change the name by hand
+  async function drawTeams() {
+    clear(teamsBox); teamsBox.append(h("h2", {}, "Hackathon teams"), h("p", { class: "muted" }, "Loading…"));
+    const [r, st] = await Promise.all([api("GET", "/teams"), api("GET", "/settings")]);
+    const q = h("input", { type: "search", placeholder: "Search team or lead…", style: "max-width:260px" });
+    let onlyNumbered = false;
+    const chip = h("button", { type: "button", class: "btn ghost sm", onclick: () => { onlyNumbered = !onlyNumbered; chip.textContent = onlyNumbered ? "Showing numbered names only" : "Show numbered names only"; drawRows(); } }, "Show numbered names only");
+    const lock = h("button", { type: "button", class: "btn ghost sm", onclick: guard(async () => { await api("PUT", "/settings", { team_edit: st.team_edit === "off" ? "on" : "off" }); drawTeams(); }) }, st.team_edit === "off" ? "Let team leads change names" : "Stop team leads changing names");
+    const body = h("div");
+    const numbered = (t) => /^Quantum Team \d+$/.test(t.name);
+    function drawRows() {
+      const needle = q.value.trim().toLowerCase();
+      const shown = r.teams.filter((t) => (!onlyNumbered || numbered(t)) && (!needle || [t.name, t.leadName, t.leadEmail].some((x) => String(x || "").toLowerCase().includes(needle))));
+      clear(body);
+      body.append(h("table", {}, h("tr", {}, ["Team name", "Lead", "Name given", ""].map((x) => h("th", {}, x))),
+        shown.map((t) => h("tr", {}, h("td", {}, h("b", {}, t.name), t.kind === "app" ? h("span", { class: "pill", style: "margin-left:6px" }, "TEST TEAM") : "", !t.onWebsite ? h("span", { class: "pill warn", style: "margin-left:6px", title: "Not on the website yet; it keeps retrying" }, "NOT ON WEBSITE YET") : ""),
+          h("td", {}, t.leadName, h("div", { class: "muted small" }, t.leadEmail)), h("td", { class: "muted small" }, t.mode === "tap" ? "Tapped by lead" : t.mode === "auto" ? "Automatic" : t.mode === "edit" ? "Edited by hand" : "Own name"),
+          h("td", {}, h("button", { class: "btn ghost sm", onclick: () => edit(t) }, "Edit"))))));
+      if (!shown.length) body.append(h("p", { class: "muted" }, "No teams match."));
+    }
+    q.oninput = drawRows;
+    function edit(t) {
+      const n = h("input", { value: t.name, maxlength: 40, required: true });
+      const bg = modal("Change team name", h("form", { onsubmit: guard(async (ev) => { ev.preventDefault(); await api("POST", "/teams/rename", { key: t.key, name: n.value }); bg.remove(); toast("Team name changed"); drawTeams(); }) },
+        h("p", { class: "muted" }, `Lead: ${t.leadName} (${t.leadEmail}). 3 to 40 characters, and no other team may have the same name. The website changes too.`), field("Team name", n), h("div", { class: "row" }, h("button", { class: "btn" }, "Save"))));
+      setTimeout(() => { n.focus(); n.select(); }, 50);
+    }
+    const nNum = r.teams.filter(numbered).length;
+    clear(teamsBox);
+    teamsBox.append(h("h2", {}, `Hackathon teams (${r.teams.length})`),
+      h("p", { class: "muted small" }, `Team leads can change their own team name once the team has one (${st.team_edit === "off" ? "currently switched off" : "currently allowed"}). ${nNum ? nNum + " teams have a numbered name like Quantum Team 1, because the founders list ran out." : ""}`),
+      !r.websiteReachable ? h("p", { class: "pill warn" }, "The website did not answer, so only test teams are listed. Reload in a moment.") : "",
+      h("div", { class: "row", style: "flex-wrap:wrap;gap:8px;margin:8px 0" }, q, nNum ? chip : "", lock), body);
+    drawRows();
+  }
   async function drawNames() {
     const t = await api("GET", "/team-names");
     const when = h("input", { type: "datetime-local" });

@@ -12,7 +12,7 @@ const initials = (n) => String(n || "?").split(/\s+/).slice(0, 2).map((x) => x[0
 export function openTeam(data, { onChanged } = {}) {
   openSheet((close) => {
     const body = h("div");
-    let state = data, busy = false, err = "";
+    let state = data, busy = false, err = "", renaming = false;
     const draw = () => {
       const t = state?.team, nm = state?.naming;
       if (!t) {
@@ -21,11 +21,12 @@ export function openTeam(data, { onChanged } = {}) {
           h("p", { class: "body muted" }, state ? "You haven’t formed or joined a team yet. Create your team, or accept an invitation, on the Qiskit Fall Fest website (Learning portal, Hackathon)." : "We couldn’t load your team right now. Check your connection and try again."));
         return;
       }
+      if (renaming) return drawRename(t);
       const rows = t.members.map((m) => h("div", { class: "teamrow" },
         h("div", { class: "teamav" + (m.role === "leader" ? " lead" : "") }, initials(m.name)),
         h("div", { class: "meta" }, h("div", { class: "name" }, m.name + (m.you ? " (you)" : "")), h("div", { class: "where" }, m.role === "leader" ? "Team lead" : "Teammate"))));
       body.replaceChildren(
-        h("h2", { class: "h1" + (t.nameHidden ? " blurname" : ""), style: { margin: 0 }, "aria-label": t.nameHidden ? "Team name not given yet" : null }, t.name),
+        h("div", { class: "teamhead" }, h("h2", { class: "h1" + (t.nameHidden ? " blurname" : ""), style: { margin: 0 }, "aria-label": t.nameHidden ? "Team name not given yet" : null }, t.name), nm?.canEdit ? button("Rename", { cls: "alt", onclick: () => { renaming = true; err = ""; draw(); } }) : null),
         h("p", { class: "body muted", style: { margin: "4px 0 0" } }, [t.problemStatementId, `${t.members.length} ${t.members.length === 1 ? "member" : "members"}`].filter(Boolean).join(" · ")),
         nm?.note ? h("p", { class: "body", style: { margin: "12px 0 0" } }, nm.note) : null,
         nm?.canAssign ? h("div", { style: { margin: "14px 0 4px" } }, button(busy ? "Getting your name…" : "Get my team name", { onclick: assign, disabled: busy })) : null,
@@ -34,6 +35,28 @@ export function openTeam(data, { onChanged } = {}) {
         !t.founder && !nm?.note ? h("p", { class: "small muted", style: { margin: "10px 0 0" } }, "Team names are inspired by India’s founders.") : null,
         h("div", { class: "teamlist" }, rows));
     };
+    function drawRename(t) {
+      const input = h("input", { type: "text", name: "teamName", maxlength: "40", value: t.name, "aria-label": "Team name", autocomplete: "off" });
+      const note = h("div", { class: "err", role: "alert" });
+      const actions = h("div");
+      const drawActions = () => actions.replaceChildren(h("div", { class: "twobtn" }, button("Cancel", { cls: "alt", onclick: () => { renaming = false; draw(); }, disabled: busy }), button(busy ? "Saving…" : "Save name", { onclick: save, disabled: busy })));
+      async function save() {
+        const name = input.value.replace(/\s+/g, " ").trim();
+        if (name.length < 3 || name.length > 40) { note.textContent = "A team name must be 3 to 40 characters."; return; }
+        if (name === t.name) { renaming = false; return draw(); }
+        busy = true; note.textContent = ""; drawActions();
+        try { await api.renameTeam(name); toast("Team name changed"); renaming = false; }
+        catch (e) { note.textContent = e instanceof ApiError ? e.message : "Couldn’t save. Check your connection and try again."; }
+        busy = false;
+        const fresh = await loadTeam(); if (fresh) { state = fresh; onChanged?.(fresh); }
+        if (renaming) drawActions(); else draw();
+      }
+      input.onkeydown = (e) => { if (e.key === "Enter") save(); };
+      drawActions();
+      body.replaceChildren(h("h2", { class: "h1" }, "Change your team name"), h("p", { class: "body muted" }, "Everyone in the team, and the organisers, will see the new name. No other team can have the same name."),
+        h("label", { class: "fl" }, "Team name", h("div", { class: "field" }, input)), note, actions);
+      setTimeout(() => { input.focus(); input.select(); }, 50);
+    }
     async function assign() {
       busy = true; err = ""; draw();
       try {

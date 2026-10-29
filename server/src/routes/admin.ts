@@ -10,7 +10,8 @@ import { mailRemaining } from "../lib/mail.ts";
 import { getPhoto, removePhoto } from "../lib/photos.ts";
 import { devicesForAll, devicesForUser, pushInBackground } from "../lib/push.ts";
 import { AnnouncementInput, EventInput, FaqInput, SettingsInput, TicketReply, TicketStatus, UserInput } from "../lib/schemas.ts";
-import { WINDOW_SEC, naming, startPractice, sweep } from "../lib/team-names.ts";
+import { WINDOW_SEC, editName, naming, startPractice, sweep } from "../lib/team-names.ts";
+import { websiteTeams } from "../lib/team.ts";
 import { audit, eventDay, eventOut } from "../lib/util.ts";
 import { detailsOut } from "../lib/details.ts";
 
@@ -361,6 +362,28 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       return { enabled: st.team_names !== "off", at: st.team_names_at || null, label: web.label, windowSec: WINDOW_SEC, webPhase: web.phase, appPhase: app.phase, practiceAt: st.team_names_practice_at ?? null, doneAt: st.team_names_done_at ?? null,
         claims: claims.map((c) => ({ team: c.team_key.startsWith("app:") ? "app team" : "website team", name: c.name, founder: c.founder, mode: c.mode, leadEmail: c.lead_email, onWebsite: c.pushed, at: new Date(c.claimed_at).toISOString() })) };
     });
+    // Every hackathon team with its lead and current name, and a way to change a name by hand. Website teams need the website to answer.
+    api.get("/admin/api/teams", async () => {
+      const claims = new Map((await db.query("SELECT team_key, name, mode, pushed FROM team_name_claims")).map((c) => [c.team_key as string, c]));
+      const rows: any[] = []; let websiteReachable = true;
+      try { for (const t of await websiteTeams(true)) { const c = claims.get(t.id); rows.push({ key: t.id, kind: "website", name: c?.name ?? t.name, wasName: c ? t.name : null, mode: c?.mode ?? null, onWebsite: c ? c.pushed : true, leadName: t.leadName, leadEmail: t.leadEmail }); } } catch { websiteReachable = false; }
+      for (const t of await db.query("SELECT t.id, t.name, u.name AS lead_name, u.email FROM app_teams t JOIN app_team_members m ON m.team_id=t.id AND m.leader JOIN users u ON u.id=m.user_id")) {
+        const c = claims.get("app:" + t.id); rows.push({ key: "app:" + t.id, kind: "app", name: c?.name ?? t.name, wasName: null, mode: c?.mode ?? null, onWebsite: true, leadName: t.lead_name, leadEmail: t.email });
+      }
+      rows.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      return { websiteReachable, teams: rows };
+    });
+    api.post("/admin/api/teams/rename", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req, reply) => {
+      const b = z.object({ key: z.string().min(1).max(80), name: z.string().max(100) }).parse(req.body);
+      let leadEmail: string | null = null;
+      if (b.key.startsWith("app:")) leadEmail = (await db.query("SELECT u.email FROM app_team_members m JOIN users u ON u.id=m.user_id WHERE m.team_id=$1 AND m.leader", [b.key.slice(4)]))[0]?.email ?? null;
+      else { try { leadEmail = (await websiteTeams()).find((t) => t.id === b.key)?.leadEmail ?? null; } catch { return reply.code(502).send({ error: "unavailable", message: "The website did not answer. Try again in a moment." }); } }
+      if (!leadEmail) return reply.code(404).send({ error: "no_such_team", message: "That team was not found." });
+      const r = await editName(db, b.key, leadEmail, b.name);
+      if (!r.ok) return reply.code(r.status).send({ error: r.error, message: r.message });
+      await audit(db, req, "team.rename", "team", undefined, { key: b.key, name: r.name }); return { ok: true, name: r.name };
+    });
+
     // Start the real round now: every team lead has 100 seconds to tap, then the rest are named automatically. Or schedule it for a time, or cancel a schedule.
     const setNamesAt = async (value: string | null) => {
       if (value) await db.query("INSERT INTO settings (key,value) VALUES ('team_names_at',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [value]); else await db.query("DELETE FROM settings WHERE key='team_names_at'");
