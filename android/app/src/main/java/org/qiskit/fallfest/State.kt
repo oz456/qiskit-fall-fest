@@ -259,10 +259,13 @@ class AppState(context: Context) {
                 TeamInfo(o.getString("name"), o.optString("problemStatementId").ifBlank { null }, o.optBoolean("isLeader"),
                     (0 until m.length()).map { i -> val x = m.getJSONObject(i); TeamMember(x.getString("name"), x.getString("role") == "leader", x.optString("status") == "invited", x.optBoolean("you")) },
                     o.optString("founder", "").ifBlank { null }) }
-            teamNaming = r.optJSONObject("naming")?.let { TeamNaming(it.optString("phase"), it.optString("note", "").ifBlank { null }, it.optBoolean("canAssign")) }
+            teamNaming = r.optJSONObject("naming")?.let { TeamNaming(it.optString("phase"), it.optString("note", "").ifBlank { null }, it.optBoolean("canAssign"), it.optBoolean("canPractice")) }
             teamLoaded = true
         } catch (_: Exception) { }
     }
+
+    /** Test teams only: the lead starts the 100-second naming round right now. */
+    suspend fun practiceTeamNames() { authed("POST", "/v1/me/team/practice"); loadTeam() }
 
     /** The team lead taps "Get my team name": the server picks a free founder-themed name. Throws ApiException with a readable message. */
     suspend fun assignTeamName(): String {

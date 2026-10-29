@@ -12,7 +12,7 @@ import { eventOut, newTicketCode } from "../lib/util.ts";
 import { cgpaMissing, Details, OdInput, detailsOut, Extra, GENDERS, needsExtra, PROGRAMS, SCHOOLS } from "../lib/details.ts";
 import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
 import { appTeamOf, inAppTeam, teamOf, type Team } from "../lib/team.ts";
-import { claimName, claimOf, maybeSweep, naming, pushClaim, scopeOf, type Claim, type Naming } from "../lib/team-names.ts";
+import { claimName, claimOf, maybeSweep, naming, pushClaim, scopeOf, startPractice, type Claim, type Naming } from "../lib/team-names.ts";
 import { randomBytes } from "node:crypto";
 
 const ACCESS_TTL = 15 * 60;
@@ -264,7 +264,10 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       const team = await teamOf(u.email);
       return team?.id ? { team, key: team.id } : null;
     };
-    const namingFor = (n: Naming, isLeader: boolean, named: boolean) => {
+    const namingFor = (n: Naming, isLeader: boolean, named: boolean, practice = false) => {
+      const v = namingView(n, isLeader, named); return practice && isLeader && n.phase !== "off" ? { ...v, canPractice: true } : v;
+    };
+    const namingView = (n: Naming, isLeader: boolean, named: boolean) => {
       if (n.phase === "off") return { phase: "off", note: null, canAssign: false };
       if (named) return { phase: n.phase, note: null, canAssign: false };
       if (n.phase === "before") return { phase: "before", note: `Team names are given out at ${n.label}. Every team gets a name inspired by an Indian founder.`, canAssign: false };
@@ -277,7 +280,15 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       void maybeSweep(db);   // the 100 seconds are over: make sure nobody is left without a name
       const n = await naming(db, scopeOf(found.key)), claim = await claimOf(db, found.key);
       const t = found.team;
-      return { team: { ...t, name: claim?.name ?? t.name, founder: claim?.founder ?? null }, naming: namingFor(n, t.isLeader, Boolean(claim)) };
+      return { team: { ...t, name: claim?.name ?? t.name, founder: claim?.founder ?? null }, naming: namingFor(n, t.isLeader, Boolean(claim), found.key.startsWith("app:")) };
+    });
+    // Test teams only (made in the app by an organiser): the lead can run the naming round again whenever they like, to try it out.
+    api.post("/v1/me/team/practice", { config: { rateLimit: { max: 12, timeWindow: "10 minutes" } } }, async (req, reply) => {
+      const own = await appTeamOf(db, req.uid!);
+      if (!own) return reply.code(403).send({ error: "not_a_test_team", message: "Practice rounds are only for test teams." });
+      if (!own.isLeader) return reply.code(403).send({ error: "not_leader", message: "Only the team lead can start a practice round." });
+      if ((await naming(db, "app")).phase === "off") return reply.code(403).send({ error: "naming_off", message: "Team names are switched off." });
+      await startPractice(db, 0); return { ok: true };
     });
     api.post("/v1/me/team/name", { config: { rateLimit: { max: 12, timeWindow: "10 minutes" } } }, async (req, reply) => {
       let found; try { found = await myTeam(req.uid!); } catch { return reply.code(502).send({ error: "unavailable", message: "Your team couldn't be loaded. Please try again." }); }

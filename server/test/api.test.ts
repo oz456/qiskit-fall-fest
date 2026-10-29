@@ -823,7 +823,12 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     const get = async (x: { authorization: string }) => (await app.inject({ method: "GET", url: "/v1/me/team", headers: x })).json();
     try {
       const t = await get(aAuth); assert.equal(t.team.name, "Test Team"); assert.equal(t.team.members[0].role, "leader"); assert.equal(t.team.members.length, 2);
-      // a practice round: starts in 25 seconds (nothing yet), then the lead taps
+      // the lead of a test team can start a practice round themselves, any time; a teammate cannot
+      assert.equal((await get(aAuth)).naming.canPractice, true); assert.equal((await get(bAuth)).naming.canPractice, undefined);
+      const post = (x: { authorization: string }) => app.inject({ method: "POST", url: "/v1/me/team/practice", headers: x });
+      assert.equal((await post(bAuth)).statusCode, 403); assert.equal((await post(aAuth)).statusCode, 200);
+      const live = await get(aAuth); assert.equal(live.naming.phase, "open"); assert.equal(live.naming.canAssign, true, "the round is open right away");
+      // a practice round from the admin: starts in 25 seconds (nothing yet), then the lead taps
       const prac = await admin("POST", "/admin/api/team-names/practice"); assert.equal(prac.statusCode, 200);
       assert.equal((await get(aAuth)).naming.phase, "before");
       await db.query("UPDATE settings SET value=$1 WHERE key='team_names_practice_at'", [new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata", dateStyle: "short", timeStyle: "medium" }).format(new Date(Date.now() - 3000)).replace(" ", "T")]);

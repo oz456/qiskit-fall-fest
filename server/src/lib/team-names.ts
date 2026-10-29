@@ -66,6 +66,14 @@ export async function pushClaim(db: Db, c: Claim): Promise<boolean> {
   } catch { return false; }
 }
 
+/** Start a practice round for the teams made in the app: old practice names are cleared, the window opens after `delaySec`, and lasts 100 seconds. Real teams and the real schedule are untouched. */
+export async function startPractice(db: Db, delaySec: number): Promise<string> {
+  const stamp = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata", dateStyle: "short", timeStyle: "medium" }).format(new Date(Date.now() + delaySec * 1000)).replace(" ", "T");
+  await db.query("DELETE FROM team_name_claims WHERE team_key LIKE 'app:%'");
+  await db.query("INSERT INTO settings (key,value) VALUES ('team_names_practice_at',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [stamp]);
+  return stamp;
+}
+
 let running = false;
 export const scopeOf = (teamKey: string): Scope => (teamKey.startsWith("app:") ? "app" : "web");
 

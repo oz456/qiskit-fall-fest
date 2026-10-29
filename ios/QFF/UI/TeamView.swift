@@ -36,6 +36,7 @@ struct TeamView: View {
             .font(T.body).foregroundStyle(P.muted)
         if let note = app.teamNaming?.note { Text(note).font(T.body).foregroundStyle(P.ink) }
         if app.teamNaming?.canAssign == true { PrimaryButton(title: busy ? "GETTING YOUR NAME…" : "GET MY TEAM NAME", loading: busy) { assign() } }
+        if app.teamNaming?.canPractice == true { Button("Practice the naming round (test teams only)") { practice() }.font(T.bodyM).foregroundStyle(P.primary).disabled(busy) }
         if let error { Text(error).font(T.small).foregroundStyle(P.danger) }
         if team.founder == nil && app.teamNaming?.note == nil { Text("Team names are inspired by India’s founders.").font(T.small).foregroundStyle(P.muted) }
         ForEach(team.members) { m in
@@ -50,6 +51,15 @@ struct TeamView: View {
                 Spacer(minLength: 0)
             }
             .padding(.vertical, 4)
+        }
+    }
+
+    private func practice() {
+        busy = true; error = nil
+        Task {
+            do { try await app.practiceTeamNames() }
+            catch { self.error = error.localizedDescription }
+            busy = false
         }
     }
 

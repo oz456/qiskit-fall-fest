@@ -29,6 +29,7 @@ export function openTeam(data, { onChanged } = {}) {
         h("p", { class: "body muted", style: { margin: "4px 0 0" } }, [t.founder ? `Inspired by ${t.founder}` : null, t.problemStatementId, `${t.members.length} ${t.members.length === 1 ? "member" : "members"}`].filter(Boolean).join(" · ")),
         nm?.note ? h("p", { class: "body", style: { margin: "12px 0 0" } }, nm.note) : null,
         nm?.canAssign ? h("div", { style: { margin: "14px 0 4px" } }, button(busy ? "Getting your name…" : "Get my team name", { onclick: assign, disabled: busy })) : null,
+        nm?.canPractice ? h("div", { style: { margin: "8px 0 4px" } }, button("Practice the naming round", { cls: "alt", onclick: practice, disabled: busy }), h("p", { class: "small muted", style: { margin: "6px 0 0" } }, "Test teams only: starts the 100-second round right now.")) : null,
         err ? h("div", { class: "err", role: "alert" }, err) : null,
         !t.founder && !nm?.note ? h("p", { class: "small muted", style: { margin: "10px 0 0" } }, "Team names are inspired by India’s founders.") : null,
         h("div", { class: "teamlist" }, rows));
@@ -39,6 +40,14 @@ export function openTeam(data, { onChanged } = {}) {
         const r = await api.assignTeamName();
         toast(`Your team is ${r.name}`);
       } catch (e) { err = e instanceof ApiError ? e.message : "Couldn’t get the name. Check your connection and try again."; }
+      busy = false;
+      const fresh = await loadTeam(); if (fresh) { state = fresh; onChanged?.(fresh); }
+      draw();
+    }
+    async function practice() {
+      busy = true; err = ""; draw();
+      try { await api.practiceTeamNames(); toast("Practice round started: you have 100 seconds"); }
+      catch (e) { err = e instanceof ApiError ? e.message : "Couldn’t start the practice round. Check your connection."; }
       busy = false;
       const fresh = await loadTeam(); if (fresh) { state = fresh; onChanged?.(fresh); }
       draw();

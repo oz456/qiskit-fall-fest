@@ -10,7 +10,7 @@ import { mailRemaining } from "../lib/mail.ts";
 import { getPhoto, removePhoto } from "../lib/photos.ts";
 import { devicesForAll, devicesForUser, pushInBackground } from "../lib/push.ts";
 import { AnnouncementInput, EventInput, FaqInput, SettingsInput, TicketReply, TicketStatus, UserInput } from "../lib/schemas.ts";
-import { DEFAULT_NAMES_AT, WINDOW_SEC, naming, sweep } from "../lib/team-names.ts";
+import { DEFAULT_NAMES_AT, WINDOW_SEC, naming, startPractice, sweep } from "../lib/team-names.ts";
 import { audit, eventDay, eventOut } from "../lib/util.ts";
 import { detailsOut } from "../lib/details.ts";
 
@@ -363,9 +363,7 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     // Practice round: only for teams made in the app (e.g. the test team). Starts in 25 seconds, lasts 100 seconds, then names are given out. The real schedule is untouched.
     api.post("/admin/api/team-names/practice", { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } }, async (req) => {
-      const stamp = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata", dateStyle: "short", timeStyle: "medium" }).format(new Date(Date.now() + 25_000)).replace(" ", "T");
-      await db.query("DELETE FROM team_name_claims WHERE team_key LIKE 'app:%'");
-      await db.query("INSERT INTO settings (key,value) VALUES ('team_names_practice_at',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [stamp]);
+      const stamp = await startPractice(db, 25);
       await audit(db, req, "team_names.practice"); return { ok: true, startsAt: stamp };
     });
     // Emergency button: name every team that has no name right now, whatever the clock says.

@@ -44,6 +44,9 @@ fun TeamSheet(app: AppState, onDismiss: () -> Unit) {
                 Text(listOfNotNull(team.founder?.let { "Inspired by $it" }, team.problemStatement, "${team.members.size} ${if (team.members.size == 1) "member" else "members"}").joinToString(" · "), style = T.body, color = P.muted)
                 naming?.note?.let { Text(it, style = T.body, color = P.ink) }
                 if (naming?.canAssign == true) PrimaryButton(if (busy) "Getting your name…" else "Get my team name", loading = busy) { assign() }
+                if (naming?.canPractice == true) {
+                    TextButton(onClick = { busy = true; error = null; scope.launch { try { app.practiceTeamNames() } catch (x: ApiException) { error = x.message } catch (_: Exception) { error = "Can't reach the server. Check your connection." } finally { busy = false } } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Practice the naming round (test teams only)", color = P.primary) }
+                }
                 if (error != null) Text(error.orEmpty(), style = T.small, color = P.danger)
                 if (team.founder == null && naming?.note == null) Text("Team names are inspired by India’s founders.", style = T.small, color = P.muted)
                 team.members.forEach { m ->
