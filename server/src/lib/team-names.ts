@@ -5,12 +5,11 @@ import type { Db } from "../db.ts";
 import { FOUNDERS } from "./founders.ts";
 import { renameTeam, websiteTeams } from "./team.ts";
 
-export const DEFAULT_NAMES_AT = "2026-10-29T11:30";   // IST, unless an organiser sets another time
 export const WINDOW_SEC = 100;
 
 export type Phase = "off" | "before" | "open" | "closed";
 export type Scope = "web" | "app";   // website teams use the real schedule; teams made in the app can also have a practice schedule
-export type Naming = { phase: Phase; startsAt: Date; endsAt: Date; label: string };
+export type Naming = { phase: Phase; startsAt: Date; endsAt: Date; label: string | null; scheduled: boolean };   // label = "11:30 AM" or "Fri 30 Oct, 11:30 AM"; null while nothing is scheduled
 
 const IST = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", ...o });
 
@@ -23,13 +22,15 @@ const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
 
 export async function naming(db: Db, scope: Scope = "web", now = new Date()): Promise<Naming> {
   const st = await settings(db);
-  const real = STAMP.test(st.team_names_at ?? "") ? st.team_names_at! : DEFAULT_NAMES_AT;
+  // nothing happens until an organiser presses "Start now" or schedules a time (Admin, Events); a practice round overrides it for teams made in the app
+  const real = STAMP.test(st.team_names_at ?? "") ? st.team_names_at! : null;
   const raw = scope === "app" && STAMP.test(st.team_names_practice_at ?? "") ? st.team_names_practice_at! : real;
+  if (!raw) return { phase: st.team_names === "off" ? "off" : "before", startsAt: new Date(8.64e15), endsAt: new Date(8.64e15), label: null, scheduled: false };
   const startsAt = new Date((raw.length === 16 ? raw + ":00" : raw) + "+05:30"), endsAt = new Date(startsAt.getTime() + WINDOW_SEC * 1000);
   const phase: Phase = st.team_names === "off" ? "off" : now < startsAt ? "before" : now < endsAt ? "open" : "closed";
   const time = IST({ hour: "numeric", minute: "2-digit", hour12: true }).format(startsAt).toUpperCase();
   const sameDay = IST({ dateStyle: "short" }).format(now) === IST({ dateStyle: "short" }).format(startsAt);
-  return { phase, startsAt, endsAt, label: sameDay ? time : `${IST({ weekday: "short", day: "numeric", month: "short" }).format(startsAt)}, ${time}` };
+  return { phase, startsAt, endsAt, scheduled: true, label: sameDay ? time : `${IST({ weekday: "short", day: "numeric", month: "short" }).format(startsAt)}, ${time}` };
 }
 
 export type Claim = { team_key: string; name: string; founder: string; mode: string; lead_email: string | null; pushed: boolean };

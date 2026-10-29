@@ -90,6 +90,24 @@ const confirmDo = (msg, fn) => { if (confirm(msg)) guard(fn)(); };
 async function events(m) {
   const list = await api("GET", "/events");
   m.append(head("Events", h("button", { class: "btn", onclick: () => editEvent() }, "New event")));
+  const namesBox = h("div", { class: "card" }); m.append(namesBox);
+  drawNames();
+  async function drawNames() {
+    const t = await api("GET", "/team-names");
+    const when = h("input", { type: "datetime-local" });
+    const state = !t.enabled ? "Switched off." : t.webPhase === "open" ? "The round is open right now: team leads have 100 seconds to tap Get my team name." : t.webPhase === "closed" ? (t.doneAt ? `Done: ${t.claims.filter((c) => c.team === "website team").length} website teams have their founder names.` : "The 100 seconds are over: the remaining teams are being named automatically.") : t.at ? `Scheduled for ${fmt(t.at + ":00+05:30", { dateStyle: "medium", timeStyle: "short" })} (Indian time).` : "Nothing scheduled yet. Teams show a blurred name until you start it.";
+    clear(namesBox);
+    namesBox.append(h("h2", {}, "Hackathon team names"), h("p", { class: "muted small" }, "Every team gets a name inspired by an Indian founder. When it starts, every team lead has 100 seconds to tap Get my team name (the app picks a free one at random); then every team still without a name is named automatically, leads who never opened the app too. The names are written to the website as well."),
+      h("p", { style: "margin:8px 0" }, h("b", {}, state)),
+      h("div", { class: "row", style: "flex-wrap:wrap;gap:8px;align-items:center" },
+        h("button", { class: "btn", disabled: !t.enabled, onclick: () => confirmDo("Start team naming right now? Every team lead gets 100 seconds, then the rest are named automatically, and the names on the website change.", async () => { await api("POST", "/team-names/start"); toast("Started: leads have 100 seconds"); drawNames(); }) }, "Start now"),
+        when, h("button", { class: "btn ghost", disabled: !t.enabled, onclick: guard(async () => { if (!when.value) return toast("Pick a date and time first"); await api("POST", "/team-names/schedule", { at: when.value }); toast("Scheduled"); drawNames(); }) }, "Schedule"),
+        t.at && t.webPhase === "before" ? h("button", { class: "btn ghost", onclick: guard(async () => { await api("POST", "/team-names/cancel"); toast("Schedule removed"); drawNames(); }) }, "Cancel schedule") : null),
+      h("div", { class: "row", style: "flex-wrap:wrap;gap:8px;margin-top:10px" },
+        h("button", { type: "button", class: "btn ghost sm", onclick: guard(async () => { const r = await api("POST", "/team-names/practice"); toast("Practice round starts at " + r.startsAt.slice(11, 19) + " for teams made in the app only"); }) }, "Practice (app-made test teams only)"),
+        h("button", { type: "button", class: "btn ghost sm", onclick: () => confirmDo("Give a name to EVERY team that has none right now, whatever the clock says? This also changes the team names on the website.", async () => { const r = await api("POST", "/team-names/run"); toast(r.assigned + " teams named" + (r.missing > 0 ? ", " + r.missing + " not done yet, try again" : "")); drawNames(); }) }, "Name all teams now"),
+        h("button", { type: "button", class: "btn ghost sm", onclick: guard(async () => { await api("PUT", "/settings", { team_names: t.enabled ? "off" : "on" }); drawNames(); }) }, t.enabled ? "Switch off" : "Switch on")));
+  }
   m.append(h("div", { class: "card" }, h("table", {}, h("tr", {}, ["When", "Event", "Track", "Where", "Saved by", ""].map((x) => h("th", {}, x))),
     list.map((e) => h("tr", { class: "click", onclick: () => editEvent(e) },
       h("td", {}, fmtRange(e.startsAt, e.endsAt)), h("td", { class: "lead" }, h("b", {}, e.title), " ", !e.published && h("span", { class: "pill warn" }, "HIDDEN"), " ", e.collectOd && h("span", { class: "pill", title: "Students are asked for OD from, until and hours in their app after they are checked in" }, "ASKS OD"), " ", fmt(e.startsAt, { dateStyle: "short" }) !== fmt(e.endsAt, { dateStyle: "short" }) && h("span", { class: "pill" }, "MULTI-DAY")),
@@ -336,17 +354,11 @@ async function attendance(m) {
 async function content(m) {
   const [faqs, st] = await Promise.all([api("GET", "/faqs"), api("GET", "/settings")]);
   const f = { fest_name: h("input", { value: st.fest_name || "" }), venue: h("input", { value: st.venue || "" }), support_note: h("input", { value: st.support_note || "" }),
-    fest_start: h("input", { type: "date", value: st.fest_start || "" }), fest_end: h("input", { type: "date", value: st.fest_end || "" }), team_names: h("input", { type: "checkbox", checked: st.team_names !== "off" }), scan_od_only: h("input", { type: "checkbox", checked: st.scan_od_only !== "off" }), team_names_at: h("input", { type: "datetime-local", value: st.team_names_at || "2026-10-29T11:30" }) };
+    fest_start: h("input", { type: "date", value: st.fest_start || "" }), fest_end: h("input", { type: "date", value: st.fest_end || "" }), scan_od_only: h("input", { type: "checkbox", checked: st.scan_od_only !== "off" }) };
   m.append(head("Content"), h("div", { class: "card" }, h("h2", {}, "Festival details"), field("Festival name", f.fest_name), field("Venue", f.venue), h("div", { class: "grid g2" }, field("Festival first day", f.fest_start), field("Festival last day", f.fest_end)),
     h("p", { class: "muted small" }, "These days always appear in the check-in scanner and drive the countdown in the app, even before sessions are added."), field("Support note (shown in the app)", f.support_note),
     h("label", { class: "row", style: "gap:10px;margin:10px 0" }, f.scan_od_only, h("span", {}, h("b", {}, "Door scanner: only events that ask for OD details"), h("span", { class: "muted small", style: "display:block" }, "Temporary. While ticked, volunteers can only scan the events with “OD needed” switched on (the Hackathon days); campus entry and every other event are hidden and refused. Untick to bring them back."))),
-    h("h2", { style: "margin-top:22px" }, "Hackathon team names"),
-    h("label", { class: "row", style: "gap:10px;margin:10px 0" }, f.team_names, h("span", {}, h("b", {}, "Hand out founder team names"), h("span", { class: "muted small", style: "display:block" }, "At the time below every team lead can tap Get my team name for 100 seconds; then every team still without a name gets one automatically (leads who never opened the app too). Names come from the list of 50 Indian founders and are written to the website as well. Untick to switch the whole thing off."))),
-    field("Names are given out at (Indian time)", f.team_names_at), h("p", { class: "muted small" }, "Set to 11:30 AM on 29 Oct 2026. Save after changing it."),
-    h("div", { class: "row", style: "flex-wrap:wrap;gap:8px" },
-      h("button", { type: "button", class: "btn ghost sm", onclick: guard(async () => { const r = await api("POST", "/team-names/practice"); toast("Practice round starts at " + r.startsAt.slice(11, 19) + " for teams made in the app only"); }) }, "Practice now (app-made test teams only)"),
-      h("button", { type: "button", class: "btn ghost sm", onclick: () => confirmDo("Give a name to EVERY team that has none right now, whatever the clock says? This also changes the team names on the website.", async () => { const r = await api("POST", "/team-names/run"); toast(r.assigned + " teams named" + (r.missing > 0 ? ", " + r.missing + " not done yet, try again" : "")); }) }, "Name all teams now")),
-    h("div", { class: "row" }, h("button", { class: "btn", onclick: guard(async () => { await api("PUT", "/settings", { fest_name: f.fest_name.value, venue: f.venue.value, support_note: f.support_note.value, team_names: f.team_names.checked ? "on" : "off", scan_od_only: f.scan_od_only.checked ? "on" : "off", team_names_at: f.team_names_at.value || "", ...(f.fest_start.value ? { fest_start: f.fest_start.value } : {}), ...(f.fest_end.value ? { fest_end: f.fest_end.value } : {}) }); toast("Saved"); }) }, "Save"))),
+    h("div", { class: "row" }, h("button", { class: "btn", onclick: guard(async () => { await api("PUT", "/settings", { fest_name: f.fest_name.value, venue: f.venue.value, support_note: f.support_note.value, scan_od_only: f.scan_od_only.checked ? "on" : "off", ...(f.fest_start.value ? { fest_start: f.fest_start.value } : {}), ...(f.fest_end.value ? { fest_end: f.fest_end.value } : {}) }); toast("Saved"); }) }, "Save"))),
     h("div", { class: "head" }, h("h2", {}, "FAQs"), h("button", { class: "btn sm right", onclick: () => editFaq() }, "Add FAQ")),
     h("div", { class: "card" }, faqs.length ? faqs.map((q) => h("div", { class: "row item" }, h("div", { class: "grow" }, h("b", {}, q.question), h("div", { class: "muted" }, q.answer)), h("button", { class: "btn ghost sm", onclick: () => editFaq(q) }, "Edit"))) : h("p", { class: "muted" }, "No FAQs yet.")));
   function editFaq(q) {

@@ -19,7 +19,7 @@ export const UserInput = z.object({ email: Email, name: text(100).min(1), colleg
 export const AnnouncementInput = z.object({ title: text(120).min(2), body: text(2000).min(2) });
 export const FaqInput = z.object({ question: text(200).min(2), answer: text(2000).min(2), position: z.number().int().min(0).max(1000).default(0) });
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "use YYYY-MM-DD");
-export const SettingsInput = z.object({ fest_name: text(100).min(1), venue: text(100), support_note: text(300), fest_start: Day, fest_end: Day, team_names: z.enum(["on", "off"]), scan_od_only: z.enum(["on", "off"]), team_names_at: z.string().regex(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})?$/, "use YYYY-MM-DDTHH:mm") }).partial();
+export const SettingsInput = z.object({ fest_name: text(100).min(1), venue: text(100), support_note: text(300), fest_start: Day, fest_end: Day, team_names: z.enum(["on", "off"]), scan_od_only: z.enum(["on", "off"])}).partial();
 export const TicketCreate = z.object({
   kind: z.enum(["General", "Mentor help", "Grievance"]),
   topic: text(60).min(1),

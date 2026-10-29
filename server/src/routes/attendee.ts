@@ -270,7 +270,7 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     const namingView = (n: Naming, isLeader: boolean, named: boolean) => {
       if (n.phase === "off") return { phase: "off", note: null, canAssign: false };
       if (named) return { phase: n.phase, note: null, canAssign: false };
-      if (n.phase === "before") return { phase: "before", note: `Team names are given out at ${n.label}. Every team gets a name inspired by an Indian founder.`, canAssign: false };
+      if (n.phase === "before") return { phase: "before", note: `${n.label ? `Team names are given out at ${n.label}.` : "Team names will be given out soon."} Every team gets a name inspired by an Indian founder.`, canAssign: false };
       if (n.phase === "open") return { phase: "open", note: isLeader ? "Tap Get my team name now. If you don’t, a name is given to your team automatically in a moment." : "Your team lead is getting the team name now.", canAssign: isLeader };
       return { phase: "closed", note: isLeader ? "Tap Get my team name, or wait a moment: your team is being named." : "Your team is being named. Check back in a moment.", canAssign: isLeader };
     };
@@ -300,7 +300,7 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       let claim: Claim | null | undefined = await claimOf(db, found.key);
       if (!claim) {
         if (view.phase === "off") return reply.code(403).send({ error: "naming_off", message: "Team names are not being given out." });
-        if (view.phase === "before") return reply.code(403).send({ error: "not_yet", message: `Team names are given out at ${n.label}.` });
+        if (view.phase === "before") return reply.code(403).send({ error: "not_yet", message: n.label ? `Team names are given out at ${n.label}.` : "Team names will be given out soon." });
         const [u] = await db.query("SELECT email FROM users WHERE id=$1", [req.uid]);
         claim = await claimName(db, found.key, u?.email ?? null, "tap");
         if (!claim) return reply.code(503).send({ error: "unavailable", message: "Please try again in a moment." });

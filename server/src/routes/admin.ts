@@ -10,7 +10,7 @@ import { mailRemaining } from "../lib/mail.ts";
 import { getPhoto, removePhoto } from "../lib/photos.ts";
 import { devicesForAll, devicesForUser, pushInBackground } from "../lib/push.ts";
 import { AnnouncementInput, EventInput, FaqInput, SettingsInput, TicketReply, TicketStatus, UserInput } from "../lib/schemas.ts";
-import { DEFAULT_NAMES_AT, WINDOW_SEC, naming, startPractice, sweep } from "../lib/team-names.ts";
+import { WINDOW_SEC, naming, startPractice, sweep } from "../lib/team-names.ts";
 import { audit, eventDay, eventOut } from "../lib/util.ts";
 import { detailsOut } from "../lib/details.ts";
 
@@ -358,9 +358,24 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const st = Object.fromEntries((await db.query("SELECT key, value FROM settings WHERE key IN ('team_names','team_names_at','team_names_practice_at','team_names_done_at')")).map((r) => [r.key as string, r.value as string]));
       const claims = await db.query("SELECT team_key, name, founder, mode, lead_email, pushed, claimed_at FROM team_name_claims ORDER BY claimed_at");
       const [web, app] = [await naming(db, "web"), await naming(db, "app")];
-      return { enabled: st.team_names !== "off", at: st.team_names_at || DEFAULT_NAMES_AT, windowSec: WINDOW_SEC, webPhase: web.phase, appPhase: app.phase, practiceAt: st.team_names_practice_at ?? null, doneAt: st.team_names_done_at ?? null,
+      return { enabled: st.team_names !== "off", at: st.team_names_at || null, label: web.label, windowSec: WINDOW_SEC, webPhase: web.phase, appPhase: app.phase, practiceAt: st.team_names_practice_at ?? null, doneAt: st.team_names_done_at ?? null,
         claims: claims.map((c) => ({ team: c.team_key.startsWith("app:") ? "app team" : "website team", name: c.name, founder: c.founder, mode: c.mode, leadEmail: c.lead_email, onWebsite: c.pushed, at: new Date(c.claimed_at).toISOString() })) };
     });
+    // Start the real round now: every team lead has 100 seconds to tap, then the rest are named automatically. Or schedule it for a time, or cancel a schedule.
+    const setNamesAt = async (value: string | null) => {
+      if (value) await db.query("INSERT INTO settings (key,value) VALUES ('team_names_at',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [value]); else await db.query("DELETE FROM settings WHERE key='team_names_at'");
+      await db.query("DELETE FROM settings WHERE key='team_names_done_at'");
+    };
+    api.post("/admin/api/team-names/start", { config: { rateLimit: { max: 5, timeWindow: "10 minutes" } } }, async (req) => {
+      const stamp = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata", dateStyle: "short", timeStyle: "medium" }).format(new Date()).replace(" ", "T");
+      await setNamesAt(stamp); await audit(db, req, "team_names.start"); return { ok: true, startsAt: stamp };
+    });
+    api.post("/admin/api/team-names/schedule", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async (req, reply) => {
+      const { at } = z.object({ at: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/) }).parse(req.body);
+      if (new Date(at + ":00+05:30").getTime() < Date.now() - 60_000) return reply.code(400).send({ error: "in_the_past", message: "Pick a time that has not passed yet, or press Start now." });
+      await setNamesAt(at); await audit(db, req, "team_names.schedule", undefined, undefined, { at }); return { ok: true, at };
+    });
+    api.post("/admin/api/team-names/cancel", async (req) => { await setNamesAt(null); await audit(db, req, "team_names.cancel"); return { ok: true }; });
     // Practice round: only for teams made in the app (e.g. the test team). Starts in 25 seconds, lasts 100 seconds, then names are given out. The real schedule is untouched.
     api.post("/admin/api/team-names/practice", { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } }, async (req) => {
       const stamp = await startPractice(db, 25);

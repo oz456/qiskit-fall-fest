@@ -781,6 +781,13 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     const get = async (a: { authorization: string }) => (await app.inject({ method: "GET", url: "/v1/me/team", headers: a })).json();
     const tap = (a: { authorization: string }) => app.inject({ method: "POST", url: "/v1/me/team/name", headers: a });
     try {
+      // nothing is scheduled yet: a blurred name and "soon", and tapping is refused; the admin can schedule, cancel or start it
+      await db.query("DELETE FROM settings WHERE key IN ('team_names_at','team_names_done_at')");
+      let l0 = await get(leadAuth); assert.equal(l0.naming.phase, "before"); assert.match(l0.naming.note, /will be given out soon/); assert.equal((await tap(leadAuth)).statusCode, 403);
+      assert.equal((await admin("POST", "/admin/api/team-names/schedule", { at: "2020-01-01T10:00" })).statusCode, 400, "a time that has passed");
+      assert.equal((await admin("POST", "/admin/api/team-names/schedule", { at: "2099-01-01T10:00" })).statusCode, 200); assert.match((await get(leadAuth)).naming.note, /given out at /);
+      assert.equal((await admin("POST", "/admin/api/team-names/cancel")).statusCode, 200); assert.match((await get(leadAuth)).naming.note, /soon/);
+      assert.equal((await admin("POST", "/admin/api/team-names/start")).statusCode, 200); l0 = await get(leadAuth); assert.equal(l0.naming.phase, "open"); assert.equal(l0.naming.canAssign, true, "Start now opens the round at once");
       // before the time: a note, no button, and tapping is refused
       await at(3_600_000);
       let l = await get(leadAuth); assert.equal(l.team.nameHidden, true, "no name yet: a blurred placeholder, not the old name"); assert.notEqual(l.team.name, "Our Own Name"); assert.equal(l.naming.phase, "before"); assert.match(l.naming.note, /given out at .*founder/); assert.equal(l.naming.canAssign, false);
