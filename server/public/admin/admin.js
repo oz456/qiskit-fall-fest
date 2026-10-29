@@ -47,7 +47,7 @@ const localToIso = (local) => { // "2026-10-16T11:00" in TZ -> ISO instant
 const isoToLocal = (iso) => { const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(iso)).map((x) => [x.type, x.value])); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`; };
 
 // ---- shell ----
-const PAGES = [["events", "Events"], ["people", "Attendees"], ["announce", "Announcements"], ["support", "Support"], ["attendance", "Attendance"], ["content", "Content"]];
+const PAGES = [["events", "Events"], ["teams", "Teams"], ["people", "Attendees"], ["announce", "Announcements"], ["support", "Support"], ["attendance", "Attendance"], ["content", "Content"]];
 function showLogin() {
   clear($app);
   const err = h("div", { class: "err" }); const u = h("input", { autocomplete: "username", required: true }); const p = h("input", { type: "password", autocomplete: "current-password", required: true });
@@ -61,7 +61,7 @@ let main;
 function route() {
   const page = (location.hash.slice(1) || "events"); clear(main);
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("on", a.dataset.p === page));
-  const fn = { events, people, announce, support, attendance, content, activity }[page] || events;
+  const fn = { events, teams, people, announce, support, attendance, content, activity }[page] || events;
   guard(fn)(main);
 }
 async function boot() {
@@ -90,6 +90,14 @@ const confirmDo = (msg, fn) => { if (confirm(msg)) guard(fn)(); };
 async function events(m) {
   const list = await api("GET", "/events");
   m.append(head("Events", h("button", { class: "btn", onclick: () => editEvent() }, "New event")));
+  m.append(h("div", { class: "card" }, h("table", {}, h("tr", {}, ["When", "Event", "Track", "Where", "Saved by", ""].map((x) => h("th", {}, x))),
+    list.map((e) => h("tr", { class: "click", onclick: () => editEvent(e) },
+      h("td", {}, fmtRange(e.startsAt, e.endsAt)), h("td", { class: "lead" }, h("b", {}, e.title), " ", !e.published && h("span", { class: "pill warn" }, "HIDDEN"), " ", e.collectOd && h("span", { class: "pill", title: "Students are asked for OD from, until and hours in their app after they are checked in" }, "ASKS OD"), " ", fmt(e.startsAt, { dateStyle: "short" }) !== fmt(e.endsAt, { dateStyle: "short" }) && h("span", { class: "pill" }, "MULTI-DAY")),
+      h("td", {}, e.track), h("td", {}, e.location), h("td", {}, String(e.saved)), h("td", { class: "chev" }, "›"))))));
+  if (!list.length) m.append(h("p", { class: "muted" }, "No events yet."));
+}
+async function teams(m) {
+  m.append(head("Teams"));
   const namesBox = h("div", { class: "card" }); m.append(namesBox);
   drawNames();
   const teamsBox = h("div", { class: "card" }); m.append(teamsBox);
@@ -146,11 +154,6 @@ async function events(m) {
         h("button", { type: "button", class: "btn ghost sm", onclick: () => confirmDo("Give a name to EVERY team that has none right now, whatever the clock says? This also changes the team names on the website.", async () => { const r = await api("POST", "/team-names/run"); toast(r.assigned + " teams named" + (r.missing > 0 ? ", " + r.missing + " not done yet, try again" : "")); drawNames(); }) }, "Name all teams now"),
         h("button", { type: "button", class: "btn ghost sm", onclick: guard(async () => { await api("PUT", "/settings", { team_names: t.enabled ? "off" : "on" }); drawNames(); }) }, t.enabled ? "Switch off" : "Switch on")));
   }
-  m.append(h("div", { class: "card" }, h("table", {}, h("tr", {}, ["When", "Event", "Track", "Where", "Saved by", ""].map((x) => h("th", {}, x))),
-    list.map((e) => h("tr", { class: "click", onclick: () => editEvent(e) },
-      h("td", {}, fmtRange(e.startsAt, e.endsAt)), h("td", { class: "lead" }, h("b", {}, e.title), " ", !e.published && h("span", { class: "pill warn" }, "HIDDEN"), " ", e.collectOd && h("span", { class: "pill", title: "Students are asked for OD from, until and hours in their app after they are checked in" }, "ASKS OD"), " ", fmt(e.startsAt, { dateStyle: "short" }) !== fmt(e.endsAt, { dateStyle: "short" }) && h("span", { class: "pill" }, "MULTI-DAY")),
-      h("td", {}, e.track), h("td", {}, e.location), h("td", {}, String(e.saved)), h("td", { class: "chev" }, "›"))))));
-  if (!list.length) m.append(h("p", { class: "muted" }, "No events yet."));
 }
 function editEvent(e) {
   const v = e || { title: "", description: "", track: "Main", location: "", speaker: "", startsAt: null, endsAt: null, published: true, collectOd: false };
