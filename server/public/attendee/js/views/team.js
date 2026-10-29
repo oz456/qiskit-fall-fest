@@ -26,7 +26,7 @@ export function openTeam(data, { onChanged } = {}) {
         h("div", { class: "meta" }, h("div", { class: "name" }, m.name + (m.you ? " (you)" : "")), h("div", { class: "where" }, m.role === "leader" ? "Team lead" : "Teammate"))));
       body.replaceChildren(
         h("h2", { class: "h1" + (t.nameHidden ? " blurname" : ""), style: { margin: 0 }, "aria-label": t.nameHidden ? "Team name not given yet" : null }, t.name),
-        h("p", { class: "body muted", style: { margin: "4px 0 0" } }, [t.founder ? `Inspired by ${t.founder}` : null, t.problemStatementId, `${t.members.length} ${t.members.length === 1 ? "member" : "members"}`].filter(Boolean).join(" · ")),
+        h("p", { class: "body muted", style: { margin: "4px 0 0" } }, [t.problemStatementId, `${t.members.length} ${t.members.length === 1 ? "member" : "members"}`].filter(Boolean).join(" · ")),
         nm?.note ? h("p", { class: "body", style: { margin: "12px 0 0" } }, nm.note) : null,
         nm?.canAssign ? h("div", { style: { margin: "14px 0 4px" } }, button(busy ? "Getting your name…" : "Get my team name", { onclick: assign, disabled: busy })) : null,
         nm?.canPractice ? h("div", { style: { margin: "8px 0 4px" } }, button("Practice the naming round", { cls: "alt", onclick: practice, disabled: busy }), h("p", { class: "small muted", style: { margin: "6px 0 0" } }, "Test teams only: starts the 100-second round right now.")) : null,

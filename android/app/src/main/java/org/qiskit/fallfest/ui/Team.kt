@@ -42,7 +42,7 @@ fun TeamSheet(app: AppState, onDismiss: () -> Unit) {
                 Text(if (app.teamLoaded) "You haven’t formed or joined a team yet. Create your team, or accept an invitation, on the Qiskit Fall Fest website (Learning portal, Hackathon)." else "We couldn’t load your team right now. Check your connection and try again.", style = T.body, color = P.muted)
             } else {
                 Text(team.name, style = T.h1, color = P.ink, maxLines = 2, modifier = if (team.nameHidden) Modifier.blur(10.dp) else Modifier)
-                Text(listOfNotNull(team.founder?.let { "Inspired by $it" }, team.problemStatement, "${team.members.size} ${if (team.members.size == 1) "member" else "members"}").joinToString(" · "), style = T.body, color = P.muted)
+                Text(listOfNotNull(team.problemStatement, "${team.members.size} ${if (team.members.size == 1) "member" else "members"}").joinToString(" · "), style = T.body, color = P.muted)
                 naming?.note?.let { Text(it, style = T.body, color = P.ink) }
                 if (naming?.canAssign == true) PrimaryButton(if (busy) "Getting your name…" else "Get my team name", loading = busy) { assign() }
                 if (naming?.canPractice == true) {

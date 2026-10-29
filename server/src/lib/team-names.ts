@@ -3,6 +3,9 @@
 // gets one automatically, including teams whose lead never opened the app. Names are written to the website too (retried until they stick).
 import type { Db } from "../db.ts";
 import { FOUNDERS } from "./founders.ts";
+
+/** The team name as shown everywhere (app, website): the team name with the founder in brackets, e.g. "Zepto Zoomers (Kaivalya Vohra)". */
+export const fullName = (f: { team: string; founder: string }) => `${f.team} (${f.founder})`;
 import { renameTeam, websiteTeams } from "./team.ts";
 
 export const WINDOW_SEC = 100;
@@ -45,10 +48,10 @@ export async function claimName(db: Db, teamKey: string, leadEmail: string | nul
   for (let i = 0; i < 30; i++) {
     const have = await claimOf(db, teamKey); if (have) return have;
     const used = new Set((await db.query("SELECT lower(name) AS n FROM team_name_claims")).map((r) => r.n as string));
-    const free = FOUNDERS.filter((f) => !used.has(f.team.toLowerCase()) && !outside.has(f.team.toLowerCase()));
+    const free = FOUNDERS.filter((f) => !used.has(fullName(f).toLowerCase()) && !outside.has(fullName(f).toLowerCase()));
     if (!free.length) return null;
     const pick = free[Math.floor(Math.random() * free.length)]!;
-    const r = await db.query("INSERT INTO team_name_claims (team_key, name, founder, mode, lead_email) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING team_key", [teamKey, pick.team, pick.founder, mode, leadEmail]);
+    const r = await db.query("INSERT INTO team_name_claims (team_key, name, founder, mode, lead_email) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING team_key", [teamKey, fullName(pick), pick.founder, mode, leadEmail]);
     if (r[0]) return (await claimOf(db, teamKey))!;
   }
   return null;

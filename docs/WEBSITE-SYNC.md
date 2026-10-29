@@ -34,7 +34,7 @@ The hackathon teams live on the website (`hackathon_teams`, `team_members`). Fla
 
 ### Team names from the founders list
 
-Every team gets a name inspired by an Indian founder (50 names in `server/src/lib/founders.ts`, for example "CRED-ibility", inspired by Kunal Shah).
+Every team gets a name inspired by an Indian founder (50 names in `server/src/lib/founders.ts`, for example "CRED-ibility (Kunal Shah)": the founder is part of the name everywhere).
 
 - **When an organiser starts it** (Admin, Events, "Hackathon team names": **Start now**, or **Schedule** a time; nothing happens on its own) every team lead can tap **Get my team name** for **100 seconds**. The server picks a free name at random, so two leads can never collide, and tapping twice gives the same name.
 - **When the 100 seconds are over** every team still without a name gets one automatically, including teams whose lead never opened the app (the app asks the website for all teams). Names are written to the website; if that fails it is retried (every 15 seconds, on app requests, and by the 10-minute scheduler) until it sticks. Until then the app already shows the new name.
