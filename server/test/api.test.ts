@@ -844,4 +844,13 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     assert.equal((await admin("PATCH", `/admin/api/users/${id}`, { passTier: "flagship" })).statusCode, 200); assert.equal((await find("handnone@")).passTier, "flagship");
     assert.equal((await admin("PATCH", `/admin/api/users/${id}`, { passTier: null })).statusCode, 200); const back = await find("handnone@"); assert.deepEqual([back.passTier, back.passManual], [null, false]);
   });
+  it("email accounts are used in the order they are listed: the first until it is exhausted, then the second", async () => {
+    const { usable, quotaError } = await import("../src/lib/mail.ts");
+    const list = [{ user: "first@x" }, { user: "second@x" }];
+    assert.deepEqual(usable(list, new Map(), 100).map((a) => a.user), ["first@x", "second@x"], "first account goes first");
+    assert.deepEqual(usable(list, new Map([["first@x", 40], ["second@x", 0]]), 100).map((a) => a.user), ["first@x", "second@x"], "still first while it has quota (no round robin)");
+    assert.deepEqual(usable(list, new Map([["first@x", 100]]), 100).map((a) => a.user), ["second@x"], "first exhausted: second takes over");
+    assert.deepEqual(usable(list, new Map([["first@x", 100], ["second@x", 100]]), 100), [], "both exhausted");
+    assert.equal(quotaError(new Error("550-5.4.5 Daily user sending limit exceeded")), true); assert.equal(quotaError(new Error("550 No such user here")), false);
+  });
 });

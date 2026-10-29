@@ -1,5 +1,5 @@
-// Outbound email through Gmail / Google Workspace SMTP (app passwords). Supports several accounts: sends are spread
-// round-robin (least-used first), fall over to the next account on failure, and respect a per-account daily cap.
+// Outbound email through Gmail / Google Workspace SMTP (app passwords). Several accounts are used in the order they are listed:
+// the first one until its daily cap is reached (or Gmail says it is out of quota), then the second, and so on.
 import nodemailer, { type Transporter } from "nodemailer";
 import { config, isProd } from "../config.ts";
 import type { Db } from "../db.ts";
@@ -32,12 +32,16 @@ export async function mailRemaining(): Promise<number> {
   return accounts.reduce((n, a) => n + Math.max(0, config.smtpDailyLimit - (used.get(a.user) ?? 0)), 0);
 }
 
-/** Reserve one send on the least-used account that still has quota. Returns the accounts to try, best first. */
+/** The accounts that may still send today, in the order they are configured (the first is used until it is exhausted). */
+export function usable<A extends { user: string }>(list: A[], used: Map<string, number>, limit: number): A[] {
+  return list.filter((a) => (used.get(a.user) ?? 0) < limit);
+}
 async function pick(): Promise<{ user: string; pass: string }[]> {
   const rows = await db!.query<{ account: string; sent: number }>("SELECT account, sent FROM mail_quota WHERE day=$1", [eventDay()]);
-  const used = new Map(rows.map((r) => [r.account, r.sent]));
-  return accounts.filter((a) => (used.get(a.user) ?? 0) < config.smtpDailyLimit).sort((x, y) => (used.get(x.user) ?? 0) - (used.get(y.user) ?? 0));
+  return usable(accounts, new Map(rows.map((r) => [r.account, r.sent])), config.smtpDailyLimit);
 }
+/** Gmail refusing because the account is out of sending quota (not a bad address or a network blip). */
+export const quotaError = (e: unknown) => /daily user sending|sending limit|quota|5\.4\.5|rate limit exceeded/i.test(String((e as Error)?.message ?? e));
 const bump = (acct: string, by: number) => db!.query(
   "INSERT INTO mail_quota (day, account, sent) VALUES ($1,$2,GREATEST($3,0)) ON CONFLICT (day, account) DO UPDATE SET sent = GREATEST(mail_quota.sent + $3, 0)", [eventDay(), acct, by]);
 
@@ -57,7 +61,11 @@ export async function sendMail(m: Mail): Promise<void> {
         from: { name: config.mailFromName, address: a.user }, to: m.to, subject: m.subject, text: m.text, html: m.html,
       });
       return;
-    } catch (e) { lastErr = e; await bump(a.user, -1); }
+    } catch (e) {
+      lastErr = e; await bump(a.user, -1);
+      // Gmail says this account is out for today: stop trying it until tomorrow so every code goes straight to the next account
+      if (quotaError(e)) await db!.query("INSERT INTO mail_quota (day, account, sent) VALUES ($1,$2,$3) ON CONFLICT (day, account) DO UPDATE SET sent = GREATEST(mail_quota.sent, $3)", [eventDay(), a.user, config.smtpDailyLimit]);
+    }
   }
   throw new Error(`SMTP send failed: ${(lastErr as Error)?.message ?? "unknown"}`);
 }

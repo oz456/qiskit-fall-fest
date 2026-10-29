@@ -20,7 +20,7 @@ Env vars and secret wiring are kept by Cloud Run between deploys; change them wi
 Roll back: Cloud Run → `qff-api` → Revisions → send 100% traffic to an older revision.
 
 ## Email (Gmail / Workspace SMTP)
-**Only login codes** are sent through Gmail SMTP using **app passwords** (no SendGrid). Currently one account (`vaishnav_s@srmap.edu.in`, same one used in brainoftoru), stored in the secret `qff-smtp-accounts`.
+**Only login codes** are sent through Gmail SMTP using **app passwords** (no SendGrid). Accounts are used **in the listed order**: the first until its daily cap is reached (or Gmail refuses for quota), then the second. Currently `executivelead@app.qffsrmap2026.com` first, then `vaishnav_s@srmap.edu.in` (same one used in brainoftoru), stored in the secret `qff-smtp-accounts`.
 - **Limits:** ~2,000 emails/day on Google Workspace, ~500/day on a free @gmail.com. The app enforces a per-account daily cap (`SMTP_DAILY_LIMIT`, default 1900) and the admin stats endpoint reports the remaining quota. Announcements and ticket replies are deliberately **not** emailed, so the whole quota is for login codes. The server also caps codes per attendee (12/day) and system-wide (500/hour).
 - **Add more accounts (round-robin, automatic failover):** put them all in the secret as a JSON array and roll a revision:
 ```bash

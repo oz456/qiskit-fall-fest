@@ -15,7 +15,7 @@ const Env = z.object({
   CHECK_PASSWORD_HASH: z.string().optional(),
   CHECK_NAMES: z.string().optional(), // JSON {"AP…":"Full Name"}: who each door login belongs to (shown in the admin Attendance page)
   CHECK_ACCOUNTS: z.string().optional(), // JSON [{"user":"AP…","hash":"scrypt$…"}]: named door logins; when set, CHECK_USERNAME/CHECK_PASSWORD_HASH are not needed
-  // JSON array: [{"user":"a@gmail.com","pass":"16-char app password"}, ...] — several accounts = round-robin
+  // JSON array: [{"user":"a@gmail.com","pass":"16-char app password"}, ...] — several accounts = used in the listed order (first until exhausted, then the next)
   SMTP_ACCOUNTS: z.string().optional(),
   SMTP_HOST: z.string().default("smtp.gmail.com"),
   SMTP_PORT: z.coerce.number().default(587),
