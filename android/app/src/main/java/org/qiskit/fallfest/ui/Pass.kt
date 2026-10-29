@@ -72,8 +72,7 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
     val (payload, progress) = rememberLivePass(app)
 
     if (teamOpen) {
-        val hack = app.events.firstOrNull { it.track == org.qiskit.fallfest.Track.Hackathon }
-        TeamSheet(app, { teamOpen = false }, hack?.let { h -> { onOpen(h) } })
+        TeamSheet(app, { teamOpen = false })
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 130.dp)) {
         item {

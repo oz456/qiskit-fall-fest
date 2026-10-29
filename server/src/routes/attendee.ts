@@ -11,7 +11,7 @@ import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
 import { cgpaMissing, Details, OdInput, detailsOut, Extra, GENDERS, needsExtra, PROGRAMS, SCHOOLS } from "../lib/details.ts";
 import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
-import { appTeamOf, inAppTeam, renameAppTeam, teamOf, renameTeam } from "../lib/team.ts";
+import { appTeamOf, inAppTeam, renameAppTeam, renameWindow, teamOf, renameTeam } from "../lib/team.ts";
 import { randomBytes } from "node:crypto";
 
 const ACCESS_TTL = 15 * 60;
@@ -256,13 +256,13 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     // Hackathon team (flagship pass holders): lead first, then teammates. The lead can rename it unless an organiser has switched renaming off.
     api.get("/v1/me/team", async (req, reply) => {
       const [u] = await db.query("SELECT email, pass_tier FROM users WHERE id=$1", [req.uid]);
-      const [off] = await db.query("SELECT 1 FROM settings WHERE key='team_rename' AND value='off'");
+      const win = await renameWindow(db);
       const own = await appTeamOf(db, req.uid!);   // a team an organiser made in the app comes first
-      if (own) return { team: own, canRename: Boolean(own.isLeader && !off) };
+      if (own) return { team: own, canRename: Boolean(own.isLeader && win.open), renameNote: own.isLeader ? win.note : null };
       if (!u || u.pass_tier !== "flagship") return { team: null, canRename: false };
       try {
         const team = await teamOf(u.email);
-        return { team, canRename: Boolean(team?.isLeader && !off) };
+        return { team, canRename: Boolean(team?.isLeader && win.open), renameNote: team?.isLeader ? win.note : null };
       } catch { return reply.code(502).send({ error: "unavailable", message: "Your team couldn't be loaded. Please try again." }); }
     });
     api.put("/v1/me/team", { config: { rateLimit: { max: 8, timeWindow: "10 minutes" } } }, async (req, reply) => {
@@ -271,8 +271,7 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       const [u] = await db.query("SELECT email, pass_tier FROM users WHERE id=$1", [req.uid]);
       const own = await inAppTeam(db, req.uid!);
       if (!u || (u.pass_tier !== "flagship" && !own)) return reply.code(403).send({ error: "no_team", message: "You are not in a team." });
-      const [off] = await db.query("SELECT 1 FROM settings WHERE key='team_rename' AND value='off'");
-      if (off) return reply.code(403).send({ error: "rename_closed", message: "Team names can't be changed any more." });
+      if (!(await renameWindow(db)).open) return reply.code(403).send({ error: "rename_closed", message: "Team names can't be changed any more." });
       const name = p.data.name.replace(/\s+/g, " ").trim();
       if (name.length < 3 || name.length > 40) return reply.code(400).send({ error: "invalid_name", message: "A team name must be 3 to 40 characters." });
       if (own) { const r = await renameAppTeam(db, req.uid!, name); return r.ok ? { ok: true, name: r.name } : reply.code(r.status).send({ error: r.error, message: r.message }); }

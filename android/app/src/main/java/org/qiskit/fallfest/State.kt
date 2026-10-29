@@ -55,6 +55,8 @@ class AppState(context: Context) {
     var team by mutableStateOf<TeamInfo?>(null); private set
     var teamLoaded by mutableStateOf(false); private set
     var canRenameTeam by mutableStateOf(false); private set
+    /** "You can rename your team until 3:00 PM." (from the server, only for the lead while renaming is open) */
+    var teamRenameNote by mutableStateOf<String?>(null); private set
     var detailsGenders by mutableStateOf(listOf("Male", "Female")); private set
     var detailsSchools by mutableStateOf(listOf("SEAS", "ESLA", "PSB", "Other")); private set
     var detailsPrograms by mutableStateOf(listOf("Other")); private set
@@ -143,7 +145,7 @@ class AppState(context: Context) {
         wipe()
     }
     private fun wipe() {
-        passType = null; team = null; teamLoaded = false; canRenameTeam = false; accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; flagship = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null; odPending = emptyList(); odDismissed = emptySet()
+        passType = null; team = null; teamLoaded = false; canRenameTeam = false; teamRenameNote = null; accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; flagship = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null; odPending = emptyList(); odDismissed = emptySet()
         profile = null; events = emptyList(); announcements = emptyList(); tickets = emptyList(); checkins = emptyMap()
     }
 
@@ -257,14 +259,14 @@ class AppState(context: Context) {
             team = t?.let { o -> val m = o.getJSONArray("members")
                 TeamInfo(o.getString("name"), o.optString("problemStatementId").ifBlank { null }, o.optBoolean("isLeader"),
                     (0 until m.length()).map { i -> val x = m.getJSONObject(i); TeamMember(x.getString("name"), x.getString("role") == "leader", x.optString("status") == "invited", x.optBoolean("you")) }) }
-            canRenameTeam = r.optBoolean("canRename"); teamLoaded = true
+            canRenameTeam = r.optBoolean("canRename"); teamRenameNote = r.optString("renameNote", "").ifBlank { null }; teamLoaded = true
         } catch (_: Exception) { }
     }
 
     /** The team lead renames the team. Throws ApiException with a readable message (name taken, too short, renaming closed). */
     suspend fun renameTeam(name: String) {
         try { authed("PUT", "/v1/me/team", JSONObject().put("name", name)) }
-        catch (e: ApiException) { if (e.code == "rename_closed" || e.http == 403) canRenameTeam = false; throw e }
+        catch (e: ApiException) { if (e.code == "rename_closed" || e.http == 403) { canRenameTeam = false; teamRenameNote = null }; throw e }
         loadTeam()
     }
 

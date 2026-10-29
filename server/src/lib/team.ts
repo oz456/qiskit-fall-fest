@@ -60,3 +60,19 @@ export async function renameAppTeam(db: Db, uid: string, name: string): Promise<
   await db.query("UPDATE app_teams SET name=$2 WHERE id=$1", [mine.id, name]);
   return { ok: true, name };
 }
+
+// ---- when renaming is allowed: the organiser's switch (settings.team_rename = 'off') and a deadline (settings.team_rename_until, IST "YYYY-MM-DDTHH:mm") ----
+export const DEFAULT_RENAME_UNTIL = "2026-10-29T15:00";   // 3:00 PM IST on 29 Oct 2026 unless an organiser sets another time
+
+const IST_FMT = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", ...o });
+
+export async function renameWindow(db: Db, now = new Date()): Promise<{ open: boolean; note: string | null }> {
+  const rows = await db.query("SELECT key, value FROM settings WHERE key IN ('team_rename','team_rename_until')");
+  const set = Object.fromEntries(rows.map((r) => [r.key as string, r.value as string]));
+  const raw = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(set.team_rename_until ?? "") ? set.team_rename_until! : DEFAULT_RENAME_UNTIL;
+  const until = new Date(raw + ":00+05:30");
+  if (set.team_rename === "off" || now >= until) return { open: false, note: null };
+  const sameDay = IST_FMT({ dateStyle: "short" }).format(now) === IST_FMT({ dateStyle: "short" }).format(until);
+  const time = IST_FMT({ hour: "numeric", minute: "2-digit", hour12: true }).format(until).toUpperCase();
+  return { open: true, note: `You can rename your team until ${sameDay ? time : IST_FMT({ weekday: "short", day: "numeric", month: "short" }).format(until) + ", " + time}.` };
+}

@@ -772,7 +772,8 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     try {
       const get = async (a: { authorization: string }) => (await app.inject({ method: "GET", url: "/v1/me/team", headers: a })).json();
       const put = (a: { authorization: string }, name: string) => app.inject({ method: "PUT", url: "/v1/me/team", headers: a, payload: { name } });
-      const l = await get(leadAuth); assert.equal(l.team.name, "Qubit Squad"); assert.equal(l.team.members[0].role, "leader"); assert.equal(l.canRename, true);
+      await admin("PUT", "/admin/api/settings", { team_rename_until: "2099-01-01T15:00" });   // the real deadline is a clock time: pin it so this test never depends on today's date
+      const l = await get(leadAuth); assert.match(l.renameNote, /^You can rename your team until /); assert.equal((await get(mateAuth)).renameNote, null, "only the lead is told"); assert.equal(l.team.name, "Qubit Squad"); assert.equal(l.team.members[0].role, "leader"); assert.equal(l.canRename, true);
       assert.equal((await get(mateAuth)).canRename, false, "a teammate cannot rename"); assert.equal((await get(npAuth)).team, null, "no ₹499 pass: no team card");
       assert.equal((await put(mateAuth, "Hijacked")).statusCode, 403); assert.equal(teamName, "Qubit Squad");
       assert.equal((await put(leadAuth, "ab")).statusCode, 400, "too short"); assert.equal((await put(leadAuth, "x".repeat(41))).statusCode, 400, "too long");
@@ -782,6 +783,9 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
       await admin("PUT", "/admin/api/settings", { team_rename: "off" });
       assert.equal((await get(leadAuth)).canRename, false); const closed = await put(leadAuth, "Too Late"); assert.equal(closed.statusCode, 403); assert.equal(closed.json().error, "rename_closed");
       await admin("PUT", "/admin/api/settings", { team_rename: "on" }); assert.equal((await get(leadAuth)).canRename, true);
+      await admin("PUT", "/admin/api/settings", { team_rename_until: "2020-01-01T15:00" });   // the deadline has passed
+      const late = await get(leadAuth); assert.equal(late.canRename, false); assert.equal(late.renameNote, null); assert.equal((await put(leadAuth, "After Three")).statusCode, 403);
+      await admin("PUT", "/admin/api/settings", { team_rename_until: "2099-01-01T15:00" });
       srv.close(); srv.closeAllConnections();
       assert.equal((await put(leadAuth, "Offline Name")).statusCode, 502, "website down: a clear, retryable error");
     } finally { config.website.baseUrl = was; config.website.secret = wasSecret; srv.close(); srv.closeAllConnections(); }
@@ -804,6 +808,7 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     const made = await admin("POST", "/admin/api/app-teams", { name: "Test Team", leadEmail: a, memberEmails: [b] }); assert.equal(made.statusCode, 201);
     assert.equal((await admin("POST", "/admin/api/app-teams", { name: "Other", leadEmail: b })).statusCode, 409, "one team per person");
     assert.equal(await me(aAuth), true); assert.equal(await me(bAuth), true); assert.equal(await kind(aAuth), "flagship", "the pass card says ₹499");
+    await admin("PUT", "/admin/api/settings", { team_rename_until: "2099-01-01T15:00" });
     const wasSecret = config.website.secret; config.website.secret = undefined;   // no website at all
     try {
       const get = async (x: { authorization: string }) => (await app.inject({ method: "GET", url: "/v1/me/team", headers: x })).json();

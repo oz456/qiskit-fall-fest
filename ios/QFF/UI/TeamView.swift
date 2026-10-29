@@ -2,9 +2,7 @@ import SwiftUI
 
 /// "Your team" for hackathon participants: the lead on top, then teammates. The lead can rename the team unless organisers have switched that off.
 struct TeamView: View {
-    var onOpenEvent: (() -> Void)?
     @EnvironmentObject var app: AppState
-    @Environment(\.dismiss) private var dismiss
     @State private var renaming = false
     @State private var name = ""
     @State private var error: String?
@@ -24,7 +22,6 @@ struct TeamView: View {
                     Text("Your team").font(Fonts.display(28, 700, style: .title1)).foregroundStyle(P.ink)
                     Text(app.teamLoaded ? "You haven’t formed or joined a team yet. Create your team, or accept an invitation, on the Qiskit Fall Fest website (Learning portal, Hackathon)." : "We couldn’t load your team right now. Check your connection and try again.")
                         .font(T.body).foregroundStyle(P.muted)
-                    if let onOpenEvent { PrimaryButton(title: "VIEW THE HACKATHON") { dismiss(); onOpenEvent() } }
                 }
             }
             .padding(24).frame(maxWidth: .infinity, alignment: .leading)
@@ -43,6 +40,7 @@ struct TeamView: View {
         }
         Text(([team.problemStatementId] .compactMap { $0 } + ["\(team.members.count) \(team.members.count == 1 ? "member" : "members")"]).joined(separator: " · "))
             .font(T.body).foregroundStyle(P.muted)
+        if app.canRenameTeam, let note = app.teamRenameNote { Text(note).font(T.small).foregroundStyle(P.muted) }
         ForEach(team.members) { m in
             HStack(spacing: 14) {
                 Text(initials(m.name)).font(T.bodyM).foregroundStyle(m.isLeader ? P.onPrimary : P.muted)
@@ -57,12 +55,12 @@ struct TeamView: View {
             .padding(.vertical, 4)
         }
         if team.isLeader && !app.canRenameTeam { Text("Team names can’t be changed any more.").font(T.small).foregroundStyle(P.muted) }
-        if let onOpenEvent { Button("View the Hackathon") { dismiss(); onOpenEvent() }.font(T.bodyM).foregroundStyle(P.primary).frame(maxWidth: .infinity).padding(.top, 6) }
     }
 
     @ViewBuilder private func renameForm(_ team: TeamInfo) -> some View {
         Text("Rename your team").font(Fonts.display(28, 700, style: .title1)).foregroundStyle(P.ink)
         Text("Everyone in the team, and the organisers, will see the new name.").font(T.body).foregroundStyle(P.muted)
+        if let note = app.teamRenameNote { Text(note).font(T.small).foregroundStyle(P.muted) }
         TextField("Team name", text: $name).font(T.body).foregroundStyle(P.ink).padding(.horizontal, 16).frame(height: 52)
             .background(P.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(P.line, lineWidth: 1))

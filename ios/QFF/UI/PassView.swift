@@ -102,10 +102,7 @@ struct PassView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in app.message = "Screenshots won't scan — the code changes every 30 seconds." }
         .fullScreenCover(isPresented: $fullQR) { FullQR(hidden: hidden) { fullQR = false }.environmentObject(app) }
         .task(id: app.profile?.flagship) { await app.loadTeam() }
-        .sheet(isPresented: $teamOpen) {
-            TeamView(onOpenEvent: app.events.first(where: { $0.track == .Hackathon }).map { h in { DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { router.sheet = .event(h.id) } } })
-                .environmentObject(app)
-        }
+        .sheet(isPresented: $teamOpen) { TeamView().environmentObject(app) }
         .onAppear { if ProcessInfo.processInfo.environment["QFF_SCREEN"] == "qr" { fullQR = true } }
     }
 }

@@ -32,3 +32,5 @@ The hackathon teams live on the website (`hackathon_teams`, `team_members`). Fla
 - The app reads one person's team on demand from the website: `GET /api/integrations/qff-app/team?email=` (Bearer `GCP_ACCESS`, read-only, names and roles only, no teammate emails). The app caches it for 30 seconds.
 - A rename is `POST /api/integrations/qff-app/team {email, name}`: only the team lead, 3 to 40 characters, name not already taken. It changes nothing but `hackathon_teams.name`, so the website, admin pages and shortlist show the new name.
 - **Switching renaming off:** Admin, Content, untick "Team leads can rename their hackathon team". The Rename button disappears and the server refuses renames. Tick it again to allow it.
+
+**Rename deadline.** Renaming also closes at a set time: 3:00 PM IST on 29 Oct 2026 by default. Change it in Admin, Content, "Team renaming closes at". The team sheet tells the lead "You can rename your team until 3:00 PM." while it is open. The untick switch above still stops it at any moment.

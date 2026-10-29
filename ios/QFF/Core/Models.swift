@@ -128,7 +128,7 @@ struct Profile: Codable, Equatable {
 struct TeamMember: Decodable, Equatable, Identifiable { var id: String { "\(role)|\(name)" }; let name: String; let role: String; let status: String; let you: Bool
     var isLeader: Bool { role == "leader" }; var invited: Bool { status == "invited" } }
 struct TeamInfo: Decodable, Equatable { let name: String; let problemStatementId: String?; let isLeader: Bool; let members: [TeamMember] }
-struct TeamResponse: Decodable { let team: TeamInfo?; let canRename: Bool }
+struct TeamResponse: Decodable { let team: TeamInfo?; let canRename: Bool; let renameNote: String? }
 struct Checkin: Decodable { let scope: String; let at: Date; var askOd: Bool? }
 /// An event whose OD details this student still has to give.
 struct OdTarget: Identifiable { let id: String }

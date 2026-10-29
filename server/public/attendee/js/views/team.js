@@ -8,7 +8,7 @@ export async function loadTeam() {
 
 const initials = (n) => String(n || "?").split(/\s+/).slice(0, 2).map((x) => x[0] || "").join("").toUpperCase() || "?";
 
-export function openTeam(data, { onRenamed, onOpenEvent } = {}) {
+export function openTeam(data, { onRenamed } = {}) {
   openSheet((close) => {
     const body = h("div");
     let state = data;
@@ -17,8 +17,7 @@ export function openTeam(data, { onRenamed, onOpenEvent } = {}) {
       if (!t) {
         body.replaceChildren(
           h("h2", { class: "h1" }, "Your team"),
-          h("p", { class: "body muted" }, state ? "You haven’t formed or joined a team yet. Create your team, or accept an invitation, on the Qiskit Fall Fest website (Learning portal, Hackathon)." : "We couldn’t load your team right now. Check your connection and try again."),
-          onOpenEvent ? button("View the Hackathon", { onclick: () => { close(); onOpenEvent(); } }) : null);
+          h("p", { class: "body muted" }, state ? "You haven’t formed or joined a team yet. Create your team, or accept an invitation, on the Qiskit Fall Fest website (Learning portal, Hackathon)." : "We couldn’t load your team right now. Check your connection and try again."));
         return;
       }
       const rows = t.members.map((m) => h("div", { class: "teamrow" },
@@ -27,9 +26,9 @@ export function openTeam(data, { onRenamed, onOpenEvent } = {}) {
       body.replaceChildren(
         h("div", { class: "teamhead" }, h("h2", { class: "h1", style: { margin: 0 } }, t.name), state.canRename ? button("Rename", { cls: "alt", onclick: rename }) : null),
         h("p", { class: "body muted" }, [t.problemStatementId, `${t.members.length} ${t.members.length === 1 ? "member" : "members"}`].filter(Boolean).join(" · ")),
+        state.canRename && state.renameNote ? h("p", { class: "small muted", style: { margin: "-6px 0 4px" } }, state.renameNote) : null,
         h("div", { class: "teamlist" }, rows),
-        t.isLeader && !state.canRename ? h("p", { class: "body muted" }, "Team names can’t be changed any more.") : null,
-        onOpenEvent ? button("View the Hackathon", { cls: "alt", onclick: () => { close(); onOpenEvent(); } }) : null);
+        t.isLeader && !state.canRename ? h("p", { class: "body muted" }, "Team names can’t be changed any more.") : null);
     };
     function rename() {
       const input = h("input", { type: "text", name: "teamName", maxlength: "40", value: state.team.name, "aria-label": "Team name", autocomplete: "off" });
@@ -54,7 +53,7 @@ export function openTeam(data, { onRenamed, onOpenEvent } = {}) {
       }
       input.onkeydown = (e) => { if (e.key === "Enter") save(); };
       drawActions();
-      body.replaceChildren(h("h2", { class: "h1" }, "Rename your team"), h("p", { class: "body muted" }, "Everyone in the team, and the organisers, will see the new name."),
+      body.replaceChildren(h("h2", { class: "h1" }, "Rename your team"), h("p", { class: "body muted" }, "Everyone in the team, and the organisers, will see the new name."), state.renameNote ? h("p", { class: "small muted", style: { margin: "-6px 0 8px" } }, state.renameNote) : null,
         h("label", { class: "fl" }, "Team name", h("div", { class: "field" }, input)), err, actions);
       setTimeout(() => { input.focus(); input.select(); }, 50);
     }

@@ -21,7 +21,7 @@ private fun initials(name: String) = name.trim().split(Regex("\\s+")).take(2).ma
 /** "Your team" for hackathon participants: the lead on top, then teammates. The lead can rename the team unless organisers have switched that off. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TeamSheet(app: AppState, onDismiss: () -> Unit, onOpenEvent: (() -> Unit)?) {
+fun TeamSheet(app: AppState, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     val team = app.team
     var renaming by remember { mutableStateOf(false) }
@@ -46,10 +46,10 @@ fun TeamSheet(app: AppState, onDismiss: () -> Unit, onOpenEvent: (() -> Unit)?) 
             if (team == null) {
                 Text("Your team", style = T.h1, color = P.ink)
                 Text(if (app.teamLoaded) "You haven’t formed or joined a team yet. Create your team, or accept an invitation, on the Qiskit Fall Fest website (Learning portal, Hackathon)." else "We couldn’t load your team right now. Check your connection and try again.", style = T.body, color = P.muted)
-                onOpenEvent?.let { PrimaryButton("View the Hackathon") { onDismiss(); it() } }
             } else if (renaming) {
                 Text("Rename your team", style = T.h1, color = P.ink)
                 Text("Everyone in the team, and the organisers, will see the new name.", style = T.body, color = P.muted)
+                app.teamRenameNote?.let { Text(it, style = T.small, color = P.muted) }
                 Box(Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp)).background(P.surface).border(1.dp, P.line, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
                     BasicTextField(name, { name = it.take(40); error = null }, singleLine = true, textStyle = T.body.copy(color = P.ink), cursorBrush = SolidColor(P.primary), modifier = Modifier.fillMaxWidth())
                 }
@@ -62,6 +62,7 @@ fun TeamSheet(app: AppState, onDismiss: () -> Unit, onOpenEvent: (() -> Unit)?) 
                     if (app.canRenameTeam) TextButton(onClick = { name = team.name; error = null; renaming = true }) { Text("Rename", color = P.primary) }
                 }
                 Text(listOfNotNull(team.problemStatement, "${team.members.size} ${if (team.members.size == 1) "member" else "members"}").joinToString(" · "), style = T.body, color = P.muted)
+                if (app.canRenameTeam) app.teamRenameNote?.let { Text(it, style = T.small, color = P.muted) }
                 team.members.forEach { m ->
                     Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Box(Modifier.size(44.dp).clip(CircleShape).background(if (m.leader) P.primary else P.surface).border(1.dp, if (m.leader) P.primary else P.line, CircleShape), contentAlignment = Alignment.Center) {
@@ -74,7 +75,6 @@ fun TeamSheet(app: AppState, onDismiss: () -> Unit, onOpenEvent: (() -> Unit)?) 
                     }
                 }
                 if (team.isLeader && !app.canRenameTeam) Text("Team names can’t be changed any more.", style = T.small, color = P.muted)
-                onOpenEvent?.let { TextButton(onClick = { onDismiss(); it() }, modifier = Modifier.fillMaxWidth()) { Text("View the Hackathon", color = P.primary) } }
             }
         }
     }
