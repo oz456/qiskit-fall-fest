@@ -19,7 +19,15 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
     api.addHook("preHandler", guard);
     common(api);
 
+    // Temporary switch (admin, Content): door scanners only offer events that ask for OD details, e.g. Hackathon Day 1 and Day 2. On unless set to "off" in the admin.
+    const odOnly = async () => { const [r] = await db.query("SELECT value FROM settings WHERE key='scan_od_only'"); return r ? r.value === "on" : process.env.NODE_ENV !== "test"; };   // unset = on (the older tests, which scan days and any event, leave it unset)
     api.get("/checkin/api/scopes", async () => {
+      if (await odOnly()) {
+        const od = await db.query("SELECT id,title,starts_at,ends_at FROM events WHERE published AND collect_od ORDER BY starts_at, title");
+        const now = Date.now();
+        const pick = od.find((e) => new Date(e.starts_at).getTime() <= now && now < new Date(e.ends_at).getTime()) ?? od.find((e) => new Date(e.starts_at).getTime() > now) ?? od.at(-1);
+        return { today: eventDay(), defaultScope: pick ? `event:${pick.id}` : "", days: [], odOnly: true, events: od.map((e) => ({ id: e.id, title: e.title })) };
+      }
       // Entry days = every day of the festival window (admin setting) ∪ every day any event touches, so a gate can be scanned
       // on a day even before sessions for it are entered.
       const set = new Set<string>();
@@ -50,6 +58,7 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
       const m = /^QFF1\.([A-Z0-9-]{4,20})\.(\d{1,12})\.([A-Za-z0-9_-]{12})$/.exec(b.payload.trim());
       if (!m) return { result: "invalid", message: "Not a Fall Fest pass." };
       const [, code, stepStr, mac] = m as unknown as [string, string, string, string];
+      if (await odOnly() && !(await collectsOd(b.scope))) return { result: "invalid", message: "Scanning is only open for the Hackathon days right now. Pick one of them at the top." };
       const [u] = await db.query("SELECT id,email,name,college,pass_code,pass_secret,status,says_srm,ask_details,details_at,section,gender, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE pass_code=$1", [code]);
       if (!u) return { result: "invalid", message: "Unknown pass." };
       const step = Number(stepStr); const nowStep = Math.floor(Date.now() / 1000 / PASS_STEP_SEC);

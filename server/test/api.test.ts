@@ -728,6 +728,12 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     assert.equal((await admin("POST", `/admin/api/attendance/${ra.id}/clear-od`)).statusCode, 200);
     assert.equal((await me(a))[0].askOd, true, "an organiser cleared a wrong entry: the student can fill it in again");
     const sum = (await admin("GET", "/admin/api/attendance")).json().summary; assert.equal(sum.find((x: any) => x.scope === `event:${withOd}`).collectOd, true); assert.equal(sum.find((x: any) => x.scope === `event:${without}`).collectOd, false);
+    // temporary switch: door scanners can only scan events that ask for OD details (the Hackathon days)
+    await admin("PUT", "/admin/api/settings", { scan_od_only: "on" });
+    const sc = (await check("GET", "/checkin/api/scopes")).json(); assert.equal(sc.odOnly, true); assert.deepEqual(sc.days, [], "campus entry is hidden"); assert.ok(sc.events.some((e: any) => e.id === withOd)); assert.equal(sc.events.some((e: any) => e.id === without), false, "events without OD are hidden"); assert.equal(sc.defaultScope, `event:${withOd}`);
+    const blocked = await scanOf(a, `event:${without}`); assert.equal(blocked.result, "invalid"); assert.match(blocked.message, /only open for the Hackathon days/); assert.equal((await scanOf(a, "day:2026-10-27")).result, "invalid", "campus entry is refused");
+    assert.notEqual((await scanOf(a, `event:${withOd}`)).result, "invalid", "an OD event still scans");
+    await admin("PUT", "/admin/api/settings", { scan_od_only: "off" }); assert.equal((await check("GET", "/checkin/api/scopes")).json().events.some((e: any) => e.id === without), true, "switched off: everything is back");
   });
   it("there is no search-and-check-in: a live QR is the only way in", async () => {
     assert.equal((await check("GET", "/checkin/api/lookup?q=finalist")).statusCode, 404);
