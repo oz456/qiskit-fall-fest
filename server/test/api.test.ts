@@ -917,4 +917,33 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     assert.equal((await claimName(db, "pool-0", null, "auto"))!.name, first!.name, "an assigned team keeps its name");
     await db.query("DELETE FROM team_name_claims");
   });
+  it("rebalance: paid teams with a numbered name take founder names from unpaid teams, and website names stay unique throughout", async () => {
+    await db.query("DELETE FROM team_name_claims");
+    const FX = "Zepto Zoomers (Kaivalya Vohra)", FY = "Nykaa Knights (Falguni Nayar)", FZ = "CRED-ibility (Kunal Shah)";
+    const web: Record<string, { name: string; lead: string }> = { P1: { name: "Quantum Team 1", lead: "rb.p1@example.org" }, P2: { name: "Quantum Team 2", lead: "rb.p2@example.org" }, P3: { name: FZ, lead: "rb.p3@example.org" },
+      U1: { name: FX, lead: "rb.u1@example.org" }, U2: { name: FY, lead: "rb.u2@example.org" }, U3: { name: "Quantum Team 3", lead: "rb.u3@example.org" }, U4: { name: "Our Own Choice", lead: "rb.u4@example.org" } };
+    let clashes = 0;
+    const srv = createServer((req, res) => {
+      res.setHeader("content-type", "application/json"); const u = new URL(req.url!, "http://x");
+      if (req.method === "GET") return void res.end(JSON.stringify({ teams: Object.entries(web).map(([id, t]) => ({ id, name: t.name, leadEmail: t.lead, leadName: id })) }));
+      let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => { const j = JSON.parse(b); const id = Object.keys(web).find((k) => web[k]!.lead === j.email)!;
+        if (Object.entries(web).some(([k, t]) => k !== id && t.name.toLowerCase() === j.name.toLowerCase())) { clashes++; res.statusCode = 409; return void res.end(JSON.stringify({ error: "name_taken" })); }
+        web[id]!.name = j.name; res.end(JSON.stringify({ ok: true, name: j.name })); });
+    });
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r)); const was = config.website.baseUrl, wasSecret = config.website.secret; config.website.baseUrl = `http://127.0.0.1:${(srv.address() as any).port}`; config.website.secret = "rebalance-test-secret-0123";
+    try {
+      for (const [id, t] of Object.entries(web)) {
+        await db.query("INSERT INTO users (email,name,pass_code,pass_secret,source,kind,pass_tier) VALUES ($1,'Lead',$2,$3,'website','student',$4)", [t.lead, "QFF-" + Math.floor(10000 + Math.random() * 80000), Buffer.alloc(32, 6), id.startsWith("P") ? "flagship" : null]);
+        const founder = t.name.startsWith("Quantum") ? "Qiskit Fall Fest" : "Someone"; const mode = id === "U4" ? "edit" : "auto";
+        await db.query("INSERT INTO team_name_claims (team_key,name,founder,mode,lead_email,pushed) VALUES ($1,$2,$3,$4,$5,true)", [id, t.name, founder, mode, t.lead]);
+      }
+      const r = (await admin("POST", "/admin/api/team-names/rebalance")).json(); assert.deepEqual([r.wanted, r.swapped, r.failed], [2, 2, 0]);
+      assert.equal(clashes, 0, "no two teams ever shared a name on the website");
+      const nm = (id: string) => web[id]!.name; assert.equal(nm("P3"), FZ, "a paid team that already had a founder name is untouched");
+      assert.deepEqual([nm("P1"), nm("P2")].sort(), [FX, FY].sort(), "paid teams took the founder names"); assert.deepEqual([nm("U1"), nm("U2")].sort(), ["Quantum Team 1", "Quantum Team 2"], "unpaid teams took the numbered names");
+      assert.equal(nm("U3"), "Quantum Team 3"); assert.equal(nm("U4"), "Our Own Choice", "a name set by hand is never taken");
+      const rows = await db.query("SELECT team_key, name, pushed FROM team_name_claims"); assert.ok(rows.every((c: any) => c.pushed && c.name === nm(c.team_key)), "the database and the website agree");
+      assert.equal((await admin("POST", "/admin/api/team-names/rebalance")).json().wanted, 0, "nothing left to fix");
+    } finally { config.website.baseUrl = was; config.website.secret = wasSecret; srv.close(); srv.closeAllConnections(); await db.query("DELETE FROM team_name_claims"); }
+  });
 });

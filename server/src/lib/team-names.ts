@@ -3,6 +3,7 @@
 // gets one automatically, including teams whose lead never opened the app. Names are written to the website too (retried until they stick).
 import type { Db } from "../db.ts";
 import { FOUNDERS, RESERVE } from "./founders.ts";
+import { randomBytes } from "node:crypto";
 
 /** The team name as shown everywhere (app, website): the team name with the founder in brackets, e.g. "Zepto Zoomers (Kaivalya Vohra)". */
 export const fullName = (f: { team: string; founder: string }) => `${f.team} (${f.founder})`;
@@ -109,6 +110,8 @@ export async function sweep(db: Db, which: { web: boolean; app: boolean }): Prom
       if (!c) { missing++; continue; }
       if (!c.pushed && (await pushClaim(db, c))) pushed++; else if (!c.pushed) missing++;
     }
+    // names that did not reach the website yet (for any team, paid or not) are retried here
+    for (const c of (await db.query("SELECT team_key, name, founder, mode, lead_email, pushed FROM team_name_claims WHERE NOT pushed")) as Claim[]) if (!teams.some((t) => t.key === c.team_key) && (await pushClaim(db, c))) pushed++;
     if (which.web && reachable && missing === 0) await db.query("INSERT INTO settings (key,value) VALUES ('team_names_done_at',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [new Date().toISOString()]);
     return { assigned, pushed, missing, websiteReachable: reachable };
   } finally { running = false; }
@@ -140,4 +143,38 @@ export async function editName(db: Db, teamKey: string, leadEmail: string | null
   } catch (e: any) { if (e?.code === "23505") return taken(`The team name "${name}" is already taken.`); throw e; }
   const c = await claimOf(db, teamKey); if (c) await pushClaim(db, c);   // if the website is slow, the sweep keeps trying; the app already shows the new name
   return { ok: true, name };
+}
+
+/**
+ * One-off repair. Founder names ended up on teams whose lead never paid, while some paid teams got a numbered name.
+ * Swap them: every paid team with a numbered name takes a founder name (the 50 first) from an unpaid team, and that unpaid team takes the numbered name.
+ * Names stay unique on the website at every step (a temporary name is used for the swap). Paid teams that already have a founder name are not touched.
+ */
+export async function rebalance(db: Db): Promise<{ swapped: number; wanted: number; failed: number }> {
+  const all = await websiteTeams(true);
+  const paid = new Set((await db.query("SELECT lower(email) AS e FROM users WHERE pass_tier='flagship' AND lower(email) = ANY($1::text[])", [all.map((t) => t.leadEmail.toLowerCase())])).map((r) => r.e as string));
+  const lead = new Map(all.map((t) => [t.id, t.leadEmail]));
+  const claims = (await db.query("SELECT team_key, name, founder, mode, lead_email, pushed FROM team_name_claims WHERE team_key NOT LIKE 'app:%'")) as Claim[];
+  const numbered = (c: Claim) => /^Quantum Team \d+$/.test(c.name);
+  const want = claims.filter((c) => lead.has(c.team_key) && paid.has(lead.get(c.team_key)!.toLowerCase()) && numbered(c));
+  const mainNames = new Set(FOUNDERS.map((f) => `${f.team} (${f.founder})`.toLowerCase()));
+  const shuffle = <T,>(a: T[]) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j]!, a[i]!]; } return a; };
+  const spare = claims.filter((c) => lead.has(c.team_key) && !paid.has(lead.get(c.team_key)!.toLowerCase()) && !numbered(c) && c.mode !== "edit");
+  const donors = [...shuffle(spare.filter((c) => mainNames.has(c.name.toLowerCase()))), ...shuffle(spare.filter((c) => !mainNames.has(c.name.toLowerCase())))];
+  let swapped = 0, failed = 0;
+  for (const a of want) {
+    const b = donors.shift(); if (!b) break;
+    const aLead = lead.get(a.team_key)!, bLead = lead.get(b.team_key)!;
+    // the database first, in one step: a gets b's founder name, b gets a's numbered name
+    await db.tx(async (q) => {
+      await q.query("DELETE FROM team_name_claims WHERE team_key = ANY($1::text[])", [[a.team_key, b.team_key]]);
+      await q.query("INSERT INTO team_name_claims (team_key, name, founder, mode, lead_email, pushed) VALUES ($1,$2,$3,'auto',$4,false)", [a.team_key, b.name, b.founder, aLead]);
+      await q.query("INSERT INTO team_name_claims (team_key, name, founder, mode, lead_email, pushed) VALUES ($1,$2,$3,'auto',$4,false)", [b.team_key, a.name, a.founder, bLead]);
+    });
+    // then the website, through a temporary name so no two teams ever share a name there
+    const tmp = "Swap " + randomBytes(5).toString("hex");
+    const ok = (await renameTeam(aLead, tmp)).ok && (await renameTeam(bLead, a.name)).ok && (await renameTeam(aLead, b.name)).ok;
+    if (ok) { await db.query("UPDATE team_name_claims SET pushed=true WHERE team_key = ANY($1::text[])", [[a.team_key, b.team_key]]); swapped++; } else failed++;
+  }
+  return { swapped, wanted: want.length, failed };
 }

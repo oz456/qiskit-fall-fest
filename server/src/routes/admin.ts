@@ -10,7 +10,7 @@ import { mailRemaining } from "../lib/mail.ts";
 import { getPhoto, removePhoto } from "../lib/photos.ts";
 import { devicesForAll, devicesForUser, pushInBackground } from "../lib/push.ts";
 import { AnnouncementInput, EventInput, FaqInput, SettingsInput, TicketReply, TicketStatus, UserInput } from "../lib/schemas.ts";
-import { WINDOW_SEC, editName, naming, startPractice, sweep } from "../lib/team-names.ts";
+import { WINDOW_SEC, editName, naming, rebalance, startPractice, sweep } from "../lib/team-names.ts";
 import { websiteTeams } from "../lib/team.ts";
 import { audit, eventDay, eventOut } from "../lib/util.ts";
 import { detailsOut } from "../lib/details.ts";
@@ -389,6 +389,11 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       await audit(db, req, "team.rename", "team", undefined, { key: b.key, name: r.name }); return { ok: true, name: r.name };
     });
 
+    // One-off repair: paid teams with a numbered name take a founder name from unpaid teams (which take the numbered name).
+    api.post("/admin/api/team-names/rebalance", { config: { rateLimit: { max: 3, timeWindow: "10 minutes" } } }, async (req, reply) => {
+      try { const r = await rebalance(db); await audit(db, req, "team_names.rebalance", undefined, undefined, r); return r; }
+      catch { return reply.code(502).send({ error: "unavailable", message: "The website did not answer. Try again in a moment." }); }
+    });
     // Start the real round now: every team lead has 100 seconds to tap, then the rest are named automatically. Or schedule it for a time, or cancel a schedule.
     const setNamesAt = async (value: string | null) => {
       if (value) await db.query("INSERT INTO settings (key,value) VALUES ('team_names_at',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [value]); else await db.query("DELETE FROM settings WHERE key='team_names_at'");
