@@ -258,7 +258,7 @@ class AppState(context: Context) {
             team = t?.let { o -> val m = o.getJSONArray("members")
                 TeamInfo(o.getString("name"), o.optString("problemStatementId").ifBlank { null }, o.optBoolean("isLeader"),
                     (0 until m.length()).map { i -> val x = m.getJSONObject(i); TeamMember(x.getString("name"), x.getString("role") == "leader", x.optString("status") == "invited", x.optBoolean("you")) },
-                    o.optString("founder", "").ifBlank { null }) }
+                    o.optString("founder", "").ifBlank { null }, o.optBoolean("nameHidden")) }
             teamNaming = r.optJSONObject("naming")?.let { TeamNaming(it.optString("phase"), it.optString("note", "").ifBlank { null }, it.optBoolean("canAssign"), it.optBoolean("canPractice")) }
             teamLoaded = true
         } catch (_: Exception) { }

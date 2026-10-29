@@ -280,7 +280,9 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       void maybeSweep(db);   // the 100 seconds are over: make sure nobody is left without a name
       const n = await naming(db, scopeOf(found.key)), claim = await claimOf(db, found.key);
       const t = found.team;
-      return { team: { ...t, name: claim?.name ?? t.name, founder: claim?.founder ?? null }, naming: namingFor(n, t.isLeader, Boolean(claim), found.key.startsWith("app:")) };
+      // until the team has its founder name, the app shows a placeholder behind a blur (the team's old name is not sent: it is about to be replaced)
+      const hidden = n.phase !== "off" && !claim;
+      return { team: { ...t, name: hidden ? "Your Team Name" : claim?.name ?? t.name, nameHidden: hidden, founder: claim?.founder ?? null }, naming: namingFor(n, t.isLeader, Boolean(claim), found.key.startsWith("app:")) };
     });
     // Test teams only (made in the app by an organiser): the lead can run the naming round again whenever they like, to try it out.
     api.post("/v1/me/team/practice", { config: { rateLimit: { max: 12, timeWindow: "10 minutes" } } }, async (req, reply) => {

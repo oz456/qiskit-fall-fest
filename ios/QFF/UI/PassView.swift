@@ -39,7 +39,7 @@ struct PassView: View {
                                 IconBubble(symbol: "chevron.left.forwardslash.chevron.right", size: 50, tint: P.mintInk, bg: P.mint)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("You are registered for the Hackathon").font(T.title).foregroundStyle(P.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                                    Text(app.team.map { "Team \($0.name) · tap to see your team" } ?? "Included in your Flagship Pass · tap to see your team").font(T.small).foregroundStyle(P.muted).lineLimit(1)
+                                    Text(app.team.map { $0.nameHidden == true ? "Team name coming soon · tap to see your team" : "Team \($0.name) · tap to see your team" } ?? "Included in your Flagship Pass · tap to see your team").font(T.small).foregroundStyle(P.muted).lineLimit(1)
                                 }
                                 Spacer(minLength: 0)
                                 Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(P.muted)

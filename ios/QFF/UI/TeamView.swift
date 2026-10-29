@@ -31,7 +31,7 @@ struct TeamView: View {
     }
 
     @ViewBuilder private func roster(_ team: TeamInfo) -> some View {
-        Text(team.name).font(Fonts.display(28, 700, style: .title1)).foregroundStyle(P.ink).lineLimit(2)
+        Text(team.name).font(Fonts.display(28, 700, style: .title1)).foregroundStyle(P.ink).lineLimit(2).blur(radius: team.nameHidden == true ? 9 : 0).animation(.easeOut(duration: 0.6), value: team.nameHidden)
         Text(([team.founder.map { "Inspired by \($0)" }, team.problemStatementId].compactMap { $0 } + ["\(team.members.count) \(team.members.count == 1 ? "member" : "members")"]).joined(separator: " · "))
             .font(T.body).foregroundStyle(P.muted)
         if let note = app.teamNaming?.note { Text(note).font(T.body).foregroundStyle(P.ink) }

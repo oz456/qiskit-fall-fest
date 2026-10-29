@@ -95,7 +95,7 @@ fun PassScreen(app: AppState, onOpen: (Event) -> Unit, goHub: () -> Unit) {
                         IconBubble(org.qiskit.fallfest.Track.Hackathon.icon, 50.dp, P.mintInk, P.mint)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text("You are registered for the Hackathon", style = T.title, color = P.ink, maxLines = 2)
-                            Text(app.team?.let { "Team ${it.name} · tap to see your team" } ?: "Included in your Flagship Pass · tap to see your team", style = T.small, color = P.muted, maxLines = 1)
+                            Text(app.team?.let { if (it.nameHidden) "Team name coming soon · tap to see your team" else "Team ${it.name} · tap to see your team" } ?: "Included in your Flagship Pass · tap to see your team", style = T.small, color = P.muted, maxLines = 1)
                         }
                         Icon(Icons.Outlined.ChevronRight, null, tint = P.muted, modifier = Modifier.size(20.dp))
                     }

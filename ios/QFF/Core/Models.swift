@@ -127,7 +127,7 @@ struct Profile: Codable, Equatable {
 /// One person in a hackathon team (the lead is listed first).
 struct TeamMember: Decodable, Equatable, Identifiable { var id: String { "\(role)|\(name)" }; let name: String; let role: String; let status: String; let you: Bool
     var isLeader: Bool { role == "leader" }; var invited: Bool { status == "invited" } }
-struct TeamInfo: Decodable, Equatable { let name: String; let problemStatementId: String?; let isLeader: Bool; let members: [TeamMember]; let founder: String? }
+struct TeamInfo: Decodable, Equatable { let name: String; let problemStatementId: String?; let isLeader: Bool; let members: [TeamMember]; let founder: String?; let nameHidden: Bool? }
 /// Where the team-name handout stands: `note` is for the screen, `canAssign` shows the "Get my team name" button.
 struct TeamNaming: Decodable, Equatable { let phase: String; let note: String?; let canAssign: Bool; let canPractice: Bool? }
 struct TeamResponse: Decodable { let team: TeamInfo?; let naming: TeamNaming? }

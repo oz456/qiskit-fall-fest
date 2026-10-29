@@ -269,3 +269,4 @@ body.kb .tabbar,body.kb .toast{display:none}
 .teamrow{display:flex;align-items:center;gap:14px;padding:10px 0}
 .teamav{width:44px;height:44px;flex:none;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:15px;background:var(--surface-2,#f3eeee);color:var(--muted);border:1px solid var(--line)}
 .teamav.lead{background:var(--pri);color:#fff;border-color:var(--pri)}
+.blurname{filter:blur(9px);user-select:none;pointer-events:none;transition:filter .6s}

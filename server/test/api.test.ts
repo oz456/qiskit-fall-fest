@@ -777,7 +777,7 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     try {
       // before the time: a note, no button, and tapping is refused
       await at(3_600_000);
-      let l = await get(leadAuth); assert.equal(l.team.name, "Our Own Name"); assert.equal(l.naming.phase, "before"); assert.match(l.naming.note, /given out at .*founder/); assert.equal(l.naming.canAssign, false);
+      let l = await get(leadAuth); assert.equal(l.team.nameHidden, true, "no name yet: a blurred placeholder, not the old name"); assert.notEqual(l.team.name, "Our Own Name"); assert.equal(l.naming.phase, "before"); assert.match(l.naming.note, /given out at .*founder/); assert.equal(l.naming.canAssign, false);
       assert.equal((await tap(leadAuth)).statusCode, 403); assert.equal((await get(npAuth)).team, null, "no ₹499 pass: no team card");
       // inside the 100 seconds: only the lead can tap
       await at(-5_000);
@@ -785,7 +785,7 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
       assert.equal((await tap(mateAuth)).statusCode, 403, "a teammate cannot get the name");
       const got = await tap(leadAuth); assert.equal(got.statusCode, 200); const { name, founder } = got.json(); assert.ok(name && founder);
       assert.equal((await tap(leadAuth)).json().name, name, "tapping twice gives the same name");
-      const after = await get(mateAuth); assert.equal(after.team.name, name, "teammates see it straight away"); assert.equal(after.team.founder, founder); assert.equal(after.naming.canAssign, false);
+      const after = await get(mateAuth); assert.equal(after.team.name, name, "teammates see it straight away"); assert.equal(after.team.nameHidden, false); assert.equal(after.team.founder, founder); assert.equal(after.naming.canAssign, false);
       await new Promise((r) => setTimeout(r, 300)); assert.equal(names.T1, name, "the name reached the website"); assert.equal(posts.filter((p) => p.email === lead).length >= 1, true);
       // the 100 seconds are over: everyone still without a name gets one, whether or not their lead ever opened the app
       await at(-200_000);
@@ -822,7 +822,7 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     const wasSecret = config.website.secret; config.website.secret = undefined;   // no website at all
     const get = async (x: { authorization: string }) => (await app.inject({ method: "GET", url: "/v1/me/team", headers: x })).json();
     try {
-      const t = await get(aAuth); assert.equal(t.team.name, "Test Team"); assert.equal(t.team.members[0].role, "leader"); assert.equal(t.team.members.length, 2);
+      const t = await get(aAuth); assert.equal(t.team.nameHidden, true); assert.equal(t.team.members[0].role, "leader"); assert.equal(t.team.members.length, 2);
       // the lead of a test team can start a practice round themselves, any time; a teammate cannot
       assert.equal((await get(aAuth)).naming.canPractice, true); assert.equal((await get(bAuth)).naming.canPractice, undefined);
       const post = (x: { authorization: string }) => app.inject({ method: "POST", url: "/v1/me/team/practice", headers: x });
