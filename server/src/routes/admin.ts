@@ -106,11 +106,11 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
       const order = f.sort === "name" ? "lower(u.name), u.email" : f.sort === "checkins" ? "checkins DESC, u.created_at DESC" : "u.created_at DESC";
       const [t] = await db.query(`SELECT count(*)::int AS n FROM users u WHERE ${where}`, args);
       const [all] = await db.query("SELECT count(*)::int AS n FROM users");
-      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,u.pass_manual,u.says_srm,u.ask_details,u.reg_no,u.school,u.semester,u.course,u.program,u.section,u.gender,u.cgpa,u.details_at,
+      const rows = await db.query(`SELECT u.id,u.email,u.name,u.college,u.pass_code,u.status,u.created_at,u.kind,u.source,u.pass_tier,u.pass_manual,u.says_srm,u.srm_answer,u.ask_details,u.reg_no,u.school,u.semester,u.course,u.program,u.section,u.gender,u.cgpa,u.details_at,
         ${HAS_APP} AS has_app, ${HAS_PHOTO} AS has_photo, (SELECT count(*)::int FROM checkins c WHERE c.user_id=u.id) AS checkins,
         (SELECT max(s.last_used_at) FROM sessions s WHERE s.user_id=u.id) AS last_active
         FROM users u WHERE ${where} ORDER BY ${order} LIMIT ${f.limit} OFFSET ${f.offset}`, args);
-      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, passManual: u.pass_manual, saysSrm: u.says_srm, askDetails: u.ask_details, details: detailsOut(u), hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins, createdAt: new Date(u.created_at).toISOString(), lastActive: u.last_active ? new Date(u.last_active).toISOString() : null })) };
+      return { total: t!.n, all: all!.n, rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name, college: u.college, passCode: u.pass_code, status: u.status, kind: u.kind, source: u.source, passTier: u.pass_tier, passManual: u.pass_manual, saysSrm: u.says_srm, srmAnswer: u.srm_answer, askDetails: u.ask_details, details: detailsOut(u), hasApp: u.has_app, hasPhoto: u.has_photo, checkins: u.checkins, createdAt: new Date(u.created_at).toISOString(), lastActive: u.last_active ? new Date(u.last_active).toISOString() : null })) };
     });
     // Who is in the app, by how they got in: SRM address, ₹99 pass, ₹499 pass, or neither. Signed in = has a live session.
     api.get("/admin/api/access-summary", async () => {
@@ -233,7 +233,7 @@ export function adminRoutes(app: FastifyInstance, db: Db) {
     });
     api.delete("/admin/api/users/:id/details", async (req) => {
       const { id } = Id.parse(req.params);
-      await db.query("UPDATE users SET reg_no=NULL, school=NULL, semester=NULL, course=NULL, program=NULL, section=NULL, gender=NULL, cgpa=NULL, details_at=NULL WHERE id=$1", [id]);
+      await db.query("UPDATE users SET reg_no=NULL, school=NULL, semester=NULL, course=NULL, program=NULL, section=NULL, gender=NULL, cgpa=NULL, details_at=NULL, srm_answer=NULL WHERE id=$1", [id]);
       await audit(db, req, "user.reset_details", "user", id);
       return { ok: true };
     });

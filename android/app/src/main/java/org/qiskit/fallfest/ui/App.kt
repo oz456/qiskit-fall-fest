@@ -60,6 +60,7 @@ fun App(app: AppState) {
             transitionSpec = { (fadeIn(tween(500)) + scaleIn(initialScale = .96f, animationSpec = tween(500))) togetherWith fadeOut(tween(250)) },
         ) { signedIn ->
             if (!signedIn) SignInScreen(app)
+            else if (app.needsSrmCheck) SrmCheckScreen(app)
             else if (app.needsDetails || app.needsExtra) DetailsScreen(app, extra = !app.needsDetails)
             else if (app.needsSelfie) SelfieScreen(app)
             else Box(Modifier.fillMaxSize()) {
@@ -89,7 +90,7 @@ fun App(app: AppState) {
     app.message?.let { msg -> Toast(msg) { app.message = null } }
     if (profile) ProfileSheet(app) { profile = false }
     // OD details come after the "You're checked in" popup, for events that collect them; "Later" keeps an "Add OD details" button on My Pass
-    app.odPending.firstOrNull { it !in app.odDismissed }?.let { if (app.checkinNotice == null && !app.needsDetails && !app.needsExtra && !app.needsSelfie) OdDialog(app, it) }
+    app.odPending.firstOrNull { it !in app.odDismissed }?.let { if (app.checkinNotice == null && !app.needsSrmCheck && !app.needsDetails && !app.needsExtra && !app.needsSelfie) OdDialog(app, it) }
     app.checkinNotice?.let { n ->
         AlertDialog(
             onDismissRequest = { app.checkinNotice = null }, containerColor = P.bg,

@@ -39,3 +39,12 @@ export const OdInput = z.object({
   from: Clock, until: Clock,
   hours: z.number({ message: "Enter the number of hours." }).gt(0, "Hours must be more than 0.").max(24, "Hours cannot be more than 24.").refine((n) => Math.abs(Math.round(n * 100) - n * 100) < 1e-6, "Hours can have at most 2 decimals."),
 }).refine((v) => v.until > v.from, { message: "OD until time must be after OD from time.", path: ["until"] });
+
+/** Who is asked for the academic details (and OD): an SRM address, someone an organiser asked, or a personal address that says SRM-AP and did not answer "outside".
+ *  `needsCheck`: that last kind has not answered "SRM-AP student or outside?" yet, and has no details saved: ask that first. */
+export function srmStatus(u: Record<string, any>) {   // needs: email, says_srm, ask_details, srm_answer, details_at
+  const srmAddress = String(u.email).trim().toLowerCase().endsWith("@srmap.edu.in");
+  const asked = srmAddress || u.ask_details || (u.says_srm && u.srm_answer !== "outside");
+  const needsCheck = !srmAddress && !u.ask_details && u.says_srm && u.srm_answer === null && !u.details_at;
+  return { asked, needsCheck };
+}

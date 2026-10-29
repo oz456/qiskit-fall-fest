@@ -9,7 +9,7 @@ import { otpMail, sendMail } from "../lib/mail.ts";
 import { sanitizeJpeg, savePhoto } from "../lib/photos.ts";
 import { Email, TicketCreate, TicketReply } from "../lib/schemas.ts";
 import { eventOut, newTicketCode } from "../lib/util.ts";
-import { cgpaMissing, Details, OdInput, detailsOut, Extra, GENDERS, needsExtra, PROGRAMS, SCHOOLS } from "../lib/details.ts";
+import { srmStatus, cgpaMissing, Details, OdInput, detailsOut, Extra, GENDERS, needsExtra, PROGRAMS, SCHOOLS } from "../lib/details.ts";
 import { allocate, classifyEmail, isSrmEmail, nameFromEmail } from "../lib/website-sync.ts";
 import { appTeamOf, inAppTeam, teamOf, type Team } from "../lib/team.ts";
 import { claimName, claimOf, editName, maybeSweep, naming, pushClaim, scopeOf, startPractice, type Claim, type Naming } from "../lib/team-names.ts";
@@ -176,7 +176,7 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
       if (!s) return reply.code(401).send({ error: "unauthorized" });
       req.uid = p.sub; req.sid = p.sid;
       // The selfie is mandatory: until it exists the only things an attendee can do are read their profile, save their details, upload the photo, or sign out.
-      if (!/^\/v1\/(me|me\/photo|me\/details|auth\/logout)(\?|$)/.test(req.url)) {
+      if (!/^\/v1\/(me|me\/photo|me\/details|me\/srm-check|auth\/logout)(\?|$)/.test(req.url)) {
         const [ph] = await db.query("SELECT 1 FROM user_photos WHERE user_id=$1", [req.uid]);
         if (!ph) return reply.code(403).send({ error: "photo_required", message: "Add your selfie to continue." });
       }
@@ -201,25 +201,33 @@ export function attendeeRoutes(app: FastifyInstance, db: Db) {
     });
 
     api.get("/v1/me", async (req) => {
-      const [u] = await db.query("SELECT name,email,college,pass_code,says_srm,ask_details,pass_tier,reg_no,school,semester,course,program,section,gender,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
+      const [u] = await db.query("SELECT name,email,college,pass_code,says_srm,ask_details,srm_answer,pass_tier,reg_no,school,semester,course,program,section,gender,cgpa,details_at, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE id=$1", [req.uid]);
       const checkins = await db.query(`SELECT c.scope, c.scanned_at, (e.collect_od AND c.od_from IS NULL) AS ask_od
         FROM checkins c LEFT JOIN events e ON c.scope = 'event:' || e.id::text WHERE c.user_id=$1`, [req.uid]);
       // only SRM-AP addresses are asked for academic details, and only until they have been saved once
-      const asked = isSrmEmail(u!.email) || u!.says_srm || u!.ask_details;   // SRM address, a personal address that says SRM-AP, or someone an organiser asked
-      const needsDetails = asked && !u!.details_at;
-      const extra = asked && needsExtra(u!); // saved before section and gender existed: only those two are asked
+      const { asked, needsCheck } = srmStatus(u!);   // SRM address, a personal address that says SRM-AP (and did not answer "outside"), or someone an organiser asked
+      const needsDetails = asked && !needsCheck && !u!.details_at;
+      const extra = asked && !needsCheck && needsExtra(u!); // saved before section and gender existed: only those two are asked
       const flagship = u!.pass_tier === "flagship" || await inAppTeam(db, req.uid!);
       // what the pass card says: SRM-AP students get the ₹99 pass free; a ₹499 holder shows the ₹499 pass; someone with neither (a guest) just sees "Secure Pass"
       const passType = flagship ? "flagship" : u!.pass_tier === "general" || isSrmEmail(u!.email) || u!.says_srm ? "general" : null;
-      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, flagship, passType, needsDetails, needsExtra: extra, details: detailsOut(u!) },
+      return { profile: { name: u!.name, email: u!.email, college: u!.college, passCode: u!.pass_code, hasPhoto: u!.has_photo, flagship, passType, needsSrmCheck: needsCheck, needsDetails, needsExtra: extra, details: detailsOut(u!) },
         ...(needsDetails || extra ? { detailsOptions: { schools: SCHOOLS, programs: PROGRAMS, genders: GENDERS } } : {}),
-        checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString(), askOd: c.ask_od === true })) };
+        checkins: checkins.map((c) => ({ scope: c.scope, at: new Date(c.scanned_at).toISOString(), askOd: c.ask_od === true && asked && !needsCheck })) };
+    });
+
+    // Personal-email people whose college says SRM-AP confirm once, right after the sign-in code: SRM-AP student, or from outside.
+    api.put("/v1/me/srm-check", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async (req, reply) => {
+      const p = z.object({ answer: z.enum(["srm", "outside"]) }).safeParse(req.body);
+      if (!p.success) return reply.code(400).send({ error: "invalid", message: "Choose SRM-AP student or Outside student." });
+      await db.query("UPDATE users SET srm_answer=$2 WHERE id=$1 AND srm_answer IS NULL", [req.uid, p.data.answer]);   // asked once; an organiser can reset it
+      return { ok: true };
     });
 
     // First sign-in of an SRM-AP person: academic details, saved once. Later changes go through an organiser.
     api.put("/v1/me/details", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async (req, reply) => {
-      const [u] = await db.query("SELECT email, says_srm, ask_details, details_at, section, gender FROM users WHERE id=$1", [req.uid]);
-      if (!isSrmEmail(u!.email) && !u!.says_srm && !u!.ask_details) return reply.code(403).send({ error: "not_needed", message: "These details are only for SRM University-AP students." });
+      const [u] = await db.query("SELECT email, says_srm, ask_details, srm_answer, details_at, section, gender FROM users WHERE id=$1", [req.uid]);
+      if (!srmStatus(u!).asked) return reply.code(403).send({ error: "not_needed", message: "These details are only for SRM University-AP students." });
       const b0 = (req.body ?? {}) as Record<string, unknown>;
       if (u!.details_at && needsExtra(u!) && ("section" in b0 || "gender" in b0)) { // earlier details are kept; only the missing section / gender are filled in
         const x = Extra.safeParse(req.body);

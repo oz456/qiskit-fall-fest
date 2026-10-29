@@ -8,6 +8,7 @@ import { bubble, button, clear, closeAllSheets, closeTopSheet, h, icon, pullToRe
 import { hubView } from "./views/hub.js";
 import { passView } from "./views/pass.js";
 import { detailsView } from "./views/details.js";
+import { srmCheckView } from "./views/srmcheck.js";
 import { openOd } from "./views/od.js";
 import { selfieView } from "./views/selfie.js";
 import { openAnnouncements, openEventSheet, openProfile } from "./views/sheets.js";
@@ -50,6 +51,7 @@ function render() {
     tabbar?.remove(); tabbar = null;
     return setView("signin", () => signInView({ onDone: onSignedIn }));
   }
+  if (S.needsSrmCheck) { tabbar?.remove(); tabbar = null; return setView("srmcheck", () => srmCheckView({ onDone: onSrmCheckDone, onSignOut: signOut })); }
   if (S.needsDetails || S.needsExtra) { tabbar?.remove(); tabbar = null; return setView("details" + (S.needsDetails ? "" : "-extra"), () => detailsView({ onDone: onDetailsDone, onSignOut: signOut, extra: !S.needsDetails })); }
   if (S.needsSelfie) { tabbar?.remove(); tabbar = null; return setView("selfie", () => selfieView({ onDone: onSelfieDone, onSignOut: signOut })); }
   if (!/^\/attendee\/(hub|pass|support)\/?$/.test(location.pathname)) history.replaceState({}, "", "/attendee/hub");
@@ -66,7 +68,7 @@ function drawTabs(tab) {
 }
 const odAsked = new Set();   // asked once per app open; a pending OD stays on My Pass until it is filled in
 subscribe(() => {
-  if (!signedIn || S.needsSelfie || S.needsDetails || S.needsExtra) return;
+  if (!signedIn || S.needsSelfie || S.needsSrmCheck || S.needsDetails || S.needsExtra) return;
   if (tabbar) drawTabs(currentTab());
   const next = (S.odPending || []).find((id) => !odAsked.has(id));
   if (next && !document.querySelector(".dialogscrim, .sheet.show, .sheet")) { odAsked.add(next); setTimeout(() => openOd(next), 100); }
@@ -78,8 +80,9 @@ async function onSignedIn() {
 async function afterAuth() {
   try { await loadAll(); } catch (e) { toast(e instanceof ApiError ? e.message : "Couldn’t load. Pull down to retry."); }
   render(); openFromHash();
-  if (!S.needsSelfie && !S.needsDetails && !S.needsExtra) { push.maybeAsk(); maybeAskInstall(); }
+  if (!S.needsSelfie && !S.needsSrmCheck && !S.needsDetails && !S.needsExtra) { push.maybeAsk(); maybeAskInstall(); }
 }
+async function onSrmCheckDone() { S.needsSrmCheck = false; viewKey = ""; await afterAuth(); }
 async function onDetailsDone() { S.needsDetails = false; S.needsExtra = false; viewKey = ""; await afterAuth(); }
 async function onSelfieDone() { S.needsSelfie = false; viewKey = ""; await afterAuth(); }
 

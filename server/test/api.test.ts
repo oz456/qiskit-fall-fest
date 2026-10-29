@@ -598,14 +598,23 @@ describe("who may sign in: every @srmap.edu.in address, plus outside people with
     config.website.secret = "sync-test-secret-0123456789";
     const feed = { people: [
       { email: "says.srm@gmail.com", name: "Says Srm", tier: "flagship", status: "verified", srmBasis: "personal_says_srm" },
+      { email: "says.out@gmail.com", name: "Says Out", tier: "general", status: "verified", srmBasis: "personal_says_srm" },
       { email: "other.college@gmail.com", name: "Other College", tier: "general", status: "verified", srmBasis: "outside" }], nextCursor: null };
     const srv = createServer((req, res) => { res.setHeader("content-type", "application/json"); res.end(JSON.stringify(req.url!.includes("/passes") ? feed : { people: [], nextCursor: null })); });
     await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r)); const was = config.website.baseUrl; config.website.baseUrl = `http://127.0.0.1:${(srv.address() as any).port}`;
     try {
       assert.equal((await admin("POST", "/admin/api/sync/run")).json().ok, true);
       const token = async (em: string) => { const id = (await db.query("SELECT id FROM users WHERE email=$1", [em]))[0]!.id; const sid = (await db.query("INSERT INTO sessions (user_id, refresh_hash, device_id, expires_at) VALUES ($1,$2,'d',now()+interval '1 day') RETURNING id", [id, randomBytes(12).toString("hex")]))[0]!.id; return signJwt({ sub: id, sid }, config.jwtSecret, 600); };
-      const me = async (em: string) => (await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: "Bearer " + (await token(em)) } })).json().profile.needsDetails;
-      assert.equal(await me("says.srm@gmail.com"), true, "self-reported SRM-AP: asked");
+      const meFull = async (em: string) => (await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: "Bearer " + (await token(em)) } })).json().profile;
+      const me = async (em: string) => (await meFull(em)).needsDetails;
+      const say = (em: string, answer: string) => token(em).then((t) => app.inject({ method: "PUT", url: "/v1/me/srm-check", headers: { authorization: "Bearer " + t }, remoteAddress: "10.90.0.5", payload: { answer } }));
+      const first = await meFull("says.srm@gmail.com"); assert.deepEqual([first.needsSrmCheck, first.needsDetails], [true, false], "self-reported SRM-AP: first confirm SRM-AP student or outside, before any details");
+      assert.equal((await say("says.srm@gmail.com", "maybe")).statusCode, 400);
+      assert.equal((await say("says.out@gmail.com", "outside")).statusCode, 200);
+      const out = await meFull("says.out@gmail.com"); assert.deepEqual([out.needsSrmCheck, out.needsDetails, out.needsExtra], [false, false, false], "said outside: never asked for details");
+      assert.equal((await app.inject({ method: "PUT", url: "/v1/me/details", headers: { authorization: "Bearer " + (await token("says.out@gmail.com")) }, remoteAddress: "10.90.0.6", payload: {} })).statusCode, 403, "and the server refuses them too");
+      assert.equal((await say("says.srm@gmail.com", "srm")).statusCode, 200);
+      assert.equal(await me("says.srm@gmail.com"), true, "confirmed SRM-AP: asked");
       assert.equal(await me("other.college@gmail.com"), false, "another college: not asked");
       const put = await app.inject({ method: "PUT", url: "/v1/me/details", headers: { authorization: "Bearer " + (await token("says.srm@gmail.com")) }, remoteAddress: "10.90.0.1", payload: { regNo: "AP25110010777", school: "SEAS", semester: 1, course: "CSE", program: "B.Tech", cgpa: "NA" } });
       assert.equal(put.statusCode, 200);
@@ -686,7 +695,7 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     const mkEvent = async (title: string, collectOd: boolean) => (await admin("POST", "/admin/api/events", { title, track: "Workshop", startsAt: new Date().toISOString(), endsAt: new Date(Date.now() + 7200_000).toISOString(), collectOd })).json().id as string;
     const withOd = await mkEvent("OD Workshop", true), without = await mkEvent("Plain Workshop", false);
     assert.equal((await admin("GET", "/admin/api/events")).json().find((e: any) => e.id === withOd).collectOd, true);
-    const mkUser = async (email: string) => { const u = (await db.query("INSERT INTO users (email,name,pass_code,pass_secret,source,kind) VALUES ($1,'OD Person',$2,$3,'admin','student') RETURNING id,pass_code,pass_secret", [email, "QFF-" + Math.floor(10000 + Math.random() * 89999), randomBytes(32)]))[0]! as any;
+    const mkUser = async (email: string) => { const u = (await db.query("INSERT INTO users (email,name,pass_code,pass_secret,source,kind,ask_details) VALUES ($1,'OD Person',$2,$3,'admin','student',true) RETURNING id,pass_code,pass_secret", [email, "QFF-" + Math.floor(10000 + Math.random() * 89999), randomBytes(32)]))[0]! as any;
       await db.query("INSERT INTO user_photos (user_id, object_key, size_bytes, sha256) VALUES ($1,'k',1,'x')", [u.id]);
       const sid = (await db.query("INSERT INTO sessions (user_id, refresh_hash, device_id, expires_at) VALUES ($1,$2,'d',now()+interval '1 day') RETURNING id", [u.id, randomBytes(12).toString("hex")]))[0]!.id;
       return { ...u, auth: { authorization: "Bearer " + signJwt({ sub: u.id, sid }, config.jwtSecret, 600) } }; };
@@ -699,7 +708,8 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     assert.match((await scanOf(srmStu, "day:2026-10-27")).warning ?? "", /Academic details not filled in/);
     await db.query("UPDATE users SET reg_no='AP25110010888', school='SEAS', semester=2, section='A', gender='Male', course='CSE', program='B.Tech', cgpa=7, details_at=now() WHERE id=$1", [srmStu.id]);
     assert.doesNotMatch((await scanOf(srmStu, "day:2026-10-27")).warning ?? "", /Academic details/);
-    assert.doesNotMatch((await scanOf(a, "day:2026-10-27")).warning ?? "", /Academic details/, "outside people are not nagged");
+    const guest = await mkUser("outside.guest@example.org"); await db.query("UPDATE users SET ask_details=false WHERE id=$1", [guest.id]);
+    assert.doesNotMatch((await scanOf(guest, "day:2026-10-27")).warning ?? "", /Academic details/, "outside people are not nagged");
     assert.equal((await check("POST", "/checkin/api/scan", { payload: passPayload(Buffer.from(a.pass_secret), a.pass_code), scope: `event:${withOd}` })).json().collectOd, true, "the volunteer is only told that the student will be asked");
     await db.query("INSERT INTO push_tokens (token,user_id,platform) VALUES ($1,$2,'android')", ["od-token-" + "x".repeat(40), a.id]);
     outbox.length = 0;

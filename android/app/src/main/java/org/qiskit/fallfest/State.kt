@@ -44,6 +44,8 @@ class AppState(context: Context) {
     /** First sign-in: the attendee has no selfie on file yet. Door staff compare faces, so we ask once. */
     var needsSelfie by mutableStateOf(prefs.getBoolean("needs_selfie", false)); private set
     /** First sign-in of an SRM-AP person: academic details are asked once. Other attendees are never asked. */
+    /** A personal-email person whose college says SRM-AP has not yet answered "SRM-AP student or outside?". Asked before the details. */
+    var needsSrmCheck by mutableStateOf(false); private set
     var needsDetails by mutableStateOf(prefs.getBoolean("needs_details", false)); private set
     /** Saved before section and gender existed: only those two are asked. */
     var needsExtra by mutableStateOf(prefs.getBoolean("needs_extra", false)); private set
@@ -79,7 +81,7 @@ class AppState(context: Context) {
     /** "ticket" / "announcement" when the user tapped a notification; the UI consumes it and sets it back to null. */
     var pendingOpen by mutableStateOf<String?>(null)
     /** Ask once, right after sign-in + selfie, on Android 13+ (older versions allow notifications without asking). */
-    fun shouldAskNotifications(): Boolean = signedIn && !needsSelfie && !needsDetails && !needsExtra && !prefs.getBoolean("notif_asked", false) && android.os.Build.VERSION.SDK_INT >= 33 && !Push.enabled(appContext)
+    fun shouldAskNotifications(): Boolean = signedIn && !needsSelfie && !needsSrmCheck && !needsDetails && !needsExtra && !prefs.getBoolean("notif_asked", false) && android.os.Build.VERSION.SDK_INT >= 33 && !Push.enabled(appContext)
     fun markNotificationsAsked() { prefs.edit().putBoolean("notif_asked", true).apply() }
     fun notificationsChanged() { notifEnabled = Push.enabled(appContext); syncPush() }
     /** Registers this phone's Firebase token with the server when notifications are allowed. Safe to call any time; it only sends when something changed. */
@@ -144,7 +146,7 @@ class AppState(context: Context) {
         wipe()
     }
     private fun wipe() {
-        passType = null; team = null; teamLoaded = false; teamNaming = null; accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsDetails = false; needsExtra = false; flagship = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null; odPending = emptyList(); odDismissed = emptySet()
+        passType = null; team = null; teamLoaded = false; teamNaming = null; accessToken = null; secure.clear(); prefs.edit().clear().apply(); needsSelfie = false; needsSrmCheck = false; needsDetails = false; needsExtra = false; flagship = false; seenTickets = emptyMap(); announcedCheckins = emptySet(); checkinNotice = null; odPending = emptyList(); odDismissed = emptySet()
         profile = null; events = emptyList(); announcements = emptyList(); tickets = emptyList(); checkins = emptyMap()
     }
 
@@ -227,6 +229,7 @@ class AppState(context: Context) {
     }
 
     private fun applyDetailsState(me: JSONObject) {
+        needsSrmCheck = me.getJSONObject("profile").optBoolean("needsSrmCheck", false)
         val need = me.getJSONObject("profile").optBoolean("needsDetails", false)
         if (need != needsDetails) { needsDetails = need; prefs.edit().putBoolean("needs_details", need).apply() }
         val fl = me.getJSONObject("profile").optBoolean("flagship", false)
@@ -240,6 +243,13 @@ class AppState(context: Context) {
             o.optJSONArray("genders")?.let { a -> detailsGenders = (0 until a.length()).map { a.getString(it) } }
             o.optJSONArray("programs")?.let { a -> detailsPrograms = (0 until a.length()).map { a.getString(it) } }
         }
+    }
+
+    /** "SRM-AP student" or "outside student", asked once after sign-in. Outside people are never asked for academic or OD details. */
+    suspend fun saveSrmCheck(answer: String) {
+        authed("PUT", "/v1/me/srm-check", JSONObject().put("answer", answer))
+        needsSrmCheck = false
+        refresh()
     }
 
     /** One-time academic details (SRM-AP people). Throws ApiException with a readable message; its code says which field is wrong. */

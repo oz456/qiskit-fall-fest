@@ -103,7 +103,7 @@ export async function loadAll() {
   if (S.loading) return; S.loading = true; emit();
   try {
     const me = await api.me();
-    S.profile = me.profile; S.needsSelfie = !me.profile.hasPhoto; S.needsDetails = !!me.profile.needsDetails; S.needsExtra = !!me.profile.needsExtra; S.detailsOptions = me.detailsOptions || null; applyCheckins(me.checkins); write("qff.profile", S.profile);
+    S.profile = me.profile; S.needsSelfie = !me.profile.hasPhoto; S.needsSrmCheck = !!me.profile.needsSrmCheck; S.needsDetails = !!me.profile.needsDetails; S.needsExtra = !!me.profile.needsExtra; S.detailsOptions = me.detailsOptions || null; applyCheckins(me.checkins); write("qff.profile", S.profile);
     if (!S.needsSelfie) {
       const [ev, ann, tix] = await Promise.all([api.events(), api.announcements(), api.tickets()]);
       S.events = ev.events.map(norm); S.faqs = ev.faqs; S.settings = ev.settings; S.announcements = ann; S.tickets = tix; S.loaded = true;
@@ -124,7 +124,7 @@ export async function toggleSaved(ev, toast) {
 }
 
 export function resetState() {
-  Object.assign(S, { profile: null, events: [], faqs: [], settings: {}, announcements: [], tickets: [], checkins: {}, needsSelfie: false, needsDetails: false, needsExtra: false, odPending: [], detailsOptions: null, loaded: false, offline: false, seenAnn: null, seenTickets: {} });
+  Object.assign(S, { profile: null, events: [], faqs: [], settings: {}, announcements: [], tickets: [], checkins: {}, needsSelfie: false, needsSrmCheck: false, needsDetails: false, needsExtra: false, odPending: [], detailsOptions: null, loaded: false, offline: false, seenAnn: null, seenTickets: {} });
   for (const k of ["qff.profile", "qff.cache", "qff.seenAnn", "qff.seenTickets", "qff.notifAsked", "qff.checkSeen"]) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
   emit();
 }

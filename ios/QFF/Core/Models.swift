@@ -114,6 +114,7 @@ struct Ticket: Identifiable, Decodable, Equatable { let id: String; let code: St
 struct Profile: Codable, Equatable {
     let name: String; let email: String; let college: String?; let passCode: String
     var hasPhoto: Bool?
+    var needsSrmCheck: Bool?
     var needsDetails: Bool?
     var needsExtra: Bool?
     var flagship: Bool?

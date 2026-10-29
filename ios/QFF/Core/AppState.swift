@@ -41,6 +41,8 @@ final class AppState: ObservableObject {
     /// First sign-in: no selfie on file yet. Door staff compare faces, so we ask once.
     @Published var needsSelfie = UserDefaults.standard.bool(forKey: "needs_selfie")
     /// First sign-in of an SRM-AP person: academic details are asked once. Other attendees are never asked.
+    /// A personal-email person whose college says SRM-AP has not answered "SRM-AP student or outside?" yet. Asked before the details.
+    @Published var needsSrmCheck = false
     @Published var needsDetails = UserDefaults.standard.bool(forKey: "needs_details")
     /// Saved before section and gender existed: only those two are asked.
     @Published var needsExtra = UserDefaults.standard.bool(forKey: "needs_extra")
@@ -140,7 +142,7 @@ final class AppState: ObservableObject {
         for k in ["profile", "cache_events", "cache_ann", "seen_ann", "needs_selfie", "needs_details", "needs_extra", "seen_tickets", "push_registered", "notif_asked", "seen_checkins"] { defaults.removeObject(forKey: k) }
         seenTickets = [:]; announcedCheckins = []; checkinNotice = nil; odPending = []; odDismissed = []
         team = nil; teamLoaded = false; teamNaming = nil
-        needsSelfie = false; needsDetails = false; needsExtra = false
+        needsSelfie = false; needsSrmCheck = false; needsDetails = false; needsExtra = false
         profile = nil; events = []; announcements = []; tickets = []; checkins = [:]; faqs = []; settings = [:]
     }
 
@@ -233,6 +235,7 @@ final class AppState: ObservableObject {
     }
 
     private func applyDetailsState(_ me: MeResponse) {
+        needsSrmCheck = me.profile.needsSrmCheck ?? false
         let need = me.profile.needsDetails ?? false
         if need != needsDetails { needsDetails = need; defaults.set(need, forKey: "needs_details") }
         let extra = me.profile.needsExtra ?? false
@@ -241,6 +244,12 @@ final class AppState: ObservableObject {
     }
 
     /// One-time academic details (SRM-AP people). Throws APIError with a readable message.
+    /// "SRM-AP student" or "outside student", asked once after sign-in. Outside people are never asked for academic or OD details.
+    func saveSrmCheck(_ answer: String) async throws {
+        if !isPreview { _ = try await authedData("PUT", "/v1/me/srm-check", body: ["answer": answer]) }
+        needsSrmCheck = false
+        if !isPreview { Task { [self] in await refresh() } }
+    }
     func saveDetails(regNo: String, school: String, semester: Int, course: String, program: String, section: String, gender: String, cgpa: Double?) async throws {
         if !isPreview {
             let body: [String: Any] = ["regNo": regNo, "school": school, "semester": semester, "course": course, "program": program, "section": section, "gender": gender, "cgpa": cgpa ?? "NA"]

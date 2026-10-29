@@ -9,7 +9,8 @@ struct RootView: View {
     var body: some View {
         ZStack {
             if app.signedIn {
-                if app.needsDetails || app.needsExtra { DetailsView(extra: !app.needsDetails).transition(.opacity) }
+                if app.needsSrmCheck { SrmCheckView().transition(.opacity) }
+                else if app.needsDetails || app.needsExtra { DetailsView(extra: !app.needsDetails).transition(.opacity) }
                 else if app.needsSelfie { SelfieView().transition(.opacity) }
                 else { MainView().environmentObject(router).transition(.opacity.combined(with: .scale(scale: 0.98))) }
             } else {
@@ -25,7 +26,7 @@ struct RootView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: app.message)
         .sheet(item: Binding<OdTarget?>(
-            get: { app.checkinNotice == nil && !app.needsDetails && !app.needsExtra && !app.needsSelfie ? app.odPending.first { !app.odDismissed.contains($0) }.map(OdTarget.init) : nil },
+            get: { app.checkinNotice == nil && !app.needsSrmCheck && !app.needsDetails && !app.needsExtra && !app.needsSelfie ? app.odPending.first { !app.odDismissed.contains($0) }.map(OdTarget.init) : nil },
             set: { if let t = $0 { _ = t } else if let id = app.odPending.first(where: { !app.odDismissed.contains($0) }) { app.odDismissed.insert(id) } })) { t in OdView(eventId: t.id).environmentObject(app) }
         .alert("You’re checked in", isPresented: Binding(get: { app.checkinNotice != nil }, set: { if !$0 { app.checkinNotice = nil } }), presenting: app.checkinNotice) { _ in
             Button("OK", role: .cancel) {}

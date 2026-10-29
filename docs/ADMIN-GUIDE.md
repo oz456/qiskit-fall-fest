@@ -37,3 +37,7 @@ In the Events page, open an event and tick **OD needed**. After a student is che
 ## Quick messages (Announcements)
 
 The Announcements page has ready-made messages above the form: Hackathon (kickoff, mentors, 2 hours / 1 hour / 30 minutes / 10 minutes left, submissions closed, judging, results soon, slow Wi-Fi), Food and breaks (snacks, tea and coffee, lunch, dinner, stretch break) and General (pass reminder, group photo, thank you). Tap one to fill the title and message, change the words if you like, then press Publish. Nothing is sent by tapping a preset. The wording lives in the `PRESETS` list at the top of the announcements section of `server/public/admin/admin.js`.
+
+## "SRM-AP student or outside?" (personal emails)
+
+People who signed in with a personal email but whose college on the website says SRM-AP are asked once, right after the sign-in code and before anything else: **SRM-AP student** (then the academic details form) or **Outside student** (never asked for registration number, semester or OD details). Their answer shows on their page as CONFIRMED SRM-AP or SAYS OUTSIDE. "Reset details" clears it, so they are asked again. If you tick "Ask for academic details" for someone, they skip the question and get the form. Outside students are also no longer shown the OD form; only SRM-AP people (and anyone you asked) are.

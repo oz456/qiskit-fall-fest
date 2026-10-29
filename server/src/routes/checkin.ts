@@ -1,4 +1,5 @@
 // Door check-in site (/checkin): separate login, separate API. It can verify passes and read attendance counts — nothing else.
+import { srmStatus } from "../lib/details.ts";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { config } from "../config.ts";
@@ -59,7 +60,7 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
       if (!m) return { result: "invalid", message: "Not a Fall Fest pass." };
       const [, code, stepStr, mac] = m as unknown as [string, string, string, string];
       if (await odOnly() && !(await collectsOd(b.scope))) return { result: "invalid", message: "Scanning is only open for the Hackathon days right now. Pick one of them at the top." };
-      const [u] = await db.query("SELECT id,email,name,college,pass_code,pass_secret,status,says_srm,ask_details,details_at,section,gender, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE pass_code=$1", [code]);
+      const [u] = await db.query("SELECT id,email,name,college,pass_code,pass_secret,status,says_srm,ask_details,srm_answer,details_at,section,gender, EXISTS(SELECT 1 FROM user_photos p WHERE p.user_id=users.id) AS has_photo FROM users WHERE pass_code=$1", [code]);
       if (!u) return { result: "invalid", message: "Unknown pass." };
       const step = Number(stepStr); const nowStep = Math.floor(Date.now() / 1000 / PASS_STEP_SEC);
       const who = { name: u.name, college: u.college, passCode: u.pass_code, hasPhoto: u.has_photo };
@@ -84,7 +85,7 @@ export function checkinRoutes(app: FastifyInstance, db: Db) {
       const warnings: string[] = [];
       if (!u.has_photo) warnings.push("No selfie on file yet.");
       // SRM-AP students must give their academic details in the app; the volunteer can remind them
-      if ((isSrmEmail(u.email) || u.says_srm || u.ask_details) && (!u.details_at || !u.section || !u.gender)) warnings.push("Academic details not filled in yet: ask them to open the app (or the web app) and complete them.");
+      if (srmStatus(u).asked && (!u.details_at || !u.section || !u.gender)) warnings.push("Academic details not filled in yet: ask them to open the app (or the web app) and complete them.");
       const collectOd = await collectsOd(scope);
       return { result: "verify", message: "Check the face, then confirm.", warning: warnings.join(" ") || undefined, who, ticket, collectOd };
     }

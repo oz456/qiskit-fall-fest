@@ -74,7 +74,7 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
   });
 
   it("iPhone: landing page shows the web-app button, then sign in -> selfie -> hub -> QR that scans at the door -> support -> sign out", async () => {
-    await db.query("UPDATE users SET pass_tier='flagship' WHERE email='web@example.org'");   // a ₹499 holder: My Pass shows the Hackathon registration card
+    await db.query("UPDATE users SET pass_tier='flagship', says_srm=true, srm_answer='srm', details_at=now(), reg_no='AP25110010111', school='SEAS', semester=3, course='CSE', program='B.Tech', section='A', gender='Male' WHERE email='web@example.org'");   // asked, and already gave their details: OD applies   // a ₹499 holder: My Pass shows the Hackathon registration card
     await b.device("ios"); await b.goto(base + "/");
     assert.ok(await b.until(`!!document.querySelector('a.webapp')`)); assert.match(await b.ev(`document.querySelector('#ios').textContent`), /isn’t on the App Store yet/);
     await b.tap("a.webapp"); assert.ok(await b.until(`location.pathname === '/attendee' && !!document.querySelector('.signin')`));
@@ -206,5 +206,20 @@ describe("web app in a browser", { skip: chromeBin ? false : "no Chrome/Chromium
     const [u] = await db.query("SELECT reg_no, school, semester, cgpa, section, gender FROM users WHERE email='details_web@srmap.edu.in'");
     assert.deepEqual([u!.reg_no, u!.school, u!.semester, Number(u!.cgpa), u!.section, u!.gender], ["AP25110010999", "SEAS", 3, 8.5, "S12", "Female"]);
     await b.goto(base + "/attendee"); assert.ok(await b.until(`!!document.querySelector('.selfie')`, 10000)); assert.equal(await b.ev(`!!document.querySelector('.details')`), false, "not asked again");
+  });
+  it("a personal-email person whose college says SRM-AP is asked 'SRM-AP student or outside?' after the code; 'outside' skips the details form", async () => {
+    await db.query("INSERT INTO users (email,name,college,pass_code,pass_secret,says_srm) VALUES ('says_web@gmail.com','Says Web','SRM AP','QFF-8877',$1,true)", [Buffer.alloc(32, 6)]);
+    await b.device("ios"); await b.cdp("Network.clearBrowserCookies"); await b.goto(base + "/attendee");
+    await b.ev(`localStorage.clear()`); await b.goto(base + "/attendee");
+    assert.ok(await b.until(`!!document.querySelector('.signin')`, 15000));
+    await b.type("input[type=email]", "says_web@gmail.com"); await code("says_web@gmail.com", "445566"); await b.tap(".form .btn");
+    assert.ok(await b.until(`!!document.querySelector('.codes')`)); await b.type(".codes input", "445566");
+    assert.ok(await b.until(`/Are you an SRM-AP student/.test(document.body.innerText)`, 15000), "the question comes first, before details and selfie");
+    assert.equal(await b.ev(`!!document.querySelector('form.details, .selfie')`), false);
+    await b.tap(".btn"); assert.ok(await b.until(`/Choose one/.test(document.body.innerText)`), "an answer is required");
+    await b.ev(`[...document.querySelectorAll('[role=radio]')].find((x) => /Outside student/.test(x.textContent)).click()`); await b.tap(".btn");
+    assert.ok(await b.until(`!!document.querySelector('.selfie')`, 10000), "outside: straight to the selfie, no details form");
+    assert.equal(await b.ev(`!!document.querySelector('form.details')`), false);
+    assert.equal((await db.query("SELECT srm_answer FROM users WHERE email='says_web@gmail.com'"))[0]!.srm_answer, "outside");
   });
 });

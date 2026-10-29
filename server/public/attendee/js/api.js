@@ -71,6 +71,7 @@ export const api = {
   setSaved: (id, on) => call(on ? "PUT" : "DELETE", `/v1/events/${id}/saved`, on ? {} : undefined),
   uploadPhoto: (blob) => call("PUT", "/v1/me/photo", blob),
   saveDetails: (d) => call("PUT", "/v1/me/details", d),
+  saveSrmCheck: (answer) => call("PUT", "/v1/me/srm-check", { answer }),
   saveOd: (d) => call("PUT", "/v1/me/od", d),
   team: () => call("GET", "/v1/me/team"),
   assignTeamName: () => call("POST", "/v1/me/team/name"),
