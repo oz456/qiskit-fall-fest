@@ -890,4 +890,15 @@ describe("check-in: anyone with a pass can be let in to any event; no manual sea
     assert.deepEqual(usable(list, new Map([["first@x", 100], ["second@x", 100]]), 100), [], "both exhausted");
     assert.equal(quotaError(new Error("550-5.4.5 Daily user sending limit exceeded")), true); assert.equal(quotaError(new Error("550 No such user here")), false);
   });
+  it("no team is ever left without a name: the 50 founders first, then the reserve, then a numbered name; assigned names are never changed", async () => {
+    const { claimName } = await import("../src/lib/team-names.ts"); const { FOUNDERS, RESERVE } = await import("../src/lib/founders.ts");
+    await db.query("DELETE FROM team_name_claims");
+    const first = await claimName(db, "pool-0", null, "tap"); assert.ok(first && FOUNDERS.some((f) => first.name.startsWith(f.team)), "from the main list first");
+    for (let i = 1; i < FOUNDERS.length + RESERVE.length + 3; i++) assert.ok(await claimName(db, "pool-" + i, null, "auto"), "team " + i + " got a name");
+    const rows = await db.query("SELECT team_key, name FROM team_name_claims"); assert.equal(rows.length, FOUNDERS.length + RESERVE.length + 3);
+    assert.equal(new Set(rows.map((r: any) => r.name.toLowerCase())).size, rows.length, "every name is different"); assert.ok(rows.every((r: any) => r.name.length >= 3 && r.name.length <= 40), "every name fits the website's 3 to 40 characters");
+    assert.ok(rows.some((r: any) => /^Quantum Team \d+$/.test(r.name)), "the numbered fallback is used last");
+    assert.equal((await claimName(db, "pool-0", null, "auto"))!.name, first!.name, "an assigned team keeps its name");
+    await db.query("DELETE FROM team_name_claims");
+  });
 });

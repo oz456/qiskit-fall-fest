@@ -11,3 +11,13 @@ export const FOUNDERS: { founder: string; team: string }[] = [
   ["Nandan Nilekani", "Aadhaar Architects"], ["Aman Gupta", "boAt Brigade"], ["Sabeer Bhatia", "Hotmail Heroes"], ["Avnish Bajaj", "Baazee Bandits"], ["Ravi Kumar", "Upstox Unit"],
   ["Ashish Rajpal", "5paisa Force"], ["Bipin Preet Singh", "Jupiter Jets"], ["Rajan Anandan", "Endiya Energizers"], ["Prasanna Sankar", "Rippling Renegades"], ["Vinod Khosla", "Khosla Ventures Vanguard"],
 ].map(([founder, team]) => ({ founder: founder!, team: team! }));
+
+// Used only when the 50 above are all taken (there turned out to be more than 50 teams).
+export const RESERVE: { founder: string; team: string }[] = [
+  ["Ritesh Agarwal", "OYO Originals"], ["Ghazal Alagh", "Mamaearth Mavericks"], ["Peyush Bansal", "Lenskart Legends"], ["Shashank ND", "Practo Pathfinders"], ["Sachin Bansal", "Navi Navigators"],
+  ["Gaurav Munjal", "Unacademy Underdogs"], ["Divyank Turakhia", "Media.net Mavericks"], ["Bhavin Turakhia", "Zeta Zeniths"], ["Sanjeev Bikhchandani", "Naukri Navigators"], ["Alakh Pandey", "PhysicsWallah Wizards"],
+  ["Anupam Mittal", "Shaadi Strikers"], ["Vishal Gondal", "GOQii Gladiators"], ["Kishore Biyani", "Big Bazaar Brigade"], ["Dhirubhai Ambani", "Reliance Rockets"], ["Verghese Kurien", "Amul Achievers"],
+  ["Sairee Chahal", "SHEROES Strikers"], ["Vani Kola", "Kalaari Knights"], ["Shradha Sharma", "YourStory Spartans"], ["Radhakishan Damani", "DMart Dynamos"], ["Vikram Sarabhai", "ISRO Innovators"],
+  ["Jamsetji Tata", "Tata Titans"], ["Ashish Hemrajani", "BookMyShow Blasters"], ["Pranay Chulet", "Quikr Quest"], ["Sandeep Aggarwal", "Droom Drivers"], ["Abhiraj Singh Bhal", "Urban Co Unicorns"],
+  ["Sahil Barua", "Delhivery Dispatch"],
+].map(([founder, team]) => ({ founder: founder!, team: team! }));

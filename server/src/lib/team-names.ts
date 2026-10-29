@@ -2,7 +2,7 @@
 // (the server picks a free name at random, so two leads can never collide); when the 100 seconds are over every team still without a name
 // gets one automatically, including teams whose lead never opened the app. Names are written to the website too (retried until they stick).
 import type { Db } from "../db.ts";
-import { FOUNDERS } from "./founders.ts";
+import { FOUNDERS, RESERVE } from "./founders.ts";
 
 /** The team name as shown everywhere (app, website): the team name with the founder in brackets, e.g. "Zepto Zoomers (Kaivalya Vohra)". */
 export const fullName = (f: { team: string; founder: string }) => `${f.team} (${f.founder})`;
@@ -48,10 +48,13 @@ export async function claimName(db: Db, teamKey: string, leadEmail: string | nul
   for (let i = 0; i < 30; i++) {
     const have = await claimOf(db, teamKey); if (have) return have;
     const used = new Set((await db.query("SELECT lower(name) AS n FROM team_name_claims")).map((r) => r.n as string));
-    const free = FOUNDERS.filter((f) => !used.has(fullName(f).toLowerCase()) && !outside.has(fullName(f).toLowerCase()));
-    if (!free.length) return null;
-    const pick = free[Math.floor(Math.random() * free.length)]!;
-    const r = await db.query("INSERT INTO team_name_claims (team_key, name, founder, mode, lead_email) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING team_key", [teamKey, fullName(pick), pick.founder, mode, leadEmail]);
+    const isFree = (f: { team: string; founder: string }) => !used.has(fullName(f).toLowerCase()) && !outside.has(fullName(f).toLowerCase());
+    // the 50 founders first, then the reserve founders, and a plain numbered name if even those are gone: a team is never left without one
+    let free = FOUNDERS.filter(isFree); if (!free.length) free = RESERVE.filter(isFree);
+    let pick: { name: string; founder: string };
+    if (free.length) { const f = free[Math.floor(Math.random() * free.length)]!; pick = { name: fullName(f), founder: f.founder }; }
+    else { let n = 1; while (used.has(`quantum team ${n}`) || outside.has(`quantum team ${n}`)) n++; pick = { name: `Quantum Team ${n}`, founder: "Qiskit Fall Fest" }; }
+    const r = await db.query("INSERT INTO team_name_claims (team_key, name, founder, mode, lead_email) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING team_key", [teamKey, pick.name, pick.founder, mode, leadEmail]);
     if (r[0]) return (await claimOf(db, teamKey))!;
   }
   return null;
